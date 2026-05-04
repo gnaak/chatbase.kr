@@ -1,11 +1,15 @@
 # app/module/infra/google/google_service.py
 
+import logging
+
 import httpx
 from fastapi import HTTPException
 
 from app.core.config.settings import settings
 from app.core.utils.response import fail
 from app.module.user.user_repository import UserRepository
+
+logger = logging.getLogger("uvicorn.error")
 
 
 class GoogleService:
@@ -21,7 +25,7 @@ class GoogleService:
 
         if not code:
             raise fail("Authorization code not provided", "AUTH_CODE_NOT_PROVIDED", 400)
-        
+
         token_data = {
             "code": code,
             "client_id": settings.google_client_id,
@@ -30,15 +34,31 @@ class GoogleService:
             "grant_type": "authorization_code",
         }
 
+        logger.error(
+            "[GOOGLE TOKEN REQ] env=%s redirect=%s client_id=%s code_prefix=%s",
+            settings.env,
+            settings.google_redirect_uri,
+            (settings.google_client_id or "")[:24],
+            (code or "")[:12],
+        )
+
         async with httpx.AsyncClient() as client:
             token_resp = await client.post(GOOGLE_TOKEN_URL, data=token_data)
-            token_resp.raise_for_status()
-        
+
+            logger.error(
+                "[GOOGLE TOKEN RESP] status=%s body=%s",
+                token_resp.status_code,
+                token_resp.text,
+            )
+
             try:
                 token_resp.raise_for_status()
             except httpx.HTTPStatusError as e:
-                raise HTTPException(status_code=401, detail=f"google token request failed: {e.response.text}")
-                
+                raise HTTPException(
+                    status_code=401,
+                    detail=f"google token request failed: {e.response.text}",
+                )
+
             access_token = token_resp.json().get("access_token")
 
             if not access_token:

@@ -143,10 +143,9 @@ const buildScript = (botId: string) =>
 const buildIframe = (botId: string) =>
   `<iframe
   src="${EMBED_ORIGIN}/embed/${botId}"
-  width="100%"
-  height="640"
-  frameborder="0"
-  allow="clipboard-write"></iframe>`;
+  style="position:fixed;bottom:0;right:0;width:420px;height:640px;border:none;z-index:2147483647;background:transparent;"
+  allow="clipboard-write"
+  title="채팅 위젯"></iframe>`;
 
 const BotEdit = () => {
   const { slug } = useParams<{ slug?: string }>();

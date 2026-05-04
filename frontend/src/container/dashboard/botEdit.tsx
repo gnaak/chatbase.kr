@@ -368,12 +368,15 @@ const BotEdit = () => {
               htmlFor="bot-name"
               required
               description="대시보드 + 임베드 위젯 헤더에 표시됩니다."
+              count={form.name.length}
+              max={60}
             >
               <Input
                 id="bot-name"
                 value={form.name}
                 onChange={(e) => update("name", e.target.value)}
-                placeholder="예: 고객지원 봇"
+                placeholder="예: 더현대 서울 안내봇 / ABC학원 상담봇"
+                maxLength={60}
               />
             </Field>
 
@@ -394,34 +397,43 @@ const BotEdit = () => {
             <Field
               label="인사 메시지"
               description="대화를 처음 열었을 때 봇이 먼저 보내는 메시지."
+              count={form.greeting.length}
+              max={500}
             >
               <Input
                 value={form.greeting}
                 onChange={(e) => update("greeting", e.target.value)}
-                placeholder="안녕하세요! 무엇을 도와드릴까요?"
+                placeholder="안녕하세요! ABC상사 고객지원 봇입니다. 영업시간·환불·배송 등 무엇이든 물어보세요."
+                maxLength={500}
               />
             </Field>
 
             <Field
               label="시스템 프롬프트"
-              description="페르소나, 톤, 답변 규칙을 정의합니다."
+              description="페르소나, 톤, 답변 규칙을 정의합니다. 1,000~3,000자 권장 (길수록 토큰 비용 ↑)."
+              count={form.systemPrompt.length}
+              max={20000}
             >
               <Textarea
                 rows={5}
                 value={form.systemPrompt}
                 onChange={(e) => update("systemPrompt", e.target.value)}
-                placeholder="당신은 ~~~ 어시스턴트입니다."
+                placeholder={`당신은 ABC상사 고객지원 어시스턴트입니다.\n\n• 항상 정중한 한국어 존댓말로 답합니다.\n• 답을 모르면 추측하지 말고, 담당자에게 문의하도록 안내하세요.\n• 정치·종교·개인 의견에 대해서는 답하지 않습니다.\n• 답변은 3~4문장 안에 핵심만 짧게 정리해주세요.`}
+                maxLength={20000}
               />
             </Field>
 
             <Field
-              label="Fallback 메시지"
-              description="학습 데이터에 없는 질문일 때 사용할 응답."
+              label="모르는 질문 답변"
+              description="학습 내용에 없는 질문을 받았을 때 보낼 메시지예요. 비워두면 일반 지식으로 최대한 답변해요."
+              count={form.fallback.length}
+              max={500}
             >
               <Input
                 value={form.fallback}
                 onChange={(e) => update("fallback", e.target.value)}
-                placeholder="죄송합니다, 해당 내용은 제가 가진 정보에 포함되어 있지 않습니다."
+                placeholder="죄송해요, 해당 내용은 제가 답변드리기 어려워요. 1588-0000으로 전화 주시거나 help@abc.com 으로 문의해주세요."
+                maxLength={500}
               />
             </Field>
           </Section>
@@ -453,13 +465,37 @@ const BotEdit = () => {
             {(!isOpenAIModel || form.trainingType === "text") && (
               <Field
                 label="학습 텍스트"
-                description="짧은 FAQ나 가이드는 직접 입력하는 편이 빠릅니다."
+                description="짧은 FAQ나 가이드는 직접 입력. 5,000자 넘어가면 파일 업로드(벡터 스토어) 권장."
+                count={form.trainingData.length}
+                max={20000}
               >
                 <Textarea
                   rows={10}
                   value={form.trainingData}
                   onChange={(e) => update("trainingData", e.target.value)}
-                  placeholder={`Q. 영업시간이 어떻게 되나요?\nA. 평일 오전 10시 ~ 오후 7시입니다.\n\nQ. 환불 정책은 어떻게 되나요?\nA. ...`}
+                  maxLength={20000}
+                  placeholder={`[회사 소개]
+ABC상사는 2010년 설립된 사무용품 전문 쇼핑몰입니다.
+
+[영업시간]
+평일 10:00 ~ 19:00 (점심 12:30 ~ 13:30)
+주말·공휴일 휴무
+
+[배송]
+- 평일 14시 이전 결제 → 당일 출고
+- 일반: 2~3일 / 제주·도서산간: 4~5일
+- 5만원 이상 구매 시 무료배송
+
+[환불 정책]
+- 단순 변심: 수령 후 7일 이내, 왕복 배송비 고객 부담
+- 제품 하자: 100% 환불 + 배송비 자사 부담
+
+[자주 묻는 질문]
+Q. 세금계산서 발급되나요?
+A. 네, 결제 후 마이페이지에서 신청 가능합니다.
+
+Q. 매장 방문 픽업 가능한가요?
+A. 서울 본사 매장은 영업시간 내 방문 픽업이 가능합니다.`}
                 />
               </Field>
             )}
@@ -543,22 +579,24 @@ const BotEdit = () => {
           </div>
         </div>
 
-        {/* 라이브 미리보기 */}
-        <div className="hidden lg:block absolute bottom-6 right-6 w-[480px] h-[760px] z-40 pointer-events-none">
-          <div className="h-full">
-            <ChatPreview
-              botName={form.name}
-              greeting={form.greeting}
-              fallback={form.fallback}
-              logo={form.logo}
-              widgetIcon={form.widgetIcon}
-              slug={slug}
-              model={form.model}
-              systemPrompt={form.systemPrompt}
-              trainingData={form.trainingData}
-            />
+        {/* 라이브 미리보기 — 저장된 봇에서만 노출 */}
+        {!isNew && (
+          <div className="hidden lg:block absolute bottom-6 right-6 w-[480px] h-[760px] z-40 pointer-events-none">
+            <div className="h-full">
+              <ChatPreview
+                botName={form.name}
+                greeting={form.greeting}
+                fallback={form.fallback}
+                logo={form.logo}
+                widgetIcon={form.widgetIcon}
+                slug={slug}
+                model={form.model}
+                systemPrompt={form.systemPrompt}
+                trainingData={form.trainingData}
+              />
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <ConfirmModal

@@ -9,8 +9,10 @@ import {
   Loader2Icon,
   MessageSquareIcon,
   RefreshCwIcon,
+  UsersIcon,
 } from "lucide-react";
 import { useGet, usePost } from "@/hooks/common/useAPI";
+import ConfirmModal from "@/component/admin/ui/feedback/confirmModal";
 
 type ModelKind = "chat" | "image";
 
@@ -20,12 +22,22 @@ interface Pricing {
   per_image?: number;
 }
 
+interface ModelUser {
+  id: number;
+  email: string;
+  name: string;
+  bot_count: number;
+}
+
 interface DiscoveredModel {
   id: number;
   value: string;
   label: string;
   pricing: Pricing | null;
   registered: boolean;
+  bot_count: number;
+  user_count: number;
+  users: ModelUser[];
 }
 
 interface ProviderBlock {
@@ -65,7 +77,7 @@ const AdminModels = () => {
     "api/admin/models/refresh",
   );
   const setActiveMutation = usePost<
-    { value: string; active: boolean },
+    { value: string; active: boolean; force?: boolean },
     { value: string; active: boolean }
   >("api/admin/models/set_active");
 
@@ -74,6 +86,7 @@ const AdminModels = () => {
     null,
   );
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [confirmModel, setConfirmModel] = useState<DiscoveredModel | null>(null);
 
   const toggleCollapsed = (provider: string) =>
     setCollapsed((prev) => ({ ...prev, [provider]: !prev[provider] }));
@@ -90,20 +103,30 @@ const AdminModels = () => {
     );
   };
 
-  const handleToggle = (m: DiscoveredModel) => {
+  const performToggle = (m: DiscoveredModel, next: boolean, force = false) => {
     setPendingValue(m.value);
-    const next = !m.registered;
     setActiveMutation.mutate(
-      { value: m.value, active: next },
+      { value: m.value, active: next, force },
       {
         onSuccess: () => {
           patchRegistered(m.value, next);
           queryClient.invalidateQueries({ queryKey: ["models", "chat"] });
           queryClient.invalidateQueries({ queryKey: ["admin-models"] });
+          queryClient.invalidateQueries({ queryKey: QUERY_KEY });
         },
         onSettled: () => setPendingValue(null),
       },
     );
+  };
+
+  const handleToggle = (m: DiscoveredModel) => {
+    const next = !m.registered;
+    // 사용 해제 시 사용 중인 봇 있으면 확인 모달
+    if (!next && m.bot_count > 0) {
+      setConfirmModel(m);
+      return;
+    }
+    performToggle(m, next);
   };
 
   const handleRefresh = () => {
@@ -214,6 +237,70 @@ const AdminModels = () => {
           ))}
         </div>
       )}
+
+      <ConfirmModal
+        open={!!confirmModel}
+        onCancel={() => setConfirmModel(null)}
+        onConfirm={() => {
+          if (confirmModel) {
+            performToggle(confirmModel, false, true);
+            setConfirmModel(null);
+          }
+        }}
+        title="이 모델을 정말 사용 해제할까요?"
+        variant="danger"
+        size="lg"
+        confirmLabel="강제 해제"
+        cancelLabel="취소"
+        description={
+          confirmModel ? (
+            <>
+              <p>
+                <span className="font-mono text-neutral-900">
+                  {confirmModel.value}
+                </span>{" "}
+                는 현재{" "}
+                <span className="font-semibold text-neutral-900">
+                  {confirmModel.user_count}명
+                </span>
+                의 사용자가{" "}
+                <span className="font-semibold text-neutral-900">
+                  봇 {confirmModel.bot_count}개
+                </span>
+                에서 사용 중입니다. 해제하면 해당 봇들이 즉시 응답 불가 상태가
+                됩니다.
+              </p>
+              {confirmModel.users.length > 0 && (
+                <div className="rounded-xl ring-1 ring-neutral-200 bg-white overflow-hidden">
+                  <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-tight text-neutral-500 bg-neutral-50 border-b border-neutral-100">
+                    사용 중인 사용자 · 상위 {confirmModel.users.length}명
+                  </div>
+                  <ul className="divide-y divide-neutral-100">
+                    {confirmModel.users.map((u) => (
+                      <li
+                        key={u.id}
+                        className="flex items-center justify-between gap-3 px-3 py-2"
+                      >
+                        <div className="min-w-0 flex flex-col">
+                          <span className="text-[13px] font-medium text-neutral-900 truncate">
+                            {u.name || "—"}
+                          </span>
+                          <span className="text-[11px] text-neutral-500 truncate font-mono">
+                            {u.email}
+                          </span>
+                        </div>
+                        <span className="font-mono text-[11px] text-neutral-600 shrink-0">
+                          봇 {u.bot_count}개
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          ) : undefined
+        }
+      />
     </div>
   );
 };
@@ -366,10 +453,12 @@ const ModelRow = ({ model, kind, onToggle, pending }: ModelRowProps) => {
       ? formatChatPricing(model.pricing)
       : formatImagePricing(model.pricing);
 
+  const inUse = model.bot_count > 0;
+
   return (
     <div className="px-5 py-3 flex items-center justify-between gap-3 border-t border-line">
       <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[13px] font-medium text-text-main truncate">
             {model.label}
           </span>
@@ -377,6 +466,17 @@ const ModelRow = ({ model, kind, onToggle, pending }: ModelRowProps) => {
             <span className="shrink-0 inline-flex items-center gap-1 px-1.5 h-5 rounded-full bg-bg-sub text-[10px] font-medium text-text-main">
               <CheckCircle2Icon className="w-3 h-3" />
               사용 중
+            </span>
+          )}
+          {inUse && (
+            <span
+              className="shrink-0 inline-flex items-center gap-1 px-1.5 h-5 rounded-full bg-amber-100 text-[10px] font-medium text-amber-800"
+              title={model.users
+                .map((u) => `${u.name || u.email} · 봇 ${u.bot_count}개`)
+                .join("\n")}
+            >
+              <UsersIcon className="w-3 h-3" />
+              {model.user_count}명 · 봇 {model.bot_count}개
             </span>
           )}
         </div>

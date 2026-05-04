@@ -52,11 +52,17 @@ const TableBody = ({
     <tbody>
       {data.map((row, index) => {
         const stripedClass =
-          striped && index % 2 === 1 ? "bg-[#FFF6DA]" : "bg-white";
+          striped && index % 2 === 1 ? "bg-neutral-50/60" : "bg-white";
+        const clickable = !!onRowClick;
         return (
           <tr
             key={`row-${index}`}
-            className={`${rowSizeClass} ${stripedClass}`}
+            className={[
+              rowSizeClass,
+              stripedClass,
+              "transition-colors hover:bg-neutral-50",
+              clickable ? "cursor-pointer" : "",
+            ].join(" ")}
             onClick={() => {
               if (onRowClick) onRowClick(row);
             }}
@@ -72,7 +78,13 @@ const TableBody = ({
               return (
                 <td
                   key={col.key}
-                  className={`px-3 py-2.5 align-middle ${alignClass} ${index < data.length - 1 ? "border-b border-gray-200" : ""}`}
+                  className={[
+                    "px-3 py-2.5 align-middle text-neutral-800",
+                    alignClass,
+                    index < data.length - 1
+                      ? "border-b border-neutral-100"
+                      : "",
+                  ].join(" ")}
                 >
                   {col.render ? col.render(row) : ((row as any)[col.key] ?? "")}
                 </td>
@@ -86,7 +98,10 @@ const TableBody = ({
         Array.from({ length: emptyCount }).map((_, i) => (
           <tr key={`empty-${i}`} className={rowSizeClass}>
             {columns.map((col) => (
-              <td key={col.key} className="px-3 py-2.5 bg-white">
+              <td
+                key={col.key}
+                className="px-3 py-2.5 bg-white border-b border-neutral-50"
+              >
                 &nbsp;
               </td>
             ))}

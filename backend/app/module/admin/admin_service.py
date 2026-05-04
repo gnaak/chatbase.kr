@@ -27,7 +27,7 @@ PROVIDER_ORDER = [
 ]
 
 
-def _model_to_dict(m: LLMModel) -> dict:
+def _model_to_dict(m: LLMModel, usage: dict | None = None) -> dict:
     pricing: dict = {}
     if m.type == ModelType.CHAT:
         if m.pricing_input is not None:
@@ -37,12 +37,16 @@ def _model_to_dict(m: LLMModel) -> dict:
     else:
         if m.pricing_per_image is not None:
             pricing["per_image"] = m.pricing_per_image
+    usage = usage or {}
     return {
         "id": m.id,
         "value": m.value,
         "label": m.label,
         "pricing": pricing or None,
         "registered": m.is_active,
+        "bot_count": usage.get("bot_count", 0),
+        "user_count": usage.get("user_count", 0),
+        "users": usage.get("users", []),  # [{id, email, name, bot_count}] 최대 5명
     }
 
 
@@ -114,7 +118,7 @@ class AdminService:
 
     # ── 모델 카탈로그 ─────────────────────────────
     async def list_catalog(self, request):
-        """provider별로 chat/image 그룹핑된 카탈로그 반환."""
+        """provider별로 chat/image 그룹핑된 카탈로그 반환. 모델별 사용 중인 봇/유저 수 포함."""
         db = self.admin_repo.db
         rows = (
             await db.execute(
@@ -122,12 +126,54 @@ class AdminService:
             )
         ).scalars().all()
 
+        # 모델별 사용 중인 봇 수 + 유저 수 집계
+        usage_rows = (
+            await db.execute(
+                select(
+                    Bot.model,
+                    Bot.user_id,
+                    User.email,
+                    User.name,
+                )
+                .join(User, User.id == Bot.user_id)
+                .where(Bot.active.is_(True))
+            )
+        ).all()
+
+        usage_map: dict[str, dict] = {}
+        for model_value, user_id, email, name in usage_rows:
+            entry = usage_map.setdefault(
+                model_value,
+                {"bot_count": 0, "users": {}},
+            )
+            entry["bot_count"] += 1
+            user_entry = entry["users"].setdefault(
+                user_id,
+                {"id": user_id, "email": email, "name": name, "bot_count": 0},
+            )
+            user_entry["bot_count"] += 1
+
+        usage_for_model: dict[str, dict] = {}
+        for value, info in usage_map.items():
+            users = sorted(
+                info["users"].values(),
+                key=lambda u: u["bot_count"],
+                reverse=True,
+            )
+            usage_for_model[value] = {
+                "bot_count": info["bot_count"],
+                "user_count": len(users),
+                "users": users[:5],
+            }
+
         grouped: dict[ModelProvider, dict[str, list]] = {
             p: {"chat": [], "image": []} for p in PROVIDER_ORDER
         }
         for m in rows:
             kind = "chat" if m.type == ModelType.CHAT else "image"
-            grouped[m.provider][kind].append(_model_to_dict(m))
+            grouped[m.provider][kind].append(
+                _model_to_dict(m, usage_for_model.get(m.value))
+            )
 
         data = [
             {
@@ -245,6 +291,7 @@ class AdminService:
         body = await request.json()
         value = (body.get("value") or "").strip()
         active = bool(body.get("active"))
+        force = bool(body.get("force"))
         if not value:
             fail("value가 필요합니다.", "VALUE_REQUIRED")
         m = (
@@ -254,6 +301,24 @@ class AdminService:
         ).scalar_one_or_none()
         if not m:
             fail("모델을 찾을 수 없습니다.", "MODEL_NOT_FOUND", 404)
+
+        # 사용 해제 시도 시: 활성 봇이 있으면 force 없으면 거부
+        if not active and not force:
+            in_use = (
+                await self.admin_repo.db.execute(
+                    select(func.count(Bot.id)).where(
+                        Bot.model == value, Bot.active.is_(True)
+                    )
+                )
+            ).scalar()
+            if in_use and in_use > 0:
+                fail(
+                    f"이 모델을 사용 중인 활성 봇이 {in_use}개 있습니다. "
+                    f"강제 해제는 force=true로 다시 요청하세요.",
+                    "MODEL_IN_USE",
+                    409,
+                )
+
         m.is_active = active
         await self.admin_repo.db.commit()
         return success(data={"value": value, "active": active})

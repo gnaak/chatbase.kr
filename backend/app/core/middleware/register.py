@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from .cors import setup_cors
 from .security import setup_security
 from .request_id import setup_request_id
+from .rate_limit import setup_rate_limit
 
 
 # CORS와 보안 헤더 미들웨어를 FastAPI 앱에 등록
@@ -12,3 +13,4 @@ def setup_middlewares(app: FastAPI):
     setup_cors(app)
     setup_security(app)
     setup_request_id(app)
+    setup_rate_limit(app)

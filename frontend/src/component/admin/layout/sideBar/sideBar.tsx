@@ -6,7 +6,7 @@ import SubLink from "./subLink";
 import { usePost } from "@/hooks/common/useAPI";
 import { AdminSidebarProps } from "@/types/admin/sidebar";
 import { parseUserInfo } from "@/hooks/common/getCookie";
-import Modal from "@/component/admin/ui/feedback/modal";
+import ConfirmModal from "@/component/admin/ui/feedback/confirmModal";
 
 const AdminSidebar = ({ adminMenu }: AdminSidebarProps) => {
   const navigate = useNavigate();
@@ -67,17 +67,16 @@ const AdminSidebar = ({ adminMenu }: AdminSidebarProps) => {
         </div>
       </div>
 
-      <Modal
+      <ConfirmModal
         open={logoutModalOpen}
-        onClose={() => setLogoutModalOpen(false)}
-        title="로그아웃"
-        description="로그아웃 하시겠습니까?"
-        buttonCount={2}
-        primaryText="로그아웃"
-        primaryVariant="danger"
-        onPrimary={handleLogout}
-        secondaryText="취소"
-        onSecondary={() => setLogoutModalOpen(false)}
+        onCancel={() => setLogoutModalOpen(false)}
+        onConfirm={handleLogout}
+        title="로그아웃 하시겠습니까?"
+        description="현재 세션이 종료되며, 다시 로그인하셔야 콘솔에 접근할 수 있습니다."
+        variant="warning"
+        size="sm"
+        confirmLabel="로그아웃"
+        cancelLabel="취소"
       />
     </aside>
   );

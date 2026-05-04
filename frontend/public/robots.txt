@@ -1,0 +1,21 @@
+# chatbase.kr — robots.txt
+
+User-agent: *
+Allow: /
+Allow: /widget.js
+
+# 운영용 비공개 영역
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /api/
+Disallow: /google/login
+Disallow: /kakao/login
+
+# 임베드 페이지는 검색엔진에 단독 노출될 필요 없음
+Disallow: /embed/
+
+# 명시적 크롤링 허용 (예: 마케팅 페이지)
+Allow: /privacy
+Allow: /terms
+
+Sitemap: https://chatbase.kr/sitemap.xml

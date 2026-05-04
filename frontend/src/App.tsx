@@ -29,6 +29,7 @@ import Billing from "./container/dashboard/billing";
 import EmbedChat from "./container/embed";
 import Terms from "./container/legal/terms";
 import Privacy from "./container/legal/privacy";
+import Guide from "./container/guide";
 import { ProtectedRoute, PublicOnlyRoute } from "./hooks/auth/protectedRoute";
 
 function App() {
@@ -67,6 +68,7 @@ function App() {
                   <Route path="/dashboard/conversations" element={<Conversations />} />
                   <Route path="/dashboard/settings" element={<Settings />} />
                   <Route path="/dashboard/billing" element={<Billing />} />
+                  <Route path="/dashboard/guide" element={<Guide />} />
                 </Route>
               </Route>
 

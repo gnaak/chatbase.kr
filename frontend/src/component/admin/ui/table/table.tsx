@@ -102,8 +102,14 @@ const Table = ({
   const rowSizeClass = sizeStyles[size];
   const isEmpty = data.length === 0;
   return (
-    <div className={`relative w-full overflow-x-auto flex flex-col ${className}`}>
-      <table className="table-fixed w-full border-collapse overflow-hidden bg-white rounded-b-xl">
+    <div
+      className={[
+        "relative w-full overflow-x-auto flex flex-col",
+        "rounded-xl bg-white ring-1 ring-neutral-200/70",
+        className,
+      ].join(" ")}
+    >
+      <table className="table-fixed w-full border-collapse">
         <TableHeader columns={columns} rowSizeClass={rowSizeClass} />
         <TableBody
           columns={columns}
@@ -117,7 +123,7 @@ const Table = ({
 
       {isEmpty && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <span className="text-sm text-gray-500">데이터가 없습니다.</span>
+          <span className="text-[13px] text-neutral-400">데이터가 없습니다.</span>
         </div>
       )}
     </div>

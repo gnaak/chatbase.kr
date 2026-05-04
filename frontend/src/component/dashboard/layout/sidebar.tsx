@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Bot,
@@ -7,6 +7,7 @@ import {
   Settings,
   MessagesSquare,
   LogOut,
+  BookOpen,
 } from "lucide-react";
 import { useGet, usePost } from "@/hooks/common/useAPI";
 
@@ -23,6 +24,7 @@ const navItems = [
   { to: "/dashboard/keys", label: "API 키", icon: KeyRound },
   { to: "/dashboard/billing", label: "결제", icon: CreditCard },
   { to: "/dashboard/settings", label: "설정", icon: Settings },
+  { to: "/dashboard/guide", label: "가이드", icon: BookOpen },
 ];
 
 const Sidebar = () => {
@@ -48,9 +50,15 @@ const Sidebar = () => {
   return (
     <aside className="hidden md:flex flex-col w-60 shrink-0 h-svh sticky top-0 border-r border-line bg-bg">
       <div className="px-5 h-14 flex items-center">
-        <span className="font-mono text-[13px] font-medium tracking-tight text-text-main">
+        <Link
+          to="/"
+          className="
+            font-mono text-[13px] font-medium tracking-tight text-text-main
+            hover:opacity-70 transition-opacity
+          "
+        >
           chatbase.kr
-        </span>
+        </Link>
       </div>
 
       <nav className="flex flex-col gap-1 px-2 py-2">

@@ -215,7 +215,7 @@ class ChatService:
             answer = _format_llm_error(provider.value, exc)
 
         if not answer.strip():
-            answer = bot.fallback or "(빈 응답)"
+            answer = bot.fallback or "죄송해요, 질문을 이해하지 못했어요. 다시 한번 말씀해 주시겠어요?"
 
         # 5) 봇 메시지 저장 + 세션 갱신
         bot_msg = ChatMessage(
@@ -348,7 +348,7 @@ class ChatService:
                     yield _sse("chunk", {"text": err_msg})
 
                 if not full_text.strip():
-                    full_text = bot.fallback or "(빈 응답)"
+                    full_text = bot.fallback or "죄송합니다. 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
                     yield _sse("chunk", {"text": full_text})
 
                 bot_msg = ChatMessage(
@@ -487,7 +487,7 @@ class ChatService:
                     yield _sse("chunk", {"text": err_msg})
 
                 if not full_text.strip():
-                    full_text = (preview_bot.fallback or "").strip() or "(빈 응답)"
+                    full_text = (preview_bot.fallback or "").strip() or "죄송합니다. 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
                     yield _sse("chunk", {"text": full_text})
 
                 bot_msg = ChatMessage(

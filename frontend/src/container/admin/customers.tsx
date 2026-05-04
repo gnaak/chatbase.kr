@@ -7,7 +7,6 @@ interface UserDto {
   email: string;
   name: string;
   active: boolean;
-  workspace_name: string | null;
   created_at: string | null;
   last_login_at: string | null;
   bot_count: number;
@@ -25,49 +24,48 @@ const AdminCustomers = () => {
 
   const columns: Column[] = useMemo(
     () => [
-      { key: "id", header: "ID", width: "60px", align: "center" },
+      { key: "id", header: "ID", width: "56px", align: "center" },
+      { key: "name", header: "이름", width: "120px", align: "center" },
       {
         key: "email",
         header: "이메일",
+        width: "240px",
+        align: "center",
         render: (r: UserDto) => (
-          <span className="font-mono text-[12px] text-text-main">{r.email}</span>
-        ),
-      },
-      { key: "name", header: "이름", width: "100px" },
-      {
-        key: "workspace_name",
-        header: "워크스페이스",
-        render: (r: UserDto) => (
-          <span className="text-[12px] text-text-sub">
-            {r.workspace_name || "—"}
+          <span
+            className="font-mono text-[12px] text-neutral-800 truncate block"
+            title={r.email}
+          >
+            {r.email}
           </span>
         ),
       },
       {
         key: "key_providers",
         header: "등록 키",
-        width: "200px",
+        width: "180px",
+        align: "center",
         render: (r: UserDto) =>
           r.key_providers.length > 0 ? (
-            <div className="flex flex-wrap gap-1">
+            <div className="flex flex-wrap justify-center gap-1">
               {r.key_providers.map((p) => (
                 <span
                   key={p}
-                  className="inline-flex items-center px-1.5 h-5 rounded-DEFAULT bg-bg-sub text-[11px] font-medium text-text-main"
+                  className="inline-flex items-center px-1.5 h-5 rounded bg-neutral-100 text-[11px] font-medium text-neutral-700"
                 >
                   {p}
                 </span>
               ))}
             </div>
           ) : (
-            <span className="text-text-sub text-[11px]">—</span>
+            <span className="text-neutral-400 text-[11px]">—</span>
           ),
       },
       {
         key: "bot_count",
         header: "봇",
         width: "60px",
-        align: "right",
+        align: "center",
         render: (r: UserDto) => (
           <span className="font-mono text-[12px]">{r.bot_count}</span>
         ),
@@ -75,8 +73,8 @@ const AdminCustomers = () => {
       {
         key: "session_count",
         header: "세션",
-        width: "70px",
-        align: "right",
+        width: "72px",
+        align: "center",
         render: (r: UserDto) => (
           <span className="font-mono text-[12px]">{r.session_count}</span>
         ),
@@ -84,14 +82,14 @@ const AdminCustomers = () => {
       {
         key: "active",
         header: "상태",
-        width: "70px",
+        width: "84px",
         align: "center",
         render: (r: UserDto) => (
-          <span className="inline-flex items-center gap-1.5 text-[11px] text-text-sub">
+          <span className="inline-flex items-center gap-1.5 text-[11px] text-neutral-600">
             <span
               className={[
                 "w-1.5 h-1.5 rounded-full",
-                r.active ? "bg-point-green" : "bg-text-disabled",
+                r.active ? "bg-emerald-500" : "bg-neutral-300",
               ].join(" ")}
             />
             {r.active ? "활성" : "비활성"}
@@ -101,9 +99,10 @@ const AdminCustomers = () => {
       {
         key: "created_at",
         header: "가입",
-        width: "160px",
+        width: "150px",
+        align: "center",
         render: (r: UserDto) => (
-          <span className="text-[11px] text-text-sub">
+          <span className="text-[11px] text-neutral-500">
             {formatDate(r.created_at)}
           </span>
         ),
@@ -111,9 +110,10 @@ const AdminCustomers = () => {
       {
         key: "last_login_at",
         header: "최근 로그인",
-        width: "160px",
+        width: "150px",
+        align: "center",
         render: (r: UserDto) => (
-          <span className="text-[11px] text-text-sub">
+          <span className="text-[11px] text-neutral-500">
             {formatDate(r.last_login_at)}
           </span>
         ),
@@ -124,18 +124,23 @@ const AdminCustomers = () => {
 
   return (
     <div className="px-6 md:px-8 py-6 flex flex-col gap-5">
-      <div>
-        <h1 className="text-[18px] font-semibold tracking-tight text-text-main">
-          고객 관리
-        </h1>
-        <p className="text-[13px] text-text-sub mt-1">
-          전체 사용자 · 봇 수 · 등록 키 provider · 누적 세션 수
-        </p>
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <h1 className="text-[18px] font-semibold tracking-tight text-neutral-900">
+            고객 관리
+          </h1>
+          <p className="text-[13px] text-neutral-500 mt-1">
+            전체 사용자 · 봇 수 · 등록 키 provider · 누적 세션 수
+          </p>
+        </div>
+        {users && (
+          <span className="text-[12px] text-neutral-500">
+            총 <span className="font-semibold text-neutral-800">{users.length}</span>명
+          </span>
+        )}
       </div>
 
-      <div className="rounded-comfy bg-bg-card shadow-border overflow-hidden">
-        <Table columns={columns} data={users ?? []} size="sm" striped />
-      </div>
+      <Table columns={columns} data={users ?? []} size="sm" />
     </div>
   );
 };

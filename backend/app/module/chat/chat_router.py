@@ -38,6 +38,25 @@ async def preview_stream(p: ServiceProvider):
     )
 
 
+@router.post("/quick-stream")
+@with_provider
+@with_login()
+async def quick_stream(p: ServiceProvider):
+    """저장 전 봇 즉시 미리보기. DB 저장 없음.
+    body: {content, model, system_prompt?, training_text?, fallback?, history?[]}
+    """
+    body = await p.request.json()
+    user_id = p.request.user_id
+    return StreamingResponse(
+        p.chat_service.quick_stream(body, user_id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @router.post("/stream")
 @with_provider
 @without_login

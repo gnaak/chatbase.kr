@@ -579,24 +579,21 @@ A. 서울 본사 매장은 영업시간 내 방문 픽업이 가능합니다.`}
           </div>
         </div>
 
-        {/* 라이브 미리보기 — 저장된 봇에서만 노출 */}
-        {!isNew && (
-          <div className="hidden lg:block absolute bottom-6 right-6 w-[480px] h-[760px] z-40 pointer-events-none">
-            <div className="h-full">
-              <ChatPreview
-                botName={form.name}
-                greeting={form.greeting}
-                fallback={form.fallback}
-                logo={form.logo}
-                widgetIcon={form.widgetIcon}
-                slug={slug}
-                model={form.model}
-                systemPrompt={form.systemPrompt}
-                trainingData={form.trainingData}
-              />
-            </div>
+        <div className="hidden lg:block absolute bottom-6 right-6 w-[480px] h-[760px] z-40 pointer-events-none">
+          <div className="h-full">
+            <ChatPreview
+              botName={form.name}
+              greeting={form.greeting}
+              fallback={form.fallback}
+              logo={form.logo}
+              widgetIcon={form.widgetIcon}
+              slug={slug}
+              model={form.model}
+              systemPrompt={form.systemPrompt}
+              trainingData={form.trainingData}
+            />
           </div>
-        )}
+        </div>
       </div>
 
       <ConfirmModal

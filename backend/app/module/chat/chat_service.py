@@ -62,9 +62,8 @@ def _build_system_prompt(bot) -> str:
 
 
 def _should_enable_web_search(bot) -> bool:
-    """학습 자료가 있고 fallback이 비어있을 때만 web search 활성."""
-    has_knowledge = bool(bot.training_text) or bool(bot.vector_store_id)
-    return has_knowledge and not (bot.fallback or "").strip()
+    """fallback이 비어있으면 web search 활성. fallback을 설정하면 web search 대신 해당 메시지 사용."""
+    return not (bot.fallback or "").strip()
 
 
 def _format_llm_error(provider_value: str, exc: Exception) -> str:
@@ -503,6 +502,79 @@ class ChatService:
                 yield _sse("done", {"bot_message": _msg_to_dict(bot_msg)})
             except Exception as exc:
                 print(f"[preview] stream error: {exc}")
+                yield _sse("error", {"message": str(exc)})
+
+    async def quick_stream(
+        self, body: dict, user_id: int
+    ) -> AsyncGenerator[str, None]:
+        """저장되지 않은 봇의 즉시 미리보기. DB 저장 없음.
+        body: {content, model, system_prompt?, training_text?, fallback?, history?[]}
+        """
+        content = (body.get("content") or "").strip()
+        model = (body.get("model") or "").strip()
+
+        if not (content and model):
+            yield _sse("error", {"message": "content, model이 필요합니다."})
+            return
+
+        async with SessionLocal() as db:
+            api_key_repo = ApiKeyRepository(db)
+            api_key_service = ApiKeyService(api_key_repo)
+
+            try:
+                preview_bot = SimpleNamespace(
+                    user_id=user_id,
+                    model=model,
+                    system_prompt=body.get("system_prompt"),
+                    training_text=body.get("training_text"),
+                    fallback=body.get("fallback"),
+                    vector_store_id=None,
+                )
+
+                effective_model = _resolve_effective_model(preview_bot.model, None)
+                provider = resolve_provider(effective_model)
+                api_key = (
+                    await api_key_service.get_decrypted_key(user_id, provider)
+                ) or ""
+
+                system = _build_system_prompt(preview_bot)
+
+                raw_history = body.get("history") or []
+                api_messages = [
+                    {
+                        "role": h.get("role", "user"),
+                        "content": h.get("content", ""),
+                    }
+                    for h in raw_history
+                    if h.get("content")
+                ]
+                api_messages.append({"role": "user", "content": content})
+
+                full_text = ""
+                try:
+                    async for chunk in self.llm_service.chat_stream(
+                        model=effective_model,
+                        system_prompt=system,
+                        messages=api_messages,
+                        api_key=api_key,
+                        vector_store_id=None,
+                        enable_web_search=_should_enable_web_search(preview_bot),
+                    ):
+                        full_text += chunk
+                        yield _sse("chunk", {"text": chunk})
+                except Exception as exc:
+                    print(f"[quick-preview] LLM stream failed: {exc}")
+                    err_msg = _format_llm_error(provider.value, exc)
+                    full_text += err_msg
+                    yield _sse("chunk", {"text": err_msg})
+
+                if not full_text.strip():
+                    full_text = (preview_bot.fallback or "").strip() or "죄송합니다. 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
+                    yield _sse("chunk", {"text": full_text})
+
+                yield _sse("done", {})
+            except Exception as exc:
+                print(f"[quick-preview] stream error: {exc}")
                 yield _sse("error", {"message": str(exc)})
 
     # ── 대시보드 (with_login) ─────────────────

@@ -14,6 +14,15 @@ interface PreviewStreamRequest {
   fallback?: string;
 }
 
+interface QuickStreamRequest {
+  content: string;
+  model: string;
+  system_prompt?: string;
+  training_text?: string;
+  fallback?: string;
+  history?: { role: string; content: string }[];
+}
+
 interface ChatPreviewProps {
   botName: string;
   greeting: string;
@@ -48,21 +57,17 @@ const ChatPreview = ({
     <div className="relative h-full pointer-events-none">
       <div className="absolute bottom-0 right-0 flex flex-col items-end gap-3 pointer-events-auto">
         {isOpen && (
-          slug ? (
-            <ChatWindow
-              botName={botName}
-              greeting={greeting}
-              fallback={fallback}
-              logo={logo}
-              slug={slug}
-              model={model}
-              systemPrompt={systemPrompt}
-              trainingData={trainingData}
-              onClose={() => setIsOpen(false)}
-            />
-          ) : (
-            <PlaceholderWindow onClose={() => setIsOpen(false)} />
-          )
+          <ChatWindow
+            botName={botName}
+            greeting={greeting}
+            fallback={fallback}
+            logo={logo}
+            slug={slug}
+            model={model}
+            systemPrompt={systemPrompt}
+            trainingData={trainingData}
+            onClose={() => setIsOpen(false)}
+          />
         )}
         <button
           type="button"
@@ -85,55 +90,6 @@ const ChatPreview = ({
     </div>
   );
 };
-
-const PlaceholderWindow = ({ onClose }: { onClose: () => void }) => (
-  <div className="flex flex-col w-[460px] max-w-full h-[700px] max-h-[calc(100svh-8rem)] bg-bg-card rounded-comfy shadow-card dark:shadow-card-dark overflow-hidden animate-fade-slide">
-    <div className="flex items-center justify-between gap-3 px-3.5 h-12 border-b border-line">
-      <div className="flex flex-col gap-1.5">
-        <div className="h-2.5 w-24 rounded-full bg-bg-sub animate-pulse" />
-        <div className="h-2 w-12 rounded-full bg-bg-sub animate-pulse" />
-      </div>
-      <IconBtn label="닫기" onClick={onClose}>
-        <X className="w-3.5 h-3.5" />
-      </IconBtn>
-    </div>
-
-    <div className="flex-1 px-3.5 py-3.5 space-y-3 bg-bg-sub/40">
-      <div className="flex items-start gap-2">
-        <div className="w-7 h-7 rounded-full bg-bg-sub animate-pulse shrink-0" />
-        <div className="flex flex-col gap-1.5 mt-1">
-          <div className="h-2.5 w-44 rounded-full bg-bg-sub animate-pulse" />
-          <div className="h-2.5 w-32 rounded-full bg-bg-sub animate-pulse" />
-        </div>
-      </div>
-      <div className="flex justify-end">
-        <div className="h-8 w-28 rounded-comfy bg-bg-sub animate-pulse" />
-      </div>
-      <div className="flex items-start gap-2">
-        <div className="w-7 h-7 rounded-full bg-bg-sub animate-pulse shrink-0" />
-        <div className="flex flex-col gap-1.5 mt-1">
-          <div className="h-2.5 w-52 rounded-full bg-bg-sub animate-pulse" />
-          <div className="h-2.5 w-40 rounded-full bg-bg-sub animate-pulse" />
-          <div className="h-2.5 w-24 rounded-full bg-bg-sub animate-pulse" />
-        </div>
-      </div>
-      <div className="flex justify-end">
-        <div className="h-8 w-20 rounded-comfy bg-bg-sub animate-pulse" />
-      </div>
-      <div className="flex items-start gap-2">
-        <div className="w-7 h-7 rounded-full bg-bg-sub animate-pulse shrink-0" />
-        <div className="flex flex-col gap-1.5 mt-1">
-          <div className="h-2.5 w-36 rounded-full bg-bg-sub animate-pulse" />
-        </div>
-      </div>
-    </div>
-
-    <div className="flex items-center gap-2 px-3 py-2.5 border-t border-line bg-bg-card">
-      <div className="flex-1 h-9 rounded-DEFAULT bg-bg-sub animate-pulse" />
-      <div className="w-9 h-9 rounded-DEFAULT bg-bg-sub animate-pulse shrink-0" />
-    </div>
-  </div>
-);
 
 interface ChatWindowProps extends ChatPreviewProps {
   onClose: () => void;
@@ -162,6 +118,9 @@ const ChatWindow = ({
   const { sendMessage } = useChatStream<PreviewStreamRequest>(
     "api/chat/preview/stream",
   );
+  const { sendMessage: sendQuick } = useChatStream<QuickStreamRequest>(
+    "api/chat/quick-stream",
+  );
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -186,17 +145,11 @@ const ChatWindow = ({
     const text = input.trim();
     if (!text || pending) return;
 
-    // 봇 미저장 상태(생성 전): 모킹 답변
-    if (!slug) {
+    if (!slug && !model) {
       setMessages((prev) => [
         ...prev,
         { role: "user", text },
-        {
-          role: "bot",
-          text:
-            fallback ||
-            "(미리보기에서는 실제 응답이 생성되지 않습니다. 봇을 저장하면 실제 LLM이 응답합니다.)",
-        },
+        { role: "bot", text: "모델을 먼저 선택해주세요! 위 설정에서 모델을 고르면 바로 대화할 수 있어요." },
       ]);
       setInput("");
       return;
@@ -246,18 +199,38 @@ const ChatWindow = ({
     };
 
     try {
-      await sendMessage(
-        {
-          bot_id: slug,
-          content: text,
-          session_id: sessionIdRef.current,
-          ...(model ? { model } : {}),
-          ...(systemPrompt !== undefined ? { system_prompt: systemPrompt } : {}),
-          ...(trainingData !== undefined ? { training_text: trainingData } : {}),
-          fallback: fallback ?? "",
-        },
-        handleChunk,
-      );
+      if (!slug) {
+        const history = messages
+          .filter((m) => m.text)
+          .map((m) => ({
+            role: m.role === "user" ? "user" : "assistant",
+            content: m.text,
+          }));
+        await sendQuick(
+          {
+            content: text,
+            model: model ?? "",
+            ...(systemPrompt !== undefined ? { system_prompt: systemPrompt } : {}),
+            ...(trainingData !== undefined ? { training_text: trainingData } : {}),
+            fallback: fallback ?? "",
+            history,
+          },
+          handleChunk,
+        );
+      } else {
+        await sendMessage(
+          {
+            bot_id: slug,
+            content: text,
+            session_id: sessionIdRef.current,
+            ...(model ? { model } : {}),
+            ...(systemPrompt !== undefined ? { system_prompt: systemPrompt } : {}),
+            ...(trainingData !== undefined ? { training_text: trainingData } : {}),
+            fallback: fallback ?? "",
+          },
+          handleChunk,
+        );
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "알 수 없는 오류";
       updateLastBot((prev) => prev || fallback || `오류: ${msg}`);
@@ -414,6 +387,9 @@ const Bubble = ({ role, text, logo, botName, typing }: BubbleProps) => {
   );
 };
 
+const normalizeMarkdown = (text: string) =>
+  text.replace(/(\*\*|__)(?=["'"‘“])/g, "$1​");
+
 const Markdown = ({ text }: { text: string }) => (
   <ReactMarkdown
     remarkPlugins={[remarkGfm]}
@@ -464,7 +440,7 @@ const Markdown = ({ text }: { text: string }) => (
       hr: () => <hr className="my-2 border-line" />,
     }}
   >
-    {text}
+    {normalizeMarkdown(text)}
   </ReactMarkdown>
 );
 

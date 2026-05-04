@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import Topbar from "@/component/dashboard/layout/topbar";
 import Button from "@/component/dashboard/ui/button";
 import Card from "@/component/dashboard/ui/card";
+import ConfirmModal from "@/component/dashboard/ui/confirmModal";
 import Field from "@/component/dashboard/ui/field";
 import Input from "@/component/dashboard/ui/input";
 import { useTheme } from "@/hooks/common/useTheme";
@@ -241,12 +242,10 @@ const AppearanceSection = () => {
 
 const DangerSection = () => {
   const toast = useToast();
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const handleDelete = () => {
-    const ok = window.confirm(
-      "정말로 계정을 삭제할까요? 모든 챗봇, 대화 로그, 워크스페이스 데이터가 사라지며 복구할 수 없습니다.",
-    );
-    if (!ok) return;
+    setConfirmOpen(false);
     // TODO: 계정 삭제 API
     toast.info("계정 삭제 API는 추후 지원될 예정입니다.");
   };
@@ -270,12 +269,22 @@ const DangerSection = () => {
             pill
             variant="danger"
             leftIcon={<Trash2 className="w-3.5 h-3.5" />}
-            onClick={handleDelete}
+            onClick={() => setConfirmOpen(true)}
           >
             계정 삭제
           </Button>
         </div>
       </Card>
+
+      <ConfirmModal
+        open={confirmOpen}
+        variant="danger"
+        title="정말로 계정을 삭제할까요?"
+        description="모든 챗봇, 대화 로그, 등록된 API 키, 결제 정보가 즉시 삭제되며 복구할 수 없습니다."
+        confirmLabel="계정 삭제"
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </Section>
   );
 };

@@ -1,7 +1,10 @@
 import asyncio
+import logging
 from typing import AsyncIterator
 
 from openai import AsyncOpenAI
+
+logger = logging.getLogger("app.infra.openai")
 
 
 class OpenAIChatService:
@@ -20,7 +23,15 @@ class OpenAIChatService:
         merged_tools: list[dict] = list(tools or [])
         if enable_web_search:
             merged_tools.append({"type": "web_search_preview"})
+        logger.info(
+            "request model=%s messages=%d web_search=%s tools=%d",
+            model,
+            len(messages),
+            enable_web_search,
+            len(merged_tools),
+        )
         response = None
+        chunks = 0
         try:
             response = await client.responses.create(
                 model=model,
@@ -31,10 +42,16 @@ class OpenAIChatService:
             )
             async for event in response:
                 if event.type == "response.output_text.delta":
+                    chunks += 1
                     yield event.delta
                 elif event.type == "response.completed":
                     break
+            logger.info("response model=%s chunks=%d", model, chunks)
         except asyncio.CancelledError:
             if response:
                 await response.close()
+            logger.warning("cancelled model=%s after_chunks=%d", model, chunks)
+            raise
+        except Exception:
+            logger.exception("error model=%s after_chunks=%d", model, chunks)
             raise

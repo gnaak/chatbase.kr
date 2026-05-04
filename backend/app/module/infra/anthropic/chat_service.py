@@ -1,6 +1,9 @@
+import logging
 from typing import AsyncIterator
 
 from anthropic import AsyncAnthropic
+
+logger = logging.getLogger("app.infra.anthropic")
 
 
 class AnthropicChatService:
@@ -35,6 +38,20 @@ class AnthropicChatService:
         if merged_tools:
             kwargs["tools"] = merged_tools
 
-        async with client.messages.stream(**kwargs) as stream:
-            async for text in stream.text_stream:
-                yield text
+        logger.info(
+            "request model=%s messages=%d web_search=%s tools=%d",
+            model,
+            len(messages),
+            enable_web_search,
+            len(merged_tools),
+        )
+        chunks = 0
+        try:
+            async with client.messages.stream(**kwargs) as stream:
+                async for text in stream.text_stream:
+                    chunks += 1
+                    yield text
+            logger.info("response model=%s chunks=%d", model, chunks)
+        except Exception:
+            logger.exception("error model=%s after_chunks=%d", model, chunks)
+            raise

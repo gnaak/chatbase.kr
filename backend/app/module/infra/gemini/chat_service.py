@@ -1,7 +1,10 @@
+import logging
 from typing import AsyncIterator
 
 from google import genai as google_genai
 from google.genai import types as genai_types
+
+logger = logging.getLogger("app.infra.gemini")
 
 
 class GeminiChatService:
@@ -34,18 +37,32 @@ class GeminiChatService:
             tools=merged_tools or None,
         )
 
-        stream = await client.aio.models.generate_content_stream(
-            model=model,
-            contents=contents,
-            config=config,
+        logger.info(
+            "request model=%s messages=%d web_search=%s tools=%d",
+            model,
+            len(messages),
+            enable_web_search,
+            len(merged_tools),
         )
-        async for chunk in stream:
-            candidates = getattr(chunk, "candidates", None) or []
-            for cand in candidates:
-                content = getattr(cand, "content", None)
-                if not content:
-                    continue
-                for part in getattr(content, "parts", None) or []:
-                    text = getattr(part, "text", None)
-                    if text:
-                        yield text
+        chunks = 0
+        try:
+            stream = await client.aio.models.generate_content_stream(
+                model=model,
+                contents=contents,
+                config=config,
+            )
+            async for chunk in stream:
+                candidates = getattr(chunk, "candidates", None) or []
+                for cand in candidates:
+                    content = getattr(cand, "content", None)
+                    if not content:
+                        continue
+                    for part in getattr(content, "parts", None) or []:
+                        text = getattr(part, "text", None)
+                        if text:
+                            chunks += 1
+                            yield text
+            logger.info("response model=%s chunks=%d", model, chunks)
+        except Exception:
+            logger.exception("error model=%s after_chunks=%d", model, chunks)
+            raise

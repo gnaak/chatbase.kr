@@ -83,8 +83,8 @@ interface BotDto {
 
 interface BotPayload {
   name: string;
-  logo?: string;
-  widget_icon?: string;
+  logo?: string | null;
+  widget_icon?: string | null;
   greeting?: string;
   system_prompt?: string;
   training_text?: string;
@@ -120,8 +120,8 @@ const dtoToForm = (dto: BotDto): BotForm => ({
 
 const formToPayload = (form: BotForm): BotPayload => ({
   name: form.name,
-  logo: form.logo,
-  widget_icon: form.widgetIcon,
+  logo: form.logo ?? null,
+  widget_icon: form.widgetIcon ?? null,
   greeting: form.greeting,
   system_prompt: form.systemPrompt,
   training_text: form.trainingData,

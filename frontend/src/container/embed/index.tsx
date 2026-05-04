@@ -185,7 +185,7 @@ const EmbedChat = () => {
                   <Bot className="w-3.5 h-3.5 text-text-sub" />
                 )}
               </div>
-              <div className="px-3 py-2 rounded-comfy bg-bg-card shadow-border text-[13px] leading-relaxed text-text-main max-w-[80%]">
+              <div className="px-3 py-2 rounded-comfy bg-bg-card shadow-border text-[13px] leading-relaxed text-text-main max-w-[90%]">
                 {msg.content ? <Markdown text={msg.content} /> : <TypingDots />}
               </div>
             </div>

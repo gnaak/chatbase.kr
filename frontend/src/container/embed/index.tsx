@@ -31,6 +31,9 @@ interface StreamRequest {
 
 const EmbedChat = () => {
   const { botId } = useParams();
+  // widget.js가 iframe에 ?mode=widget을 붙여서 호출 → 버블 버튼 없이 채팅창만 표시
+  const isWidgetMode = new URLSearchParams(window.location.search).get("mode") === "widget";
+
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sessionId, setSessionId] = useState<number | undefined>();
@@ -132,90 +135,98 @@ const EmbedChat = () => {
     setError(null);
   };
 
-  return (
-    <div className="fixed bottom-4 right-4 flex flex-col items-end gap-3 font-sans">
-      {isOpen && (
-        <div className="flex flex-col w-[360px] h-[560px] bg-bg-card rounded-comfy shadow-[0_8px_32px_rgba(0,0,0,0.18)] overflow-hidden animate-fade-slide">
-          {/* 헤더 */}
-          <header className="shrink-0 flex items-center justify-between px-3.5 h-12 border-b border-line">
-            <div className="flex items-center gap-2.5 min-w-0">
+  const chatWindow = (
+    <div className={[
+      "flex flex-col bg-bg-card overflow-hidden",
+      isWidgetMode
+        ? "w-full h-svh"
+        : "w-[360px] h-[560px] rounded-comfy shadow-[0_8px_32px_rgba(0,0,0,0.18)] animate-fade-slide",
+    ].join(" ")}>
+      <header className="shrink-0 flex items-center justify-between px-3.5 h-12 border-b border-line">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-7 h-7 rounded-full bg-bg-sub shadow-border flex items-center justify-center shrink-0 overflow-hidden">
+            {bot?.logo ? (
+              <img src={bot.logo} alt={bot?.name} className="w-full h-full object-cover" />
+            ) : (
+              <Bot className="w-3.5 h-3.5 text-text-sub" />
+            )}
+          </div>
+          <div className="min-w-0">
+            <div className="text-[13px] font-semibold tracking-tight text-text-main truncate">
+              {bot?.name || "챗봇"}
+            </div>
+            <div className="text-[11px] text-text-sub flex items-center gap-1">
+              <span className={["w-1.5 h-1.5 rounded-full", bot?.active === false ? "bg-text-disabled" : "bg-point-green"].join(" ")} />
+              {bot?.active === false ? "비활성" : "온라인"}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-0.5">
+          <IconBtn label="대화 초기화" onClick={handleReset}>
+            <RotateCcw className="w-3.5 h-3.5" />
+          </IconBtn>
+          {!isWidgetMode && (
+            <IconBtn label="닫기" onClick={() => setIsOpen(false)}>
+              <X className="w-3.5 h-3.5" />
+            </IconBtn>
+          )}
+        </div>
+      </header>
+
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3.5 py-3.5 space-y-2.5 bg-bg-sub/40">
+        {messages.map((msg) => {
+          if (!msg.content && msg.id >= 0) return null;
+          return msg.role === "bot" ? (
+            <div key={msg.id} className="flex items-start gap-2">
               <div className="w-7 h-7 rounded-full bg-bg-sub shadow-border flex items-center justify-center shrink-0 overflow-hidden">
                 {bot?.logo ? (
-                  <img src={bot.logo} alt={bot?.name} className="w-full h-full object-cover" />
+                  <img src={bot.logo} alt={bot.name} className="w-full h-full object-cover" />
                 ) : (
                   <Bot className="w-3.5 h-3.5 text-text-sub" />
                 )}
               </div>
-              <div className="min-w-0">
-                <div className="text-[13px] font-semibold tracking-tight text-text-main truncate">
-                  {bot?.name || "챗봇"}
-                </div>
-                <div className="text-[11px] text-text-sub flex items-center gap-1">
-                  <span className={["w-1.5 h-1.5 rounded-full", bot?.active === false ? "bg-text-disabled" : "bg-point-green"].join(" ")} />
-                  {bot?.active === false ? "비활성" : "온라인"}
-                </div>
+              <div className="px-3 py-2 rounded-comfy bg-bg-card shadow-border text-[13px] leading-relaxed text-text-main max-w-[80%]">
+                {msg.content ? <Markdown text={msg.content} /> : <TypingDots />}
               </div>
             </div>
-            <div className="flex items-center gap-0.5">
-              <IconBtn label="대화 초기화" onClick={handleReset}>
-                <RotateCcw className="w-3.5 h-3.5" />
-              </IconBtn>
-              <IconBtn label="닫기" onClick={() => setIsOpen(false)}>
-                <X className="w-3.5 h-3.5" />
-              </IconBtn>
+          ) : (
+            <div key={msg.id} className="flex justify-end">
+              <div className="px-3 py-2 rounded-comfy bg-text-main text-text-inverse text-[13px] leading-relaxed max-w-[80%] whitespace-pre-wrap">
+                {msg.content}
+              </div>
             </div>
-          </header>
+          );
+        })}
+        {error && <p className="text-[11px] text-point-red text-center">{error}</p>}
+      </div>
 
-          {/* 메시지 영역 */}
-          <div ref={scrollRef} className="flex-1 overflow-y-auto px-3.5 py-3.5 space-y-2.5 bg-bg-sub/40">
-            {messages.map((msg) => {
-              if (!msg.content && msg.id >= 0) return null;
-              return msg.role === "bot" ? (
-                <div key={msg.id} className="flex items-start gap-2">
-                  <div className="w-7 h-7 rounded-full bg-bg-sub shadow-border flex items-center justify-center shrink-0 overflow-hidden">
-                    {bot?.logo ? (
-                      <img src={bot.logo} alt={bot.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <Bot className="w-3.5 h-3.5 text-text-sub" />
-                    )}
-                  </div>
-                  <div className="px-3 py-2 rounded-comfy bg-bg-card shadow-border text-[13px] leading-relaxed text-text-main max-w-[80%]">
-                    {msg.content ? <Markdown text={msg.content} /> : <TypingDots />}
-                  </div>
-                </div>
-              ) : (
-                <div key={msg.id} className="flex justify-end">
-                  <div className="px-3 py-2 rounded-comfy bg-text-main text-text-inverse text-[13px] leading-relaxed max-w-[80%] whitespace-pre-wrap">
-                    {msg.content}
-                  </div>
-                </div>
-              );
-            })}
-            {error && <p className="text-[11px] text-point-red text-center">{error}</p>}
-          </div>
+      <form onSubmit={handleSend} className="shrink-0 flex items-center gap-2 px-3 py-2.5 border-t border-line bg-bg-card">
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder={isStreaming ? "응답을 기다리는 중..." : "메시지를 입력하세요"}
+          disabled={isStreaming}
+          className="flex-1 h-9 px-3 rounded-comfy bg-input-bg shadow-border text-[13px] text-text-main placeholder:text-text-placeholder outline-none border-0 focus:shadow-[0_0_0_1px_rgb(var(--text-main))] transition-shadow disabled:opacity-60"
+        />
+        <button
+          type="submit"
+          aria-label="전송"
+          disabled={!input.trim() || isStreaming}
+          className="inline-flex items-center justify-center w-9 h-9 rounded-comfy bg-text-main text-text-inverse hover:bg-text-main/90 disabled:bg-bg-disabled disabled:text-text-disabled disabled:cursor-not-allowed transition-colors"
+        >
+          <Send className="w-4 h-4" />
+        </button>
+      </form>
+    </div>
+  );
 
-          {/* 입력창 */}
-          <form onSubmit={handleSend} className="shrink-0 flex items-center gap-2 px-3 py-2.5 border-t border-line bg-bg-card">
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={isStreaming ? "응답을 기다리는 중..." : "메시지를 입력하세요"}
-              disabled={isStreaming}
-              className="flex-1 h-9 px-3 rounded-comfy bg-input-bg shadow-border text-[13px] text-text-main placeholder:text-text-placeholder outline-none border-0 focus:shadow-[0_0_0_1px_rgb(var(--text-main))] transition-shadow disabled:opacity-60"
-            />
-            <button
-              type="submit"
-              aria-label="전송"
-              disabled={!input.trim() || isStreaming}
-              className="inline-flex items-center justify-center w-9 h-9 rounded-comfy bg-text-main text-text-inverse hover:bg-text-main/90 disabled:bg-bg-disabled disabled:text-text-disabled disabled:cursor-not-allowed transition-colors"
-            >
-              <Send className="w-4 h-4" />
-            </button>
-          </form>
-        </div>
-      )}
+  // widget.js 사용 시: 채팅창만 (버블 버튼은 widget.js가 관리)
+  if (isWidgetMode) return chatWindow;
 
-      {/* 버블 버튼 */}
+  // standalone iframe 사용 시: 버블 버튼 + 채팅창
+  return (
+    <div className="fixed bottom-4 right-4 flex flex-col items-end gap-3 font-sans">
+      {isOpen && chatWindow}
       <button
         type="button"
         onClick={() => setIsOpen((v) => !v)}

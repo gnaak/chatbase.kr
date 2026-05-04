@@ -77,7 +77,7 @@
   var iframe = document.createElement("iframe");
   iframe.title = "Chat";
   iframe.allow = "clipboard-write";
-  iframe.src = baseURL + "/embed/" + encodeURIComponent(botId);
+  iframe.src = baseURL + "/embed/" + encodeURIComponent(botId) + "?mode=widget";
   panel.appendChild(iframe);
 
   var bubble = document.createElement("button");

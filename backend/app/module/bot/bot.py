@@ -42,8 +42,9 @@ class Bot(Base):
     greeting = Column(String(500), nullable=True)
     system_prompt = Column(Text, nullable=True)
     training_text = Column(Text, nullable=True)
+    training_type = Column(String(8), nullable=False, default="text")  # "text" | "file"
     fallback = Column(String(500), nullable=True)
-    model = Column(String(50), nullable=False, default="gpt-4o-mini")
+    model = Column(String(50), nullable=False, default="gpt-5.4-mini")
     vector_store_id = Column(String(64), nullable=True)
 
     active = Column(Boolean, default=True, nullable=False)

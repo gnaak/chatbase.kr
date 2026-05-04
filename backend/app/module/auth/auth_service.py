@@ -42,6 +42,8 @@ class AuthService:
         password = body.get("password")
         auth_type = body.get("type")
         
+        print(hash_password(password))
+        print(password)
         if auth_type == "user":
             user_obj = await self.user_repo.get_user_by_email(email)
         elif auth_type == "admin":

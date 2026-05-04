@@ -18,14 +18,9 @@ MODEL_PROVIDER_MAP = {
 }
 
 # 사용자 노출 alias → 실제 API 모델 ID
-MODEL_API_ID = {
-    "gpt-4o-mini": "gpt-4o-mini",
-    "gpt-4o": "gpt-4o",
-    "claude-haiku": "claude-haiku-4-5",
-    "claude-sonnet": "claude-sonnet-4-5",
-    "gemini-1.5-flash": "gemini-1.5-flash",
-    "gemini-1.5-pro": "gemini-1.5-pro",
-}
+# (현재는 alias 사용 안 함. ALLOWED_MODELS의 ID를 그대로 쓰므로
+# resolve_api_model의 fallback `model.get(m, m)`이 동일 ID를 반환.)
+MODEL_API_ID: dict[str, str] = {}
 
 
 def resolve_provider(model: str) -> Provider:
@@ -54,6 +49,7 @@ class LLMService:
         messages: list[dict],
         api_key: str,
         vector_store_id: str | None = None,
+        enable_web_search: bool = False,
     ) -> AsyncGenerator[str, None]:
         provider = resolve_provider(model)
         api_model = resolve_api_model(model)
@@ -74,6 +70,7 @@ class LLMService:
                 api_key=api_key,
                 instructions=instructions,
                 tools=tools,
+                enable_web_search=enable_web_search,
             )
         elif provider == Provider.ANTHROPIC:
             stream = self._anthropic.generate_stream(
@@ -81,6 +78,7 @@ class LLMService:
                 model=api_model,
                 api_key=api_key,
                 instructions=instructions,
+                enable_web_search=enable_web_search,
             )
         elif provider == Provider.GOOGLE:
             stream = self._gemini.generate_stream(
@@ -88,6 +86,7 @@ class LLMService:
                 model=api_model,
                 api_key=api_key,
                 instructions=instructions,
+                enable_web_search=enable_web_search,
             )
         else:
             raise ValueError(f"unhandled provider: {provider}")
@@ -102,11 +101,17 @@ class LLMService:
         messages: list[dict],
         api_key: str,
         vector_store_id: str | None = None,
+        enable_web_search: bool = False,
     ) -> str:
         """비스트리밍은 스트림을 모아 반환."""
         chunks: list[str] = []
         async for chunk in self.chat_stream(
-            model, system_prompt, messages, api_key, vector_store_id
+            model,
+            system_prompt,
+            messages,
+            api_key,
+            vector_store_id,
+            enable_web_search,
         ):
             chunks.append(chunk)
         return "".join(chunks)

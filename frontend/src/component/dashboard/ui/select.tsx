@@ -4,6 +4,7 @@ import { ChevronDown, Check } from "lucide-react";
 export interface SelectOption {
   value: string;
   label: string;
+  disabled?: boolean;
 }
 
 interface SelectProps {
@@ -73,14 +74,26 @@ const Select = ({
       close();
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
-      setHighlight((h) => (h + 1) % options.length);
+      setHighlight((h) => {
+        for (let i = 1; i <= options.length; i++) {
+          const next = (h + i) % options.length;
+          if (!options[next].disabled) return next;
+        }
+        return h;
+      });
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setHighlight((h) => (h - 1 + options.length) % options.length);
+      setHighlight((h) => {
+        for (let i = 1; i <= options.length; i++) {
+          const prev = (h - i + options.length) % options.length;
+          if (!options[prev].disabled) return prev;
+        }
+        return h;
+      });
     } else if (e.key === "Enter") {
       e.preventDefault();
       const opt = options[highlight];
-      if (opt) {
+      if (opt && !opt.disabled) {
         onChange(opt.value);
         close();
       }
@@ -136,33 +149,43 @@ const Select = ({
           className="
             absolute left-0 right-0 top-full mt-1.5 z-30
             rounded-comfy bg-bg-card shadow-card dark:shadow-card-dark
-            p-1 max-h-64 overflow-y-auto scrollbar-visible
+            p-1 max-h-64 overflow-y-auto
+            [scrollbar-width:none] [-ms-overflow-style:none]
+            [&::-webkit-scrollbar]:hidden
             animate-fade-slide
           "
         >
           {options.map((opt, idx) => {
             const isSelected = opt.value === value;
-            const isHighlight = idx === highlight;
+            const isHighlight = idx === highlight && !opt.disabled;
+            const isDisabled = !!opt.disabled;
             return (
               <button
                 key={opt.value}
                 type="button"
                 role="option"
                 aria-selected={isSelected}
+                aria-disabled={isDisabled}
+                disabled={isDisabled}
                 onClick={() => {
+                  if (isDisabled) return;
                   onChange(opt.value);
                   close();
                 }}
-                onMouseEnter={() => setHighlight(idx)}
+                onMouseEnter={() => !isDisabled && setHighlight(idx)}
                 className={[
                   "w-full flex items-center gap-2 h-8 px-2.5 rounded-DEFAULT",
                   "text-[13px] text-left transition-colors",
                   isHighlight ? "bg-bg-hover" : "",
-                  isSelected ? "text-text-main font-medium" : "text-text-main",
+                  isDisabled
+                    ? "text-text-disabled cursor-not-allowed"
+                    : isSelected
+                      ? "text-text-main font-medium"
+                      : "text-text-main",
                 ].join(" ")}
               >
                 <span className="flex-1 truncate">{opt.label}</span>
-                {isSelected && (
+                {isSelected && !isDisabled && (
                   <Check className="shrink-0 w-3.5 h-3.5 text-text-main" />
                 )}
               </button>

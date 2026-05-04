@@ -14,15 +14,19 @@ class OpenAIChatService:
         api_key: str,
         instructions: str | None = None,
         tools: list[dict] | None = None,
+        enable_web_search: bool = False,
     ) -> AsyncIterator[str]:
         client = AsyncOpenAI(api_key=api_key)
+        merged_tools: list[dict] = list(tools or [])
+        if enable_web_search:
+            merged_tools.append({"type": "web_search_preview"})
         response = None
         try:
             response = await client.responses.create(
                 model=model,
                 input=messages,
                 stream=True,
-                tools=tools or None,
+                tools=merged_tools or None,
                 instructions=instructions,
             )
             async for event in response:

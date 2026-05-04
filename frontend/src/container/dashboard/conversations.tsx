@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, Bot, User, MessagesSquare, Filter } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import Topbar from "@/component/dashboard/layout/topbar";
 import Input from "@/component/dashboard/ui/input";
 import Select, { SelectOption } from "@/component/dashboard/ui/select";
@@ -265,7 +266,7 @@ const MessageRow = ({ message }: { message: MessageDto }) => {
           <Bot className="w-3.5 h-3.5 text-text-sub" />
         </div>
         <div className="flex flex-col gap-1 max-w-[70%]">
-          <div className="px-3 py-2 rounded-comfy bg-bg-card shadow-border text-[13px] leading-relaxed text-text-main">
+          <div className="px-3 py-2 rounded-comfy bg-bg-card shadow-border text-[13px] leading-relaxed text-text-main break-words">
             <Markdown text={message.content} />
           </div>
           <span className="text-[10px] font-mono text-text-sub px-1">{at}</span>
@@ -277,7 +278,7 @@ const MessageRow = ({ message }: { message: MessageDto }) => {
   return (
     <div className="flex justify-end">
       <div className="flex flex-col gap-1 max-w-[70%] items-end">
-        <div className="px-3 py-2 rounded-comfy bg-text-main text-text-inverse text-[13px] leading-relaxed whitespace-pre-wrap">
+        <div className="px-3 py-2 rounded-comfy bg-text-main text-text-inverse text-[13px] leading-relaxed whitespace-pre-wrap break-words">
           {message.content}
         </div>
         <span className="text-[10px] font-mono text-text-sub px-1">{at}</span>
@@ -288,6 +289,7 @@ const MessageRow = ({ message }: { message: MessageDto }) => {
 
 const Markdown = ({ text }: { text: string }) => (
   <ReactMarkdown
+    remarkPlugins={[remarkGfm]}
     components={{
       p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
       strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
@@ -306,18 +308,33 @@ const Markdown = ({ text }: { text: string }) => (
         </a>
       ),
       code: ({ children }) => (
-        <code className="px-1 py-0.5 rounded bg-bg-sub text-[12px] font-mono">
+        <code className="px-1 py-0.5 rounded bg-bg-sub text-[12px] font-mono break-all">
           {children}
         </code>
       ),
       pre: ({ children }) => (
-        <pre className="px-2 py-1.5 my-1 rounded bg-bg-sub overflow-x-auto text-[12px] font-mono">
+        <pre className="px-2 py-1.5 my-1 rounded bg-bg-sub text-[12px] font-mono whitespace-pre-wrap break-all">
           {children}
         </pre>
       ),
       h1: ({ children }) => <h3 className="text-[14px] font-semibold mt-1 mb-0.5">{children}</h3>,
       h2: ({ children }) => <h3 className="text-[14px] font-semibold mt-1 mb-0.5">{children}</h3>,
       h3: ({ children }) => <h3 className="text-[13px] font-semibold mt-1 mb-0.5">{children}</h3>,
+      table: ({ children }) => (
+        <div className="my-2 overflow-x-auto rounded-DEFAULT shadow-border">
+          <table className="w-full text-[12px] border-collapse">{children}</table>
+        </div>
+      ),
+      thead: ({ children }) => <thead className="bg-bg-sub">{children}</thead>,
+      tbody: ({ children }) => <tbody>{children}</tbody>,
+      tr: ({ children }) => <tr className="border-b border-line last:border-b-0">{children}</tr>,
+      th: ({ children }) => (
+        <th className="px-2.5 py-1.5 text-left font-semibold text-text-main">{children}</th>
+      ),
+      td: ({ children }) => (
+        <td className="px-2.5 py-1.5 align-top text-text-main">{children}</td>
+      ),
+      hr: () => <hr className="my-2 border-line" />,
     }}
   >
     {text}

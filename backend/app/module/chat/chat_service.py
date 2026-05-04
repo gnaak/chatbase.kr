@@ -1,8 +1,10 @@
 import json
+from types import SimpleNamespace
 from typing import AsyncGenerator
 
 from app.core.database.base import SessionLocal, now_kst
 from app.core.utils.response import fail, success
+from app.module.api_key.api_key import Provider
 from app.module.api_key.api_key_repository import ApiKeyRepository
 from app.module.api_key.api_key_service import ApiKeyService
 from app.module.bot.bot_repository import BotRepository
@@ -10,6 +12,89 @@ from app.module.chat.chat_message import ChatMessage, MessageRole
 from app.module.chat.chat_repository import ChatRepository
 from app.module.chat.chat_session import ChatSession
 from app.module.infra.llm.llm_service import LLMService, resolve_provider
+
+
+def _resolve_effective_model(bot_model: str, override: str | None) -> str:
+    """body의 model override가 provider prefix 매칭되면 채택. 카탈로그는 DB SOT."""
+    if not override:
+        return bot_model
+    val = override.strip()
+    try:
+        resolve_provider(val)
+        return val
+    except ValueError:
+        return bot_model
+
+
+def _build_system_prompt(bot) -> str:
+    """봇 system_prompt + 학습 텍스트 + (fallback 또는 web search) 규칙 합성.
+
+    - 학습 자료 + fallback 있음: 자료에 없는 질문은 fallback 그대로 답변.
+    - 학습 자료 + fallback 없음: 자료에 없는 질문은 web search로 답변.
+    - 학습 자료 없음: 일반 자유 응답.
+    """
+    parts: list[str] = []
+    if (bot.system_prompt or "").strip():
+        parts.append(bot.system_prompt.strip())
+    if bot.training_text:
+        parts.append(
+            "다음은 답변에 활용할 참고 자료입니다:\n" + bot.training_text
+        )
+
+    has_knowledge = bool(bot.training_text) or bool(bot.vector_store_id)
+    if has_knowledge:
+        fallback = (bot.fallback or "").strip()
+        if fallback:
+            parts.append(
+                "중요 규칙:\n"
+                "- 위에 제공된 참고 자료(또는 첨부된 파일)에 명시된 내용 안에서만 답변하세요.\n"
+                "- 추측하거나 일반 상식/사전 지식으로 답변하지 마세요.\n"
+                "- 자료에 없거나 확실하지 않은 질문에는 다른 말 없이 정확히 다음 문장을 그대로 답변하세요:\n"
+                f'"{fallback}"'
+            )
+        else:
+            parts.append(
+                "중요 규칙:\n"
+                "- 우선 위에 제공된 참고 자료(또는 첨부된 파일)에서 답을 찾으세요.\n"
+                "- 자료에 답이 없으면 web search 도구를 사용해 인터넷에서 최신 정보를 검색해 답변하세요."
+            )
+    return "\n\n".join(parts)
+
+
+def _should_enable_web_search(bot) -> bool:
+    """학습 자료가 있고 fallback이 비어있을 때만 web search 활성."""
+    has_knowledge = bool(bot.training_text) or bool(bot.vector_store_id)
+    return has_knowledge and not (bot.fallback or "").strip()
+
+
+def _format_llm_error(provider_value: str, exc: Exception) -> str:
+    """LLM SDK 에러 메시지를 사용자 친화적으로 가공."""
+    raw = str(exc)
+    low = raw.lower()
+    if (
+        "api_key" in low
+        or "auth_token" in low
+        or "x-api-key" in low
+        or "authentication" in low
+        or "401" in raw
+        or "unauthorized" in low
+        or "invalid api key" in low
+        or "api key not valid" in low
+    ):
+        hint = f"⚠️ {provider_value} API 키가 유효하지 않습니다. (없거나 잘못 입력됐을 수 있어요.)"
+    elif (
+        "quota" in low
+        or "insufficient" in low
+        or "billing" in low
+        or "credit" in low
+        or "429" in raw
+        or "rate limit" in low
+    ):
+        hint = f"⚠️ {provider_value} 토큰/크레딧이 부족하거나 호출 한도를 초과했습니다."
+    else:
+        hint = "⚠️ 모델 호출 실패"
+
+    return f"{hint}\n\n```\n{raw}\n```"
 
 
 def _sse(event: str, data: dict) -> str:
@@ -62,6 +147,7 @@ class ChatService:
         visitor_id = (body.get("visitor_id") or "").strip()
         content = (body.get("content") or "").strip()
         session_id = body.get("session_id")
+        model_override = body.get("model")
 
         if not (bot_slug and visitor_id and content):
             fail("bot_id, visitor_id, content가 필요합니다.", "BAD_REQUEST")
@@ -69,6 +155,8 @@ class ChatService:
         bot = await self.bot_repo.find_by_slug(bot_slug)
         if not bot or not bot.active:
             fail("이 챗봇은 현재 사용할 수 없습니다.", "BOT_UNAVAILABLE", 404)
+
+        effective_model = _resolve_effective_model(bot.model, model_override)
 
         # 1) 세션 확보
         if session_id:
@@ -90,16 +178,9 @@ class ChatService:
         )
         await self.chat_repo.add_message(user_msg)
 
-        # 3) BYOK 키 확보
-        provider = resolve_provider(bot.model)
-        api_key = await self.api_key_service.get_decrypted_key(bot.user_id, provider)
-        if not api_key:
-            await self.chat_repo.db.commit()
-            fail(
-                f"{provider.value} API 키가 등록되어 있지 않습니다.",
-                "API_KEY_MISSING",
-                424,
-            )
+        # 3) BYOK 키 — 없으면 빈 문자열로 호출 시도. SDK가 raise하면 그 메시지가 답변.
+        provider = resolve_provider(effective_model)
+        api_key = await self.api_key_service.get_decrypted_key(bot.user_id, provider) or ""
 
         # 4) LLM 호출 — 학습 데이터를 시스템 프롬프트에 합성
         history = await self.chat_repo.find_messages(session.id)
@@ -111,29 +192,30 @@ class ChatService:
             for m in history
         ]
 
-        system = (bot.system_prompt or "").strip()
-        if bot.training_text:
-            system = (
-                (system + "\n\n" if system else "")
-                + "다음은 답변에 활용할 참고 자료입니다:\n"
-                + bot.training_text
-            )
+        system = _build_system_prompt(bot)
 
+        # vector_store는 OpenAI 모델일 때만 의미 있음
+        vec_id = (
+            bot.vector_store_id
+            if provider == Provider.OPENAI
+            else None
+        )
         try:
             answer = await self.llm_service.chat(
-                model=bot.model,
+                model=effective_model,
                 system_prompt=system,
                 messages=api_messages,
                 api_key=api_key,
-                vector_store_id=bot.vector_store_id,
+                vector_store_id=vec_id,
+                enable_web_search=_should_enable_web_search(bot),
             )
         except Exception as exc:
-            answer = bot.fallback or "죄송합니다, 답변을 생성하지 못했습니다."
-            # LLM 실패는 fallback으로 안내. 로그는 추후 통합.
+            # 키 누락/잘못된 키/모델 오류 등 모든 SDK 에러를 그대로 답변으로 노출
             print(f"[chat] LLM call failed: {exc}")
+            answer = _format_llm_error(provider.value, exc)
 
         if not answer.strip():
-            answer = bot.fallback or "죄송합니다, 답변을 생성하지 못했습니다."
+            answer = bot.fallback or "(빈 응답)"
 
         # 5) 봇 메시지 저장 + 세션 갱신
         bot_msg = ChatMessage(
@@ -171,6 +253,7 @@ class ChatService:
         visitor_id = (body.get("visitor_id") or "").strip()
         content = (body.get("content") or "").strip()
         session_id = body.get("session_id")
+        model_override = body.get("model")
 
         if not (bot_slug and visitor_id and content):
             yield _sse("error", {"message": "bot_id, visitor_id, content가 필요합니다."})
@@ -220,30 +303,14 @@ class ChatService:
                 )
                 print("[stream] meta yielded")
 
-                provider = resolve_provider(bot.model)
-                api_key = await api_key_service.get_decrypted_key(bot.user_id, provider)
-                if not api_key:
-                    fallback = bot.fallback or "API 키가 등록되어 있지 않습니다."
-                    bot_msg = ChatMessage(
-                        session_id=session.id,
-                        role=MessageRole.BOT,
-                        content=fallback,
-                    )
-                    await chat_repo.add_message(bot_msg)
-                    session.last_message_at = now_kst()
-                    await db.commit()
-                    await db.refresh(bot_msg)
-                    yield _sse("chunk", {"text": fallback})
-                    yield _sse("done", {"bot_message": _msg_to_dict(bot_msg)})
-                    return
+                effective_model = _resolve_effective_model(bot.model, model_override)
+                provider = resolve_provider(effective_model)
+                # 키 없어도 빈 문자열로 호출 시도 — SDK 에러를 답변으로 노출
+                api_key = (
+                    await api_key_service.get_decrypted_key(bot.user_id, provider)
+                ) or ""
 
-                system = (bot.system_prompt or "").strip()
-                if bot.training_text:
-                    system = (
-                        (system + "\n\n" if system else "")
-                        + "다음은 답변에 활용할 참고 자료입니다:\n"
-                        + bot.training_text
-                    )
+                system = _build_system_prompt(bot)
 
                 history = await chat_repo.find_messages(session.id)
                 api_messages = [
@@ -254,15 +321,21 @@ class ChatService:
                     for m in history
                 ]
 
+                vec_id = (
+                    bot.vector_store_id
+                    if provider == Provider.OPENAI
+                    else None
+                )
                 full_text = ""
-                print(f"[stream] starting LLM call: {bot.model}")
+                print(f"[stream] starting LLM call: {effective_model}")
                 try:
                     async for chunk in self.llm_service.chat_stream(
-                        model=bot.model,
+                        model=effective_model,
                         system_prompt=system,
                         messages=api_messages,
                         api_key=api_key,
-                        vector_store_id=bot.vector_store_id,
+                        vector_store_id=vec_id,
+                        enable_web_search=_should_enable_web_search(bot),
                     ):
                         if not full_text:
                             print("[stream] first LLM chunk received")
@@ -270,12 +343,12 @@ class ChatService:
                         yield _sse("chunk", {"text": chunk})
                 except Exception as exc:
                     print(f"[chat] LLM stream failed: {exc}")
-                    if not full_text.strip():
-                        full_text = bot.fallback or "죄송합니다, 답변을 생성하지 못했습니다."
-                        yield _sse("chunk", {"text": full_text})
+                    err_msg = _format_llm_error(provider.value, exc)
+                    full_text = (full_text or "") + err_msg
+                    yield _sse("chunk", {"text": err_msg})
 
                 if not full_text.strip():
-                    full_text = bot.fallback or "죄송합니다, 답변을 생성하지 못했습니다."
+                    full_text = bot.fallback or "(빈 응답)"
                     yield _sse("chunk", {"text": full_text})
 
                 bot_msg = ChatMessage(
@@ -291,6 +364,145 @@ class ChatService:
                 yield _sse("done", {"bot_message": _msg_to_dict(bot_msg)})
             except Exception as exc:
                 print(f"[chat] stream error: {exc}")
+                yield _sse("error", {"message": str(exc)})
+
+    # ── 대시보드 미리보기 (봇 소유자만, DB 저장 O, visitor_id=preview-{user_id}) ──
+    async def preview_stream(
+        self, body: dict, user_id: int
+    ) -> AsyncGenerator[str, None]:
+        """폼 override 그대로 LLM 호출. session/message DB에 저장하되
+        visitor_id를 'preview-{user_id}'로 박아 일반 대화와 구분 가능."""
+        bot_slug = (body.get("bot_id") or "").strip()
+        content = (body.get("content") or "").strip()
+        session_id = body.get("session_id")
+
+        if not (bot_slug and content):
+            yield _sse("error", {"message": "bot_id, content가 필요합니다."})
+            return
+
+        async with SessionLocal() as db:
+            chat_repo = ChatRepository(db)
+            bot_repo = BotRepository(db)
+            api_key_repo = ApiKeyRepository(db)
+            api_key_service = ApiKeyService(api_key_repo)
+
+            try:
+                bot = await bot_repo.find_by_slug(bot_slug)
+                if not bot:
+                    yield _sse("error", {"message": "봇이 존재하지 않습니다."})
+                    return
+                if bot.user_id != user_id:
+                    yield _sse("error", {"message": "권한이 없습니다."})
+                    return
+
+                visitor_id = f"preview-{user_id}"
+
+                # 세션 확보 (있으면 검증, 없으면 새로)
+                if session_id:
+                    session = await chat_repo.find_session(int(session_id))
+                    if (
+                        not session
+                        or session.bot_id != bot.id
+                        or session.visitor_id != visitor_id
+                    ):
+                        yield _sse("error", {"message": "세션이 유효하지 않습니다."})
+                        return
+                else:
+                    session = ChatSession(bot_id=bot.id, visitor_id=visitor_id)
+                    await chat_repo.add_session(session)
+
+                # 사용자 메시지 저장
+                user_msg = ChatMessage(
+                    session_id=session.id,
+                    role=MessageRole.USER,
+                    content=content,
+                )
+                await chat_repo.add_message(user_msg)
+                await db.commit()
+                await db.refresh(user_msg)
+                await db.refresh(session)
+
+                yield _sse(
+                    "meta",
+                    {
+                        "session_id": session.id,
+                        "user_message": _msg_to_dict(user_msg),
+                    },
+                )
+
+                # 폼 override를 적용한 가벼운 가짜 bot
+                preview_bot = SimpleNamespace(
+                    user_id=bot.user_id,
+                    model=(body.get("model") or "").strip() or bot.model,
+                    system_prompt=body.get("system_prompt")
+                    if "system_prompt" in body
+                    else bot.system_prompt,
+                    training_text=body.get("training_text")
+                    if "training_text" in body
+                    else bot.training_text,
+                    fallback=body.get("fallback")
+                    if "fallback" in body
+                    else bot.fallback,
+                    vector_store_id=bot.vector_store_id,
+                )
+
+                effective_model = _resolve_effective_model(preview_bot.model, None)
+                provider = resolve_provider(effective_model)
+                api_key = (
+                    await api_key_service.get_decrypted_key(user_id, provider)
+                ) or ""
+
+                system = _build_system_prompt(preview_bot)
+                history = await chat_repo.find_messages(session.id)
+                api_messages = [
+                    {
+                        "role": "user" if m.role == MessageRole.USER else "assistant",
+                        "content": m.content,
+                    }
+                    for m in history
+                ]
+
+                vec_id = (
+                    preview_bot.vector_store_id
+                    if provider == Provider.OPENAI
+                    else None
+                )
+
+                full_text = ""
+                try:
+                    async for chunk in self.llm_service.chat_stream(
+                        model=effective_model,
+                        system_prompt=system,
+                        messages=api_messages,
+                        api_key=api_key,
+                        vector_store_id=vec_id,
+                        enable_web_search=_should_enable_web_search(preview_bot),
+                    ):
+                        full_text += chunk
+                        yield _sse("chunk", {"text": chunk})
+                except Exception as exc:
+                    print(f"[preview] LLM stream failed: {exc}")
+                    err_msg = _format_llm_error(provider.value, exc)
+                    full_text += err_msg
+                    yield _sse("chunk", {"text": err_msg})
+
+                if not full_text.strip():
+                    full_text = (preview_bot.fallback or "").strip() or "(빈 응답)"
+                    yield _sse("chunk", {"text": full_text})
+
+                bot_msg = ChatMessage(
+                    session_id=session.id,
+                    role=MessageRole.BOT,
+                    content=full_text,
+                )
+                await chat_repo.add_message(bot_msg)
+                session.last_message_at = now_kst()
+                await db.commit()
+                await db.refresh(bot_msg)
+
+                yield _sse("done", {"bot_message": _msg_to_dict(bot_msg)})
+            except Exception as exc:
+                print(f"[preview] stream error: {exc}")
                 yield _sse("error", {"message": str(exc)})
 
     # ── 대시보드 (with_login) ─────────────────

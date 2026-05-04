@@ -1,0 +1,406 @@
+import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  AlertCircleIcon,
+  CheckCircle2Icon,
+  ChevronDownIcon,
+  CpuIcon,
+  ImageIcon,
+  Loader2Icon,
+  MessageSquareIcon,
+  RefreshCwIcon,
+} from "lucide-react";
+import { useGet, usePost } from "@/hooks/common/useAPI";
+
+type ModelKind = "chat" | "image";
+
+interface Pricing {
+  input?: number;
+  output?: number;
+  per_image?: number;
+}
+
+interface DiscoveredModel {
+  id: number;
+  value: string;
+  label: string;
+  pricing: Pricing | null;
+  registered: boolean;
+}
+
+interface ProviderBlock {
+  provider: string;
+  label: string;
+  chat: DiscoveredModel[];
+  image: DiscoveredModel[];
+  error?: string;
+}
+
+interface RefreshResult {
+  added: number;
+  updated: number;
+  errors: string[];
+}
+
+const formatChatPricing = (p: Pricing | null) => {
+  if (!p || p.input == null || p.output == null) return "—";
+  return `$${p.input.toFixed(2)} / $${p.output.toFixed(2)} (1M tokens)`;
+};
+
+const formatImagePricing = (p: Pricing | null) => {
+  if (!p || p.per_image == null) return "—";
+  return `$${p.per_image.toFixed(3)} / image`;
+};
+
+const QUERY_KEY = ["admin-models-catalog"];
+
+const AdminModels = () => {
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useGet<ProviderBlock[]>(
+    "api/admin/models/catalog",
+    QUERY_KEY,
+  );
+
+  const refreshMutation = usePost<void, RefreshResult>(
+    "api/admin/models/refresh",
+  );
+  const setActiveMutation = usePost<
+    { value: string; active: boolean },
+    { value: string; active: boolean }
+  >("api/admin/models/set_active");
+
+  const [pendingValue, setPendingValue] = useState<string | null>(null);
+  const [refreshSummary, setRefreshSummary] = useState<RefreshResult | null>(
+    null,
+  );
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+
+  const toggleCollapsed = (provider: string) =>
+    setCollapsed((prev) => ({ ...prev, [provider]: !prev[provider] }));
+
+  const patchRegistered = (value: string, registered: boolean) => {
+    queryClient.setQueryData<ProviderBlock[]>(QUERY_KEY, (old) =>
+      old?.map((p) => ({
+        ...p,
+        chat: p.chat.map((m) => (m.value === value ? { ...m, registered } : m)),
+        image: p.image.map((m) =>
+          m.value === value ? { ...m, registered } : m,
+        ),
+      })),
+    );
+  };
+
+  const handleToggle = (m: DiscoveredModel) => {
+    setPendingValue(m.value);
+    const next = !m.registered;
+    setActiveMutation.mutate(
+      { value: m.value, active: next },
+      {
+        onSuccess: () => {
+          patchRegistered(m.value, next);
+          queryClient.invalidateQueries({ queryKey: ["models", "chat"] });
+          queryClient.invalidateQueries({ queryKey: ["admin-models"] });
+        },
+        onSettled: () => setPendingValue(null),
+      },
+    );
+  };
+
+  const handleRefresh = () => {
+    setRefreshSummary(null);
+    refreshMutation.mutate(undefined, {
+      onSuccess: (res) => {
+        setRefreshSummary(res);
+        queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      },
+    });
+  };
+
+  const totals = useMemo(() => {
+    if (!data) return { chat: 0, image: 0, registered: 0 };
+    let chat = 0;
+    let image = 0;
+    let registered = 0;
+    for (const p of data) {
+      chat += p.chat.length;
+      image += p.image.length;
+      registered +=
+        p.chat.filter((m) => m.registered).length +
+        p.image.filter((m) => m.registered).length;
+    }
+    return { chat, image, registered };
+  }, [data]);
+
+  const isRefreshing = refreshMutation.isPending;
+
+  return (
+    <div className="px-6 md:px-8 py-6 flex flex-col gap-5">
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <h1 className="text-[18px] font-semibold tracking-tight text-text-main">
+            모델 관리
+          </h1>
+          <p className="text-[13px] text-text-sub mt-1">
+            저장된 모델 카탈로그. 새로고침을 누르면 OpenAI / Anthropic / Gemini
+            SDK로 신규 모델을 가져옵니다.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          {data && (
+            <span className="text-[11px] text-text-sub">
+              chat {totals.chat} · image {totals.image} · 사용 중{" "}
+              {totals.registered}
+            </span>
+          )}
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="
+              inline-flex items-center gap-1.5 h-8 px-3 rounded-full
+              bg-bg-card shadow-border text-[12px] font-medium text-text-main
+              hover:bg-bg-hover disabled:opacity-60 transition-colors
+            "
+          >
+            <RefreshCwIcon
+              className={[
+                "w-3.5 h-3.5",
+                isRefreshing ? "animate-spin" : "",
+              ].join(" ")}
+            />
+            {isRefreshing ? "조회 중..." : "새로고침"}
+          </button>
+        </div>
+      </div>
+
+      {refreshSummary && (
+        <div className="rounded-comfy bg-bg-card shadow-border px-4 py-3 text-[12px] text-text-main flex flex-col gap-1">
+          <div>
+            새로고침 완료 — 새 모델{" "}
+            <span className="font-semibold">{refreshSummary.added}</span>개 추가
+            · 갱신{" "}
+            <span className="font-semibold">{refreshSummary.updated}</span>개
+          </div>
+          {refreshSummary.errors.length > 0 && (
+            <div className="text-[11px] text-point-red flex items-start gap-1.5">
+              <AlertCircleIcon className="w-3 h-3 mt-0.5 shrink-0" />
+              <div className="flex flex-col gap-0.5">
+                {refreshSummary.errors.map((e, i) => (
+                  <span key={i}>{e}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="flex items-center justify-center gap-2 py-20 text-[12px] text-text-sub">
+          <Loader2Icon className="w-4 h-4 animate-spin" />
+          카탈로그를 불러오는 중...
+        </div>
+      ) : !data || data.every((p) => p.chat.length === 0 && p.image.length === 0) ? (
+        <Empty />
+      ) : (
+        <div className="flex flex-col gap-3">
+          {data.map((provider) => (
+            <ProviderSection
+              key={provider.provider}
+              provider={provider}
+              onToggle={handleToggle}
+              pendingValue={pendingValue}
+              collapsed={!!collapsed[provider.provider]}
+              onToggleCollapsed={() => toggleCollapsed(provider.provider)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const Empty = () => (
+  <div className="rounded-comfy bg-bg-card shadow-border px-6 py-16">
+    <div className="flex flex-col items-center justify-center gap-3 text-center">
+      <div className="w-12 h-12 rounded-full bg-bg-sub flex items-center justify-center">
+        <CpuIcon className="w-5 h-5 text-text-sub" />
+      </div>
+      <p className="text-[14px] font-medium text-text-main">
+        카탈로그가 비어있습니다
+      </p>
+      <p className="text-[12px] text-text-sub max-w-md leading-relaxed">
+        우측 상단 <span className="font-medium text-text-main">새로고침</span>
+        을 눌러 OpenAI / Anthropic / Gemini SDK에서 모델을 가져오세요.
+      </p>
+    </div>
+  </div>
+);
+
+interface ProviderSectionProps {
+  provider: ProviderBlock;
+  onToggle: (m: DiscoveredModel) => void;
+  pendingValue: string | null;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+}
+
+const ProviderSection = ({
+  provider,
+  onToggle,
+  pendingValue,
+  collapsed,
+  onToggleCollapsed,
+}: ProviderSectionProps) => {
+  const total = provider.chat.length + provider.image.length;
+  const registered =
+    provider.chat.filter((m) => m.registered).length +
+    provider.image.filter((m) => m.registered).length;
+
+  return (
+    <section className="rounded-comfy bg-bg-card shadow-border overflow-hidden">
+      <button
+        type="button"
+        onClick={onToggleCollapsed}
+        className={[
+          "w-full px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-bg-hover transition-colors",
+          collapsed ? "" : "border-b border-line",
+        ].join(" ")}
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-DEFAULT bg-bg-sub flex items-center justify-center shrink-0">
+            <CpuIcon className="w-4 h-4 text-text-sub" />
+          </div>
+          <h2 className="text-[14px] font-semibold text-text-main truncate">
+            {provider.label}
+          </h2>
+          <span className="text-[11px] text-text-sub shrink-0">
+            {total}개 · 사용 중 {registered}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {provider.error && (
+            <div className="flex items-center gap-1.5 text-[11px] text-point-red">
+              <AlertCircleIcon className="w-3.5 h-3.5" />
+              {provider.error}
+            </div>
+          )}
+          <ChevronDownIcon
+            className={[
+              "w-4 h-4 text-text-sub transition-transform duration-200",
+              collapsed ? "-rotate-90" : "",
+            ].join(" ")}
+          />
+        </div>
+      </button>
+
+      {!collapsed && (
+        <>
+          <ModelGroup
+            kind="chat"
+            models={provider.chat}
+            onToggle={onToggle}
+            pendingValue={pendingValue}
+          />
+          {provider.image.length > 0 && (
+            <ModelGroup
+              kind="image"
+              models={provider.image}
+              onToggle={onToggle}
+              pendingValue={pendingValue}
+            />
+          )}
+        </>
+      )}
+    </section>
+  );
+};
+
+interface ModelGroupProps {
+  kind: ModelKind;
+  models: DiscoveredModel[];
+  onToggle: (m: DiscoveredModel) => void;
+  pendingValue: string | null;
+}
+
+const ModelGroup = ({
+  kind,
+  models,
+  onToggle,
+  pendingValue,
+}: ModelGroupProps) => {
+  if (models.length === 0) return null;
+  return (
+    <div>
+      <div className="px-5 pt-4 pb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-tight text-text-sub">
+        {kind === "chat" ? (
+          <MessageSquareIcon className="w-3 h-3" />
+        ) : (
+          <ImageIcon className="w-3 h-3" />
+        )}
+        {kind}
+      </div>
+      <div className="flex flex-col">
+        {models.map((m) => (
+          <ModelRow
+            key={m.value}
+            model={m}
+            kind={kind}
+            onToggle={onToggle}
+            pending={pendingValue === m.value}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+interface ModelRowProps {
+  model: DiscoveredModel;
+  kind: ModelKind;
+  onToggle: (m: DiscoveredModel) => void;
+  pending: boolean;
+}
+
+const ModelRow = ({ model, kind, onToggle, pending }: ModelRowProps) => {
+  const pricing =
+    kind === "chat"
+      ? formatChatPricing(model.pricing)
+      : formatImagePricing(model.pricing);
+
+  return (
+    <div className="px-5 py-3 flex items-center justify-between gap-3 border-t border-line">
+      <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+        <div className="flex items-center gap-2">
+          <span className="text-[13px] font-medium text-text-main truncate">
+            {model.label}
+          </span>
+          {model.registered && (
+            <span className="shrink-0 inline-flex items-center gap-1 px-1.5 h-5 rounded-full bg-bg-sub text-[10px] font-medium text-text-main">
+              <CheckCircle2Icon className="w-3 h-3" />
+              사용 중
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 text-[11px] text-text-sub">
+          <span className="font-mono truncate">{model.value}</span>
+          <span className="text-text-disabled">·</span>
+          <span className="font-mono">{pricing}</span>
+        </div>
+      </div>
+      <button
+        onClick={() => onToggle(model)}
+        disabled={pending}
+        className={[
+          "shrink-0 inline-flex items-center justify-center h-8 px-3 rounded-full",
+          "text-[12px] font-medium transition-colors disabled:opacity-60",
+          model.registered
+            ? "bg-bg-card shadow-border text-text-main hover:bg-bg-hover"
+            : "bg-text-main text-text-inverse hover:bg-text-main/90",
+        ].join(" ")}
+      >
+        {pending ? "처리 중..." : model.registered ? "사용 해제" : "사용 설정"}
+      </button>
+    </div>
+  );
+};
+
+export default AdminModels;

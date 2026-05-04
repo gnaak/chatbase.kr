@@ -7,14 +7,13 @@ from app.module.bot.bot_repository import BotRepository
 from app.module.infra.llm.llm_service import resolve_provider
 from app.module.infra.openai.vector_store_service import VectorStoreService
 
-ALLOWED_MODELS = {
-    "gpt-4o-mini",
-    "gpt-4o",
-    "claude-haiku",
-    "claude-sonnet",
-    "gemini-1.5-flash",
-    "gemini-1.5-pro",
-}
+
+def _validate_model(model: str) -> None:
+    """provider prefix(gpt-/claude-/gemini-)만 검증. 모델 카탈로그는 DB SOT."""
+    try:
+        resolve_provider(model)
+    except ValueError:
+        fail(f"지원하지 않는 모델: {model}", "INVALID_MODEL")
 
 
 def _bot_to_dict(bot: Bot) -> dict:
@@ -26,6 +25,7 @@ def _bot_to_dict(bot: Bot) -> dict:
         "greeting": bot.greeting,
         "system_prompt": bot.system_prompt,
         "training_text": bot.training_text,
+        "training_type": bot.training_type or "text",
         "fallback": bot.fallback,
         "model": bot.model,
         "active": bot.active,
@@ -33,6 +33,10 @@ def _bot_to_dict(bot: Bot) -> dict:
         "created_at": bot.created_at.isoformat() if bot.created_at else None,
         "updated_at": bot.updated_at.isoformat() if bot.updated_at else None,
     }
+
+
+def _normalize_training_type(value: str | None) -> str:
+    return "file" if value == "file" else "text"
 
 
 def _file_to_dict(f: BotFile) -> dict:
@@ -111,9 +115,8 @@ class BotService:
         if not name:
             fail("이름이 필요합니다.", "NAME_REQUIRED")
 
-        model = body.get("model") or "gpt-4o-mini"
-        if model not in ALLOWED_MODELS:
-            fail(f"지원하지 않는 모델: {model}", "INVALID_MODEL")
+        model = body.get("model") or "gpt-5.4-mini"
+        _validate_model(model)
 
         bot = Bot(
             user_id=user_id,
@@ -123,6 +126,7 @@ class BotService:
             greeting=body.get("greeting"),
             system_prompt=body.get("system_prompt"),
             training_text=body.get("training_text"),
+            training_type=_normalize_training_type(body.get("training_type")),
             fallback=body.get("fallback"),
             model=model,
             active=body.get("active", True),
@@ -145,15 +149,19 @@ class BotService:
             "greeting",
             "system_prompt",
             "training_text",
+            "training_type",
             "fallback",
             "model",
             "active",
         ):
             if field in body:
-                if field == "model" and body[field] not in ALLOWED_MODELS:
-                    fail(f"지원하지 않는 모델: {body[field]}", "INVALID_MODEL")
+                if field == "model":
+                    _validate_model(body[field])
                 if field == "name" and not (body[field] or "").strip():
                     fail("이름이 비어있습니다.", "NAME_REQUIRED")
+                if field == "training_type":
+                    setattr(bot, field, _normalize_training_type(body[field]))
+                    continue
                 setattr(bot, field, body[field])
 
         await self.bot_repo.db.commit()

@@ -85,15 +85,12 @@
   bubble.type = "button";
   bubble.setAttribute("aria-label", "채팅 열기");
 
-  var ICON_OPEN =
-    '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  var ICON_CLOSE =
-    '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-
-  bubble.innerHTML = ICON_OPEN;
+  // lucide MessageCircle — 대시보드 미리보기 버블과 동일한 SVG
+  var ICON_DEFAULT =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>';
 
   var customIcon = null;
-  var renderClosedBubble = function () {
+  var renderBubble = function () {
     if (customIcon) {
       bubble.innerHTML =
         '<img src="' +
@@ -102,21 +99,18 @@
       bubble.style.padding = "0";
       bubble.style.overflow = "hidden";
     } else {
-      bubble.innerHTML = ICON_OPEN;
+      bubble.innerHTML = ICON_DEFAULT;
+      bubble.style.padding = "";
+      bubble.style.overflow = "";
     }
   };
+
+  renderBubble();
 
   var open = false;
   var setOpen = function (next) {
     open = next;
     panel.style.display = open ? "block" : "none";
-    if (open) {
-      bubble.innerHTML = ICON_CLOSE;
-      bubble.style.padding = "";
-      bubble.style.overflow = "";
-    } else {
-      renderClosedBubble();
-    }
     bubble.setAttribute("aria-label", open ? "채팅 닫기" : "채팅 열기");
   };
 
@@ -130,7 +124,7 @@
     .then(function (json) {
       if (json && json.success && json.data && json.data.widget_icon) {
         customIcon = json.data.widget_icon;
-        if (!open) renderClosedBubble();
+        renderBubble();
       }
     })
     .catch(function () {});

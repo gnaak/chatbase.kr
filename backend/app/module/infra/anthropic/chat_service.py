@@ -13,17 +13,27 @@ class AnthropicChatService:
         api_key: str,
         instructions: str | None = None,
         tools: list[dict] | None = None,
+        enable_web_search: bool = False,
         max_tokens: int = 4096,
     ) -> AsyncIterator[str]:
         client = AsyncAnthropic(api_key=api_key)
+        merged_tools: list[dict] = list(tools or [])
+        if enable_web_search:
+            merged_tools.append(
+                {
+                    "type": "web_search_20250305",
+                    "name": "web_search",
+                    "max_uses": 3,
+                }
+            )
         kwargs: dict = {
             "model": model,
             "max_tokens": max_tokens,
             "messages": messages,
             "system": instructions or "",
         }
-        if tools:
-            kwargs["tools"] = tools
+        if merged_tools:
+            kwargs["tools"] = merged_tools
 
         async with client.messages.stream(**kwargs) as stream:
             async for text in stream.text_stream:

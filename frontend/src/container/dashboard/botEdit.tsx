@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -13,6 +13,7 @@ import {
 import Topbar from "@/component/dashboard/layout/topbar";
 import Button from "@/component/dashboard/ui/button";
 import Card from "@/component/dashboard/ui/card";
+import ConfirmModal from "@/component/dashboard/ui/confirmModal";
 import Field from "@/component/dashboard/ui/field";
 import Input from "@/component/dashboard/ui/input";
 import Textarea from "@/component/dashboard/ui/textarea";
@@ -21,17 +22,38 @@ import LogoUpload from "@/component/dashboard/ui/logoUpload";
 import CodeBlock from "@/component/dashboard/ui/codeBlock";
 import ChatPreview from "@/component/dashboard/bot/chatPreview";
 import FileLearning from "@/component/dashboard/bot/fileLearning";
-import { useDelete, useGet, usePatch, usePost } from "@/hooks/common/useAPI";
+import { baseURL, useDelete, useGet, usePatch, usePost } from "@/hooks/common/useAPI";
 import { useToast } from "@/hooks/common/useToast";
 
-const MODEL_OPTIONS: SelectOption[] = [
-  { value: "gpt-4o-mini", label: "OpenAI · GPT-4o mini (가성비)" },
-  { value: "gpt-4o", label: "OpenAI · GPT-4o (고품질)" },
-  { value: "claude-haiku", label: "Anthropic · Claude Haiku (빠름)" },
-  { value: "claude-sonnet", label: "Anthropic · Claude Sonnet (균형)" },
-  { value: "gemini-1.5-flash", label: "Google · Gemini 1.5 Flash (빠름)" },
-  { value: "gemini-1.5-pro", label: "Google · Gemini 1.5 Pro (고품질)" },
-];
+interface ModelDto {
+  value: string;
+  label: string;
+  provider: "openai" | "anthropic" | "gemini";
+  type: "chat" | "image";
+}
+
+interface ApiKeyDto {
+  provider: "openai" | "anthropic" | "google";
+  last4: string;
+  registered_at: string | null;
+}
+
+const PROVIDER_LABEL: Record<string, string> = {
+  openai: "OpenAI",
+  anthropic: "Anthropic",
+  gemini: "Google",
+};
+
+// llm_model의 provider('gemini')와 api_key의 provider('google')는 표기가 다름
+const MODEL_PROVIDER_TO_KEY: Record<string, string> = {
+  openai: "openai",
+  anthropic: "anthropic",
+  gemini: "google",
+};
+
+const PROVIDER_ORDER = ["openai", "anthropic", "gemini"];
+
+type TrainingType = "text" | "file";
 
 interface BotForm {
   name: string;
@@ -40,6 +62,7 @@ interface BotForm {
   greeting: string;
   systemPrompt: string;
   trainingData: string;
+  trainingType: TrainingType;
   fallback: string;
   model: string;
 }
@@ -52,6 +75,7 @@ interface BotDto {
   greeting: string | null;
   system_prompt: string | null;
   training_text: string | null;
+  training_type: TrainingType;
   fallback: string | null;
   model: string;
   active: boolean;
@@ -64,6 +88,7 @@ interface BotPayload {
   greeting?: string;
   system_prompt?: string;
   training_text?: string;
+  training_type?: TrainingType;
   fallback?: string;
   model: string;
   active?: boolean;
@@ -73,13 +98,12 @@ const DEFAULT_FORM: BotForm = {
   name: "",
   logo: undefined,
   widgetIcon: undefined,
-  greeting: "안녕하세요! 무엇을 도와드릴까요?",
-  systemPrompt:
-    "당신은 친절하고 전문적인 고객 지원 어시스턴트입니다.\n학습된 정보 안에서만 답변하고, 정중한 한국어 존댓말을 사용하세요.",
+  greeting: "",
+  systemPrompt: "",
   trainingData: "",
-  fallback:
-    "죄송합니다, 해당 내용은 제가 가진 정보에 포함되어 있지 않습니다. 담당자에게 문의해주세요.",
-  model: "gpt-4o-mini",
+  trainingType: "text",
+  fallback: "",
+  model: "",
 };
 
 const dtoToForm = (dto: BotDto): BotForm => ({
@@ -89,6 +113,7 @@ const dtoToForm = (dto: BotDto): BotForm => ({
   greeting: dto.greeting ?? "",
   systemPrompt: dto.system_prompt ?? "",
   trainingData: dto.training_text ?? "",
+  trainingType: dto.training_type === "file" ? "file" : "text",
   fallback: dto.fallback ?? "",
   model: dto.model,
 });
@@ -100,19 +125,24 @@ const formToPayload = (form: BotForm): BotPayload => ({
   greeting: form.greeting,
   system_prompt: form.systemPrompt,
   training_text: form.trainingData,
+  training_type: form.trainingType,
   fallback: form.fallback,
   model: form.model,
 });
 
+const EMBED_ORIGIN =
+  (import.meta.env.VITE_APP_EMBED_ORIGIN as string | undefined) ||
+  window.location.origin;
+
 const buildScript = (botId: string) =>
   `<script
-  src="https://chatbase.kr/widget.js"
+  src="${EMBED_ORIGIN}/widget.js"
   data-bot-id="${botId}"
   defer></script>`;
 
 const buildIframe = (botId: string) =>
   `<iframe
-  src="https://chatbase.kr/embed/${botId}"
+  src="${EMBED_ORIGIN}/embed/${botId}"
   width="100%"
   height="640"
   frameborder="0"
@@ -127,7 +157,8 @@ const BotEdit = () => {
 
   const [form, setForm] = useState<BotForm>(DEFAULT_FORM);
   const [active, setActive] = useState(true);
-  const [trainingTab, setTrainingTab] = useState<"text" | "file">("text");
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [confirmKind, setConfirmKind] = useState<"toggle" | "delete" | null>(null);
 
   const { data: botDto } = useGet<BotDto>(
     `api/bot/${slug}`,
@@ -140,6 +171,47 @@ const BotEdit = () => {
     ["bot-sessions", slug ?? ""],
     !isNew,
   );
+
+  const { data: chatModels } = useGet<ModelDto[]>(
+    "api/model/?type=chat",
+    ["models", "chat"],
+  );
+
+  const { data: registeredKeys } = useGet<ApiKeyDto[]>(
+    "api/api-key/",
+    ["api-keys"],
+  );
+
+  const registeredKeyProviders = useMemo(
+    () => new Set<string>((registeredKeys ?? []).map((k) => k.provider)),
+    [registeredKeys],
+  );
+
+  const isOpenAIModel = useMemo(() => {
+    const m = chatModels?.find((x) => x.value === form.model);
+    return m?.provider === "openai";
+  }, [chatModels, form.model]);
+
+  const modelOptions: SelectOption[] = useMemo(() => {
+    const sorted = [...(chatModels ?? [])].sort((a, b) => {
+      const ai = PROVIDER_ORDER.indexOf(a.provider);
+      const bi = PROVIDER_ORDER.indexOf(b.provider);
+      if (ai !== bi) return ai - bi;
+      return 0;
+    });
+    return sorted.map((m) => {
+      const keyProvider = MODEL_PROVIDER_TO_KEY[m.provider] ?? m.provider;
+      const hasKey = registeredKeyProviders.has(keyProvider);
+      const providerLabel = PROVIDER_LABEL[m.provider] ?? m.provider;
+      return {
+        value: m.value,
+        label: hasKey
+          ? `${providerLabel} · ${m.label}`
+          : `${providerLabel} · ${m.label} (키 미등록)`,
+        disabled: !hasKey,
+      };
+    });
+  }, [chatModels, registeredKeyProviders]);
 
   // 로드된 봇 정보를 폼에 반영
   useEffect(() => {
@@ -161,55 +233,77 @@ const BotEdit = () => {
     if (slug) queryClient.invalidateQueries({ queryKey: ["bot", slug] });
   };
 
-  const handleSave = () => {
+  const uploadPendingFiles = async (targetSlug: string) => {
+    if (!pendingFiles.length) return;
+    const fd = new FormData();
+    pendingFiles.forEach((f) => fd.append("files", f));
+    const res = await fetch(`${baseURL}/api/bot/${targetSlug}/files`, {
+      method: "POST",
+      credentials: "include",
+      body: fd,
+    });
+    if (!res.ok) throw new Error(`파일 업로드 실패 (status: ${res.status})`);
+    queryClient.invalidateQueries({ queryKey: ["bot-files", targetSlug] });
+    setPendingFiles([]);
+  };
+
+  const handleSave = async () => {
     const payload = formToPayload(form);
-    if (isNew) {
-      createMutation.mutate(payload, {
-        onSuccess: () => {
-          invalidate();
-          toast.success("챗봇이 생성되었습니다.");
-          navigate("/dashboard");
-        },
-        onError: (err) => toast.error(err?.message || "생성에 실패했습니다."),
-      });
-    } else {
-      updateMutation.mutate(payload, {
-        onSuccess: () => {
-          invalidate();
-          toast.success("저장되었습니다.");
-        },
-        onError: (err) => toast.error(err?.message || "저장에 실패했습니다."),
-      });
+    try {
+      if (isNew) {
+        const created = await createMutation.mutateAsync(payload);
+        if (isOpenAIModel && form.trainingType === "file") {
+          await uploadPendingFiles(created.id);
+        }
+        invalidate();
+        toast.success(
+          pendingFiles.length
+            ? `챗봇 생성 + 파일 ${pendingFiles.length}개 업로드`
+            : "챗봇이 생성되었습니다.",
+        );
+        navigate(`/dashboard/bots/${created.id}`);
+      } else {
+        await updateMutation.mutateAsync(payload);
+        if (isOpenAIModel && form.trainingType === "file" && pendingFiles.length) {
+          await uploadPendingFiles(slug!);
+        }
+        invalidate();
+        toast.success("저장되었습니다.");
+      }
+    } catch (err) {
+      const e = err as { message?: string };
+      toast.error(e?.message || "저장에 실패했습니다.");
+      return;
     }
   };
 
-  const handleToggleActive = () => {
+  const handleToggleActive = async () => {
     if (isNew) return;
     const next = !active;
-    updateMutation.mutate(
-      { ...formToPayload(form), active: next },
-      {
-        onSuccess: () => {
-          setActive(next);
-          invalidate();
-          toast.success(next ? "활성화되었습니다." : "비활성화되었습니다.");
-        },
-        onError: (err) => toast.error(err?.message || "변경에 실패했습니다."),
-      },
-    );
+    try {
+      await updateMutation.mutateAsync({ ...formToPayload(form), active: next });
+      setActive(next);
+      invalidate();
+      toast.success(next ? "활성화되었습니다." : "비활성화되었습니다.");
+    } catch (err) {
+      const e = err as { message?: string; status?: number };
+      console.error("toggle active failed", e);
+      toast.error(e?.message || `변경 실패 (status: ${e?.status ?? "?"})`);
+    }
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (isNew) return;
-    if (!window.confirm("정말로 삭제할까요? 복구할 수 없습니다.")) return;
-    deleteMutation.mutate(undefined, {
-      onSuccess: () => {
-        invalidate();
-        toast.success("챗봇이 삭제되었습니다.");
-        navigate("/dashboard");
-      },
-      onError: (err) => toast.error(err?.message || "삭제에 실패했습니다."),
-    });
+    try {
+      await deleteMutation.mutateAsync();
+      invalidate();
+      toast.success("챗봇이 삭제되었습니다.");
+      navigate("/dashboard");
+    } catch (err) {
+      const e = err as { message?: string; status?: number };
+      console.error("delete bot failed", e);
+      toast.error(e?.message || `삭제 실패 (status: ${e?.status ?? "?"})`);
+    }
   };
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
@@ -230,7 +324,7 @@ const BotEdit = () => {
             pill
             leftIcon={<Save className="w-4 h-4" />}
             onClick={handleSave}
-            disabled={!form.name.trim() || isSaving}
+            disabled={!form.name.trim() || !form.model || isSaving}
           >
             {isSaving ? "저장 중..." : "저장"}
           </Button>
@@ -290,7 +384,8 @@ const BotEdit = () => {
               <Select
                 value={form.model}
                 onChange={(v) => update("model", v)}
-                options={MODEL_OPTIONS}
+                options={modelOptions}
+                placeholder="모델을 선택하세요"
               />
             </Field>
           </Section>
@@ -326,6 +421,7 @@ const BotEdit = () => {
               <Input
                 value={form.fallback}
                 onChange={(e) => update("fallback", e.target.value)}
+                placeholder="죄송합니다, 해당 내용은 제가 가진 정보에 포함되어 있지 않습니다."
               />
             </Field>
           </Section>
@@ -334,16 +430,16 @@ const BotEdit = () => {
             title="학습 데이터"
             description="자주 묻는 질문, 회사/제품 설명, 정책 등을 자유롭게 입력하거나 파일로 업로드하세요."
           >
-            {!isNew && form.model.startsWith("gpt-") && (
+            {isOpenAIModel && (
               <div className="inline-flex items-center gap-1 p-1 rounded-full bg-bg-sub shadow-border w-fit">
                 {(["text", "file"] as const).map((tab) => (
                   <button
                     key={tab}
                     type="button"
-                    onClick={() => setTrainingTab(tab)}
+                    onClick={() => update("trainingType", tab)}
                     className={[
                       "h-7 px-3.5 rounded-full text-[12px] font-medium transition-colors",
-                      trainingTab === tab
+                      form.trainingType === tab
                         ? "bg-bg-card text-text-main shadow-border"
                         : "text-text-sub hover:text-text-main",
                     ].join(" ")}
@@ -354,7 +450,7 @@ const BotEdit = () => {
               </div>
             )}
 
-            {(isNew || !form.model.startsWith("gpt-") || trainingTab === "text") && (
+            {(!isOpenAIModel || form.trainingType === "text") && (
               <Field
                 label="학습 텍스트"
                 description="짧은 FAQ나 가이드는 직접 입력하는 편이 빠릅니다."
@@ -368,12 +464,17 @@ const BotEdit = () => {
               </Field>
             )}
 
-            {!isNew && form.model.startsWith("gpt-") && trainingTab === "file" && (
+            {isOpenAIModel && form.trainingType === "file" && (
               <Field
                 label="파일 업로드"
-                description="긴 문서(PDF, DOCX 등)는 OpenAI vector store에 저장 후 답변 시 자동으로 검색해 사용합니다."
+                description="긴 문서(PDF, DOCX 등)는 저장 시 OpenAI vector store에 일괄 업로드됩니다."
               >
-                <FileLearning slug={slug!} isOpenAIModel={true} />
+                <FileLearning
+                  slug={slug}
+                  isOpenAIModel={true}
+                  pending={pendingFiles}
+                  onPendingChange={setPendingFiles}
+                />
               </Field>
             )}
           </Section>
@@ -412,7 +513,7 @@ const BotEdit = () => {
                           <Power className="w-3.5 h-3.5" />
                         )
                       }
-                      onClick={handleToggleActive}
+                      onClick={() => setConfirmKind("toggle")}
                       disabled={updateMutation.isPending}
                     >
                       {active ? "비활성화" : "활성화"}
@@ -429,7 +530,7 @@ const BotEdit = () => {
                       pill
                       variant="danger"
                       leftIcon={<Trash2 className="w-3.5 h-3.5" />}
-                      onClick={handleDelete}
+                      onClick={() => setConfirmKind("delete")}
                       disabled={deleteMutation.isPending}
                     >
                       삭제
@@ -443,8 +544,8 @@ const BotEdit = () => {
         </div>
 
         {/* 라이브 미리보기 */}
-        <div className="hidden lg:block absolute bottom-6 right-6 w-[480px] h-[760px] z-20 pointer-events-none">
-          <div className="h-full pointer-events-auto">
+        <div className="hidden lg:block absolute bottom-6 right-6 w-[480px] h-[760px] z-40 pointer-events-none">
+          <div className="h-full">
             <ChatPreview
               botName={form.name}
               greeting={form.greeting}
@@ -452,10 +553,42 @@ const BotEdit = () => {
               logo={form.logo}
               widgetIcon={form.widgetIcon}
               slug={slug}
+              model={form.model}
+              systemPrompt={form.systemPrompt}
+              trainingData={form.trainingData}
             />
           </div>
         </div>
       </div>
+
+      <ConfirmModal
+        open={confirmKind === "toggle"}
+        title={active ? "이 봇을 비활성화할까요?" : "이 봇을 활성화할까요?"}
+        description={
+          active
+            ? "비활성화하면 임베드 위젯에서 응답이 즉시 중단됩니다."
+            : "활성화하면 임베드 위젯에서 즉시 응답을 시작합니다."
+        }
+        confirmLabel={active ? "비활성화" : "활성화"}
+        onConfirm={() => {
+          setConfirmKind(null);
+          handleToggleActive();
+        }}
+        onCancel={() => setConfirmKind(null)}
+      />
+
+      <ConfirmModal
+        open={confirmKind === "delete"}
+        variant="danger"
+        title="이 봇을 삭제할까요?"
+        description="대화 로그를 포함한 모든 데이터가 즉시 사라집니다. 복구할 수 없습니다."
+        confirmLabel="삭제"
+        onConfirm={() => {
+          setConfirmKind(null);
+          handleDelete();
+        }}
+        onCancel={() => setConfirmKind(null)}
+      />
     </>
   );
 };

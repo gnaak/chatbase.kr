@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>chatbase 위젯 로컬 테스트</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        padding: 40px 24px;
+        background: #fafafa;
+        color: #1a1a1a;
+      }
+      h1 {
+        font-size: 22px;
+        margin: 0;
+      }
+      p {
+        margin: 0;
+        color: #666;
+        font-size: 14px;
+        line-height: 1.6;
+        text-align: center;
+        max-width: 520px;
+      }
+      code {
+        background: #efefef;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 13px;
+      }
+      .hint {
+        margin-top: 12px;
+        padding: 12px 16px;
+        background: #fff;
+        border: 1px solid #e5e5e5;
+        border-radius: 12px;
+        font-size: 13px;
+        color: #444;
+        max-width: 520px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>chatbase 위젯 테스트 페이지</h1>
+    <p>
+      우측 하단에 떠있는 채팅 버블을 클릭하면 위젯이 열립니다. 봇 ID는 아래
+      <code>data-bot-id</code> 값으로 설정되어 있고, 필요하면 직접 수정해서
+      다른 봇으로 바꿀 수 있습니다.
+    </p>
+    <div class="hint">
+      이 파일은 <code>frontend/widget-test.html</code> 입니다. 프론트 dev 서버가
+      <code>http://localhost:3000</code>에서 떠 있으면 그대로 더블 클릭해서
+      열거나, <code>http://localhost:3000/widget-test.html</code>로 접속해도
+      됩니다.
+    </div>
+
+    <!-- chatbase 위젯 (로컬 dev) -->
+    <script
+      src="http://localhost:3000/widget.js"
+      data-bot-id="i3KHKVOGlAfL0bGs"
+      defer
+    ></script>
+  </body>
+</html>

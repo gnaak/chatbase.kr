@@ -17,35 +17,55 @@ interface ProviderInfo {
   description: string;
   prefix: string;
   docsUrl: string;
-  models: string[];
+  models: { value: string; label: string }[];
 }
 
-const PROVIDERS: ProviderInfo[] = [
+interface ProviderMeta {
+  id: Provider;
+  name: string;
+  description: string;
+  prefix: string;
+  docsUrl: string;
+}
+
+// 정적 메타데이터(가입/문서 URL 등). 모델 목록은 카탈로그에서 동적으로 채움.
+const PROVIDER_META: ProviderMeta[] = [
   {
     id: "openai",
     name: "OpenAI",
-    description: "GPT-4o, GPT-4o-mini 등 OpenAI의 모델을 사용합니다.",
+    description: "GPT 시리즈 모델을 사용합니다.",
     prefix: "sk-",
     docsUrl: "https://platform.openai.com/api-keys",
-    models: ["gpt-4o-mini", "gpt-4o"],
   },
   {
     id: "anthropic",
     name: "Anthropic",
-    description: "Claude Haiku, Sonnet, Opus 등 Anthropic의 Claude 모델을 사용합니다.",
+    description: "Claude 시리즈 모델을 사용합니다.",
     prefix: "sk-ant-",
     docsUrl: "https://console.anthropic.com/settings/keys",
-    models: ["claude-haiku", "claude-sonnet"],
   },
   {
     id: "google",
     name: "Google",
-    description: "Gemini 1.5 Flash / Pro 등 Google의 Gemini 모델을 사용합니다.",
+    description: "Gemini 시리즈 모델을 사용합니다.",
     prefix: "AIza",
     docsUrl: "https://aistudio.google.com/app/apikey",
-    models: ["gemini-1.5-flash", "gemini-1.5-pro"],
   },
 ];
+
+interface ModelDto {
+  value: string;
+  label: string;
+  provider: "openai" | "anthropic" | "gemini";
+  type: "chat" | "image";
+}
+
+// llm_model의 'gemini' ↔ api_key의 'google' 매핑
+const MODEL_PROVIDER_TO_KEY: Record<string, Provider> = {
+  openai: "openai",
+  anthropic: "anthropic",
+  gemini: "google",
+};
 
 interface KeyState {
   last4?: string;
@@ -65,6 +85,26 @@ const Keys = () => {
   const queryClient = useQueryClient();
   const toast = useToast();
   const { data: keysList } = useGet<ApiKeyDto[]>("api/api-key/", KEYS_QUERY_KEY);
+  const { data: chatModels } = useGet<ModelDto[]>(
+    "api/model/?type=chat",
+    ["models", "chat"],
+  );
+
+  const providers: ProviderInfo[] = useMemo(() => {
+    const byProvider: Record<Provider, { value: string; label: string }[]> = {
+      openai: [],
+      anthropic: [],
+      google: [],
+    };
+    (chatModels ?? []).forEach((m) => {
+      const key = MODEL_PROVIDER_TO_KEY[m.provider];
+      if (key) byProvider[key].push({ value: m.value, label: m.label });
+    });
+    return PROVIDER_META.map((meta) => ({
+      ...meta,
+      models: byProvider[meta.id],
+    }));
+  }, [chatModels]);
 
   const upsertMutation = usePost<
     { provider: Provider; key: string },
@@ -131,7 +171,7 @@ const Keys = () => {
       <div className="flex-1 overflow-y-auto px-8 md:px-12 py-8">
         <div className="flex flex-col gap-4 max-w-4xl mx-auto">
           <Notice />
-          {PROVIDERS.map((provider) => (
+          {providers.map((provider) => (
             <ProviderCard
               key={provider.id}
               provider={provider}
@@ -216,16 +256,18 @@ const ProviderCard = ({ provider, state, onSave, onRemove }: ProviderCardProps) 
           <p className="text-[12px] text-text-sub leading-relaxed mb-2">
             {provider.description}
           </p>
-          <div className="flex flex-wrap gap-1.5">
-            {provider.models.map((model) => (
-              <span
-                key={model}
-                className="font-mono text-[11px] text-text-sub bg-bg-sub shadow-border px-1.5 h-5 inline-flex items-center rounded-DEFAULT"
-              >
-                {model}
-              </span>
-            ))}
-          </div>
+          {provider.models.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {provider.models.map((model) => (
+                <span
+                  key={model.value}
+                  className="font-mono text-[11px] text-text-sub bg-bg-sub shadow-border px-1.5 h-5 inline-flex items-center rounded-DEFAULT"
+                >
+                  {model.label}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         <a
           href={provider.docsUrl}

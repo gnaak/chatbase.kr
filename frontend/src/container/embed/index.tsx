@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Bot, Send, RotateCcw } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useChatStream, useGet } from "@/hooks/common/useAPI";
 import { getVisitorId } from "@/hooks/common/visitorId";
 
@@ -56,12 +58,12 @@ const EmbedChat = () => {
     }
   }, [bot?.greeting]);
 
+  const lastContent = messages[messages.length - 1]?.content ?? "";
   useEffect(() => {
-    scrollRef.current?.scrollTo({
-      top: scrollRef.current.scrollHeight,
-      behavior: "smooth",
-    });
-  }, [messages.length]);
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [messages.length, lastContent]);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -229,8 +231,8 @@ const EmbedChat = () => {
                   <Bot className="w-3.5 h-3.5 text-text-sub" />
                 )}
               </div>
-              <div className="px-3 py-2 rounded-comfy bg-bg-card shadow-border text-[13px] leading-relaxed text-text-main max-w-[80%] whitespace-pre-wrap">
-                {msg.content}
+              <div className="px-3 py-2 rounded-comfy bg-bg-card shadow-border text-[13px] leading-relaxed text-text-main max-w-[80%]">
+                <Markdown text={msg.content} />
               </div>
             </div>
           ) : (
@@ -242,17 +244,12 @@ const EmbedChat = () => {
           );
         })}
         {isStreaming && messages[messages.length - 1]?.content === "" && (
-          <div className="flex items-start gap-2">
-            <div className="w-7 h-7 rounded-full bg-bg-sub shadow-border flex items-center justify-center shrink-0">
-              <Bot className="w-3.5 h-3.5 text-text-sub" />
-            </div>
-            <div className="px-3 py-2 rounded-comfy bg-bg-card shadow-border">
-              <span className="inline-flex gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-text-sub animate-pulse" />
-                <span className="w-1.5 h-1.5 rounded-full bg-text-sub animate-pulse [animation-delay:120ms]" />
-                <span className="w-1.5 h-1.5 rounded-full bg-text-sub animate-pulse [animation-delay:240ms]" />
-              </span>
-            </div>
+          <div className="flex items-center gap-2 pl-9">
+            <span className="inline-flex gap-1">
+              <span className="w-1 h-1 rounded-full bg-text-sub animate-pulse" />
+              <span className="w-1 h-1 rounded-full bg-text-sub animate-pulse [animation-delay:120ms]" />
+              <span className="w-1 h-1 rounded-full bg-text-sub animate-pulse [animation-delay:240ms]" />
+            </span>
           </div>
         )}
         {error && (
@@ -295,5 +292,59 @@ const EmbedChat = () => {
     </div>
   );
 };
+
+const Markdown = ({ text }: { text: string }) => (
+  <ReactMarkdown
+    remarkPlugins={[remarkGfm]}
+    components={{
+      p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
+      strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+      em: ({ children }) => <em className="italic">{children}</em>,
+      ul: ({ children }) => <ul className="list-disc pl-4 my-1 space-y-0.5">{children}</ul>,
+      ol: ({ children }) => <ol className="list-decimal pl-4 my-1 space-y-0.5">{children}</ol>,
+      li: ({ children }) => <li>{children}</li>,
+      a: ({ href, children }) => (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline text-text-main hover:opacity-80"
+        >
+          {children}
+        </a>
+      ),
+      code: ({ children }) => (
+        <code className="px-1 py-0.5 rounded bg-bg-sub text-[12px] font-mono break-all">
+          {children}
+        </code>
+      ),
+      pre: ({ children }) => (
+        <pre className="px-2 py-1.5 my-1 rounded bg-bg-sub text-[12px] font-mono whitespace-pre-wrap break-all">
+          {children}
+        </pre>
+      ),
+      h1: ({ children }) => <h3 className="text-[14px] font-semibold mt-1 mb-0.5">{children}</h3>,
+      h2: ({ children }) => <h3 className="text-[14px] font-semibold mt-1 mb-0.5">{children}</h3>,
+      h3: ({ children }) => <h3 className="text-[13px] font-semibold mt-1 mb-0.5">{children}</h3>,
+      table: ({ children }) => (
+        <div className="my-2 overflow-x-auto rounded-DEFAULT shadow-border">
+          <table className="w-full text-[12px] border-collapse">{children}</table>
+        </div>
+      ),
+      thead: ({ children }) => <thead className="bg-bg-sub">{children}</thead>,
+      tbody: ({ children }) => <tbody>{children}</tbody>,
+      tr: ({ children }) => <tr className="border-b border-line last:border-b-0">{children}</tr>,
+      th: ({ children }) => (
+        <th className="px-2.5 py-1.5 text-left font-semibold text-text-main">{children}</th>
+      ),
+      td: ({ children }) => (
+        <td className="px-2.5 py-1.5 align-top text-text-main">{children}</td>
+      ),
+      hr: () => <hr className="my-2 border-line" />,
+    }}
+  >
+    {text}
+  </ReactMarkdown>
+);
 
 export default EmbedChat;

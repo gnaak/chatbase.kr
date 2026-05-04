@@ -1,14 +1,17 @@
-import { useEffect, useMemo, useRef, useState, FormEvent } from "react";
+import { useEffect, useRef, useState, FormEvent } from "react";
 import { Send, Bot, RotateCcw, X, MessageCircle } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useChatStream } from "@/hooks/common/useAPI";
-import { getVisitorId } from "@/hooks/common/visitorId";
 
-interface StreamRequest {
+interface PreviewStreamRequest {
   bot_id: string;
-  visitor_id: string;
   content: string;
   session_id: number | null;
+  model?: string;
+  system_prompt?: string;
+  training_text?: string;
+  fallback?: string;
 }
 
 interface ChatPreviewProps {
@@ -18,6 +21,9 @@ interface ChatPreviewProps {
   logo?: string;
   widgetIcon?: string;
   slug?: string;
+  model?: string;
+  systemPrompt?: string;
+  trainingData?: string;
 }
 
 interface PreviewMessage {
@@ -32,21 +38,31 @@ const ChatPreview = ({
   logo,
   widgetIcon,
   slug,
+  model,
+  systemPrompt,
+  trainingData,
 }: ChatPreviewProps) => {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <div className="relative h-full">
-      <div className="absolute bottom-0 right-0 flex flex-col items-end gap-3">
+    <div className="relative h-full pointer-events-none">
+      <div className="absolute bottom-0 right-0 flex flex-col items-end gap-3 pointer-events-auto">
         {isOpen && (
-          <ChatWindow
-            botName={botName}
-            greeting={greeting}
-            fallback={fallback}
-            logo={logo}
-            slug={slug}
-            onClose={() => setIsOpen(false)}
-          />
+          slug ? (
+            <ChatWindow
+              botName={botName}
+              greeting={greeting}
+              fallback={fallback}
+              logo={logo}
+              slug={slug}
+              model={model}
+              systemPrompt={systemPrompt}
+              trainingData={trainingData}
+              onClose={() => setIsOpen(false)}
+            />
+          ) : (
+            <PlaceholderWindow onClose={() => setIsOpen(false)} />
+          )
         )}
         <button
           type="button"
@@ -70,6 +86,55 @@ const ChatPreview = ({
   );
 };
 
+const PlaceholderWindow = ({ onClose }: { onClose: () => void }) => (
+  <div className="flex flex-col w-[460px] max-w-full h-[700px] max-h-[calc(100svh-8rem)] bg-bg-card rounded-comfy shadow-card dark:shadow-card-dark overflow-hidden animate-fade-slide">
+    <div className="flex items-center justify-between gap-3 px-3.5 h-12 border-b border-line">
+      <div className="flex flex-col gap-1.5">
+        <div className="h-2.5 w-24 rounded-full bg-bg-sub animate-pulse" />
+        <div className="h-2 w-12 rounded-full bg-bg-sub animate-pulse" />
+      </div>
+      <IconBtn label="닫기" onClick={onClose}>
+        <X className="w-3.5 h-3.5" />
+      </IconBtn>
+    </div>
+
+    <div className="flex-1 px-3.5 py-3.5 space-y-3 bg-bg-sub/40">
+      <div className="flex items-start gap-2">
+        <div className="w-7 h-7 rounded-full bg-bg-sub animate-pulse shrink-0" />
+        <div className="flex flex-col gap-1.5 mt-1">
+          <div className="h-2.5 w-44 rounded-full bg-bg-sub animate-pulse" />
+          <div className="h-2.5 w-32 rounded-full bg-bg-sub animate-pulse" />
+        </div>
+      </div>
+      <div className="flex justify-end">
+        <div className="h-8 w-28 rounded-comfy bg-bg-sub animate-pulse" />
+      </div>
+      <div className="flex items-start gap-2">
+        <div className="w-7 h-7 rounded-full bg-bg-sub animate-pulse shrink-0" />
+        <div className="flex flex-col gap-1.5 mt-1">
+          <div className="h-2.5 w-52 rounded-full bg-bg-sub animate-pulse" />
+          <div className="h-2.5 w-40 rounded-full bg-bg-sub animate-pulse" />
+          <div className="h-2.5 w-24 rounded-full bg-bg-sub animate-pulse" />
+        </div>
+      </div>
+      <div className="flex justify-end">
+        <div className="h-8 w-20 rounded-comfy bg-bg-sub animate-pulse" />
+      </div>
+      <div className="flex items-start gap-2">
+        <div className="w-7 h-7 rounded-full bg-bg-sub animate-pulse shrink-0" />
+        <div className="flex flex-col gap-1.5 mt-1">
+          <div className="h-2.5 w-36 rounded-full bg-bg-sub animate-pulse" />
+        </div>
+      </div>
+    </div>
+
+    <div className="flex items-center gap-2 px-3 py-2.5 border-t border-line bg-bg-card">
+      <div className="flex-1 h-9 rounded-DEFAULT bg-bg-sub animate-pulse" />
+      <div className="w-9 h-9 rounded-DEFAULT bg-bg-sub animate-pulse shrink-0" />
+    </div>
+  </div>
+);
+
 interface ChatWindowProps extends ChatPreviewProps {
   onClose: () => void;
 }
@@ -80,6 +145,9 @@ const ChatWindow = ({
   fallback,
   logo,
   slug,
+  model,
+  systemPrompt,
+  trainingData,
   onClose,
 }: ChatWindowProps) => {
   const initialMessages: PreviewMessage[] = [
@@ -91,8 +159,9 @@ const ChatWindow = ({
   const sessionIdRef = useRef<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const { sendMessage } = useChatStream<StreamRequest>("api/chat/stream");
-  const visitorId = useMemo(() => getVisitorId(), []);
+  const { sendMessage } = useChatStream<PreviewStreamRequest>(
+    "api/chat/preview/stream",
+  );
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -165,9 +234,7 @@ const ChatWindow = ({
 
         if (event === "meta") {
           const sid = payload.session_id;
-          if (typeof sid === "number") {
-            sessionIdRef.current = sid;
-          }
+          if (typeof sid === "number") sessionIdRef.current = sid;
         } else if (event === "chunk") {
           const piece = typeof payload.text === "string" ? payload.text : "";
           if (piece) updateLastBot((prev) => prev + piece);
@@ -182,16 +249,18 @@ const ChatWindow = ({
       await sendMessage(
         {
           bot_id: slug,
-          visitor_id: visitorId,
           content: text,
           session_id: sessionIdRef.current,
+          ...(model ? { model } : {}),
+          ...(systemPrompt !== undefined ? { system_prompt: systemPrompt } : {}),
+          ...(trainingData !== undefined ? { training_text: trainingData } : {}),
+          fallback: fallback ?? "",
         },
         handleChunk,
       );
-    } catch (err: any) {
-      updateLastBot((prev) =>
-        prev || fallback || `오류: ${err?.message ?? "알 수 없는 오류"}`,
-      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "알 수 없는 오류";
+      updateLastBot((prev) => prev || fallback || `오류: ${msg}`);
     } finally {
       setPending(false);
     }
@@ -329,7 +398,7 @@ const Bubble = ({ role, text, logo, botName, typing }: BubbleProps) => {
             <Bot className="w-3.5 h-3.5 text-text-sub" />
           )}
         </div>
-        <div className="max-w-[95%] px-3 py-2 rounded-comfy text-[13px] leading-relaxed bg-bg-card shadow-border text-text-main">
+        <div className="max-w-[95%] px-3 py-2 rounded-comfy text-[13px] leading-relaxed bg-bg-card shadow-border text-text-main break-words">
           {typing ? <TypingDots /> : <Markdown text={text} />}
         </div>
       </div>
@@ -347,6 +416,7 @@ const Bubble = ({ role, text, logo, botName, typing }: BubbleProps) => {
 
 const Markdown = ({ text }: { text: string }) => (
   <ReactMarkdown
+    remarkPlugins={[remarkGfm]}
     components={{
       p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
       strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
@@ -365,18 +435,33 @@ const Markdown = ({ text }: { text: string }) => (
         </a>
       ),
       code: ({ children }) => (
-        <code className="px-1 py-0.5 rounded bg-bg-sub text-[12px] font-mono">
+        <code className="px-1 py-0.5 rounded bg-bg-sub text-[12px] font-mono break-all">
           {children}
         </code>
       ),
       pre: ({ children }) => (
-        <pre className="px-2 py-1.5 my-1 rounded bg-bg-sub overflow-x-auto text-[12px] font-mono">
+        <pre className="px-2 py-1.5 my-1 rounded bg-bg-sub text-[12px] font-mono whitespace-pre-wrap break-all">
           {children}
         </pre>
       ),
       h1: ({ children }) => <h3 className="text-[14px] font-semibold mt-1 mb-0.5">{children}</h3>,
       h2: ({ children }) => <h3 className="text-[14px] font-semibold mt-1 mb-0.5">{children}</h3>,
       h3: ({ children }) => <h3 className="text-[13px] font-semibold mt-1 mb-0.5">{children}</h3>,
+      table: ({ children }) => (
+        <div className="my-2 overflow-x-auto rounded-DEFAULT shadow-border">
+          <table className="w-full text-[12px] border-collapse">{children}</table>
+        </div>
+      ),
+      thead: ({ children }) => <thead className="bg-bg-sub">{children}</thead>,
+      tbody: ({ children }) => <tbody>{children}</tbody>,
+      tr: ({ children }) => <tr className="border-b border-line last:border-b-0">{children}</tr>,
+      th: ({ children }) => (
+        <th className="px-2.5 py-1.5 text-left font-semibold text-text-main">{children}</th>
+      ),
+      td: ({ children }) => (
+        <td className="px-2.5 py-1.5 align-top text-text-main">{children}</td>
+      ),
+      hr: () => <hr className="my-2 border-line" />,
     }}
   >
     {text}

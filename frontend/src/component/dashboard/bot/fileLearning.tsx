@@ -1,7 +1,7 @@
 import { ChangeEvent, DragEvent, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Upload, FileText, Trash2, Loader2 } from "lucide-react";
-import { useDelete, useGet, usePost } from "@/hooks/common/useAPI";
+import { Upload, FileText, Trash2, X } from "lucide-react";
+import { useDelete, useGet } from "@/hooks/common/useAPI";
 import { useToast } from "@/hooks/common/useToast";
 
 interface BotFileDto {
@@ -13,8 +13,10 @@ interface BotFileDto {
 }
 
 interface FileLearningProps {
-  slug: string;
+  slug?: string;
   isOpenAIModel: boolean;
+  pending: File[];
+  onPendingChange: (next: File[]) => void;
 }
 
 const formatBytes = (n: number): string => {
@@ -23,49 +25,47 @@ const formatBytes = (n: number): string => {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 };
 
-const FileLearning = ({ slug, isOpenAIModel }: FileLearningProps) => {
+const FileLearning = ({
+  slug,
+  isOpenAIModel,
+  pending,
+  onPendingChange,
+}: FileLearningProps) => {
   const queryClient = useQueryClient();
   const toast = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
 
-  const queryKey = ["bot-files", slug];
+  const queryKey = ["bot-files", slug ?? ""];
   const { data: files } = useGet<BotFileDto[]>(
     `api/bot/${slug}/files`,
     queryKey,
-    isOpenAIModel,
+    isOpenAIModel && !!slug,
   );
 
-  const uploadMutation = usePost<FormData, BotFileDto[]>(`api/bot/${slug}/files`);
-
-  const upload = (selected: File[]) => {
+  const stage = (selected: File[]) => {
     if (!selected.length) return;
     if (!isOpenAIModel) {
       toast.error("파일 학습은 OpenAI 모델에서만 사용할 수 있습니다.");
       return;
     }
-    const fd = new FormData();
-    selected.forEach((f) => fd.append("files", f));
-    uploadMutation.mutate(fd, {
-      onSuccess: () => {
-        toast.success(`${selected.length}개 파일을 업로드했습니다.`);
-        queryClient.invalidateQueries({ queryKey });
-      },
-      onError: (err) => toast.error(err?.message || "업로드에 실패했습니다."),
-    });
+    onPendingChange([...pending, ...selected]);
   };
+
+  const removePending = (idx: number) =>
+    onPendingChange(pending.filter((_, i) => i !== idx));
 
   const handleSelect = (e: ChangeEvent<HTMLInputElement>) => {
     const list = e.target.files ? Array.from(e.target.files) : [];
     e.target.value = "";
-    upload(list);
+    stage(list);
   };
 
   const handleDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setDragActive(false);
     if (!isOpenAIModel) return;
-    upload(Array.from(e.dataTransfer.files));
+    stage(Array.from(e.dataTransfer.files));
   };
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
@@ -84,8 +84,6 @@ const FileLearning = ({ slug, isOpenAIModel }: FileLearningProps) => {
     );
   }
 
-  const uploading = uploadMutation.isPending;
-
   return (
     <div className="flex flex-col gap-3">
       <div
@@ -99,18 +97,12 @@ const FileLearning = ({ slug, isOpenAIModel }: FileLearningProps) => {
           dragActive ? "bg-bg-hover" : "bg-bg-sub/40 hover:bg-bg-hover/60",
         ].join(" ")}
       >
-        {uploading ? (
-          <Loader2 className="w-5 h-5 text-text-sub animate-spin" />
-        ) : (
-          <Upload className="w-5 h-5 text-text-sub" />
-        )}
+        <Upload className="w-5 h-5 text-text-sub" />
         <p className="text-[13px] font-medium text-text-main">
-          {uploading
-            ? "업로드 중..."
-            : "파일을 드래그하거나 클릭해서 업로드"}
+          파일을 드래그하거나 클릭해서 추가
         </p>
         <p className="text-[11px] text-text-sub">
-          PDF / DOCX / TXT / MD 등 · OpenAI vector store에 안전하게 저장됩니다.
+          저장 버튼을 누르면 OpenAI vector store에 일괄 업로드됩니다.
         </p>
       </div>
 
@@ -122,7 +114,45 @@ const FileLearning = ({ slug, isOpenAIModel }: FileLearningProps) => {
         className="hidden"
       />
 
-      {files && files.length > 0 && (
+      {pending.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <div className="text-[11px] font-medium uppercase tracking-tight text-text-sub">
+            업로드 대기 ({pending.length})
+          </div>
+          <ul className="flex flex-col gap-1.5">
+            {pending.map((f, idx) => (
+              <li
+                key={`${f.name}-${idx}`}
+                className="flex items-center gap-3 px-3 py-2 rounded-DEFAULT shadow-border bg-bg-card"
+              >
+                <FileText className="w-4 h-4 text-text-sub shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-medium text-text-main truncate">
+                    {f.name}
+                  </div>
+                  <div className="text-[11px] text-text-sub">
+                    {formatBytes(f.size)}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removePending(idx)}
+                  aria-label="목록에서 제거"
+                  className="
+                    inline-flex items-center justify-center w-7 h-7 rounded-full
+                    text-text-sub hover:text-text-main hover:bg-bg-hover
+                    transition-colors
+                  "
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {slug && files && files.length > 0 && (
         <ul className="flex flex-col gap-1.5">
           {files.map((f) => (
             <FileItem
@@ -150,15 +180,15 @@ const FileItem = ({
   const toast = useToast();
   const deleteMutation = useDelete<void>(`api/bot/${slug}/files/${file.id}`);
 
-  const handleRemove = () => {
-    if (!window.confirm(`'${file.filename}' 을(를) 삭제할까요?`)) return;
-    deleteMutation.mutate(undefined, {
-      onSuccess: () => {
-        toast.success("삭제되었습니다.");
-        onDeleted();
-      },
-      onError: (err) => toast.error(err?.message || "삭제에 실패했습니다."),
-    });
+  const handleRemove = async () => {
+    try {
+      await deleteMutation.mutateAsync();
+      onDeleted();
+    } catch (err) {
+      const e = err as { message?: string; status?: number };
+      console.error("file delete failed", e);
+      toast.error(e?.message || `삭제 실패 (status: ${e?.status ?? "?"})`);
+    }
   };
 
   return (

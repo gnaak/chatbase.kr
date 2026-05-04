@@ -14,6 +14,7 @@ class GeminiChatService:
         api_key: str,
         instructions: str | None = None,
         tools: list[dict] | None = None,
+        enable_web_search: bool = False,
     ) -> AsyncIterator[str]:
         client = google_genai.Client(api_key=api_key)
 
@@ -22,9 +23,15 @@ class GeminiChatService:
             role = "model" if msg["role"] == "assistant" else "user"
             contents.append({"role": role, "parts": [{"text": msg["content"]}]})
 
+        merged_tools: list = list(tools or [])
+        if enable_web_search:
+            merged_tools.append(
+                genai_types.Tool(google_search=genai_types.GoogleSearch())
+            )
+
         config = genai_types.GenerateContentConfig(
             system_instruction=instructions or None,
-            tools=tools or None,
+            tools=merged_tools or None,
         )
 
         stream = await client.aio.models.generate_content_stream(

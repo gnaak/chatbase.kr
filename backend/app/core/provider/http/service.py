@@ -26,6 +26,11 @@ class ServiceProvider:
         self._chat_service = None
         self._llm_service = None
         self._vector_store_service = None
+        self._llm_model_repo = None
+        self._llm_model_service = None
+        self._openai_model_service = None
+        self._anthropic_model_service = None
+        self._gemini_model_service = None
 
     # ── 기존 도메인 ─────────────────────────
     @property
@@ -53,7 +58,12 @@ class ServiceProvider:
     def admin_service(self):
         if not self._admin_service:
             from app.module.admin.admin_service import AdminService
-            self._admin_service = AdminService(self.admin_repo)
+            self._admin_service = AdminService(
+                admin_repo=self.admin_repo,
+                openai_model_service=self.openai_model_service,
+                anthropic_model_service=self.anthropic_model_service,
+                gemini_model_service=self.gemini_model_service,
+            )
         return self._admin_service
 
     @property
@@ -102,6 +112,41 @@ class ServiceProvider:
             from app.module.infra.openai.vector_store_service import VectorStoreService
             self._vector_store_service = VectorStoreService()
         return self._vector_store_service
+
+    @property
+    def llm_model_repo(self):
+        if not self._llm_model_repo:
+            from app.module.llm_model.llm_model_repository import LLMModelRepository
+            self._llm_model_repo = LLMModelRepository(self.db)
+        return self._llm_model_repo
+
+    @property
+    def llm_model_service(self):
+        if not self._llm_model_service:
+            from app.module.llm_model.llm_model_service import LLMModelService
+            self._llm_model_service = LLMModelService(self.llm_model_repo)
+        return self._llm_model_service
+
+    @property
+    def openai_model_service(self):
+        if not self._openai_model_service:
+            from app.module.infra.openai.model_service import OpenAIModelService
+            self._openai_model_service = OpenAIModelService()
+        return self._openai_model_service
+
+    @property
+    def anthropic_model_service(self):
+        if not self._anthropic_model_service:
+            from app.module.infra.anthropic.model_service import AnthropicModelService
+            self._anthropic_model_service = AnthropicModelService()
+        return self._anthropic_model_service
+
+    @property
+    def gemini_model_service(self):
+        if not self._gemini_model_service:
+            from app.module.infra.gemini.model_service import GeminiModelService
+            self._gemini_model_service = GeminiModelService()
+        return self._gemini_model_service
 
     @property
     def api_key_repo(self):

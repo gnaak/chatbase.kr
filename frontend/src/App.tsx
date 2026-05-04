@@ -9,6 +9,9 @@ import AdminLogin from "./container/admin/login";
 import AdminLayout from "./container/admin/layout";
 import AdminMain from "./container/admin/main";
 import AdminGroup from "./container/admin/group";
+import AdminCustomers from "./container/admin/customers";
+import AdminPayments from "./container/admin/payments";
+import AdminModels from "./container/admin/models";
 import ClientLayOut from "./container/client/layout";
 import Landing from "./container/landing";
 import Login from "./container/auth/login";
@@ -73,6 +76,9 @@ function App() {
               <Route element={<AdminLayout />}>
                 <Route path="/admin" element={<AdminMain />} />
                 <Route path="/admin/group" element={<AdminGroup />} />
+                <Route path="/admin/customers" element={<AdminCustomers />} />
+                <Route path="/admin/payments" element={<AdminPayments />} />
+                <Route path="/admin/models" element={<AdminModels />} />
               </Route>
               <Route path="*" element={<NotFoundPage />} />
             </Routes>

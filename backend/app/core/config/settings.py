@@ -27,8 +27,15 @@ class RawEnv(BaseSettings):
     jwt_secret: str
     hash_key: str
 
-    # External API keys (옵션)
+    # External API keys (옵션) — admin/카탈로그 새로고침에 그대로 사용
     openai_api_key: Optional[str] = None
+    anthropic_api_key: Optional[str] = None
+    gemini_api_key: Optional[str] = None
+
+    # admin_* 키는 별도 운영자 키로 분리하고 싶을 때 .env에 설정
+    admin_openai_api_key: Optional[str] = None
+    admin_anthropic_api_key: Optional[str] = None
+    admin_gemini_api_key: Optional[str] = None
 
     # KAKAO
     kakao_client_id: Optional[str] = None
@@ -114,6 +121,18 @@ class Settings:
     @property
     def openai_api_key(self) -> Optional[str]:
         return self.raw.openai_api_key
+
+    @property
+    def admin_openai_api_key(self) -> Optional[str]:
+        return self.raw.admin_openai_api_key or self.raw.openai_api_key
+
+    @property
+    def admin_anthropic_api_key(self) -> Optional[str]:
+        return self.raw.admin_anthropic_api_key or self.raw.anthropic_api_key
+
+    @property
+    def admin_gemini_api_key(self) -> Optional[str]:
+        return self.raw.admin_gemini_api_key or self.raw.gemini_api_key
 
     @property
     def kakao_client_id(self) -> Optional[str]:

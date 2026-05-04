@@ -17,6 +17,27 @@ async def send_message(p: ServiceProvider):
     return await p.chat_service.send_message(p.request)
 
 
+# ── 대시보드 미리보기 (로그인 필요, 봇 소유자만, DB 저장 X) ──
+@router.post("/preview/stream")
+@with_provider
+@with_login()
+async def preview_stream(p: ServiceProvider):
+    """SSE 응답. 폼의 override값을 그대로 사용, 채팅 로그/세션 DB 저장 안 함.
+
+    body: {bot_id, content, history?[], model?, system_prompt?, training_text?, fallback?}
+    """
+    body = await p.request.json()
+    user_id = p.request.user_id
+    return StreamingResponse(
+        p.chat_service.preview_stream(body, user_id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @router.post("/stream")
 @with_provider
 @without_login

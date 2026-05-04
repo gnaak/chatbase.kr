@@ -143,9 +143,10 @@ const buildScript = (botId: string) =>
 const buildIframe = (botId: string) =>
   `<iframe
   src="${EMBED_ORIGIN}/embed/${botId}?mode=widget"
-  style="position:fixed;bottom:0;right:0;width:420px;height:640px;border:none;z-index:2147483647;background:transparent;"
+  style="width:100%;height:600px;border:none;border-radius:12px;"
   allow="clipboard-write"
   title="채팅 위젯"></iframe>`;
+
 
 const BotEdit = () => {
   const { slug } = useParams<{ slug?: string }>();
@@ -731,39 +732,20 @@ const Row = ({
   </div>
 );
 
-interface TabItem {
-  key: string;
-  label: string;
-  hint?: string;
-  code: string;
-  language?: string;
-}
+const EMBED_TABS = [
+  { key: "script", label: "Script", hint: "우측 하단에 채팅 버블이 자동 생성됩니다. </body> 직전에 붙여넣으세요." },
+  { key: "iframe", label: "iframe", hint: "원하는 위치에 직접 배치할 때 사용합니다. width·height를 자유롭게 조절하세요." },
+] as const;
 
 const EmbedTabs = ({ botId }: { botId: string }) => {
-  const tabs: TabItem[] = [
-    {
-      key: "script",
-      label: "Script (권장)",
-      hint: "우측 하단에 채팅 버블이 자동 생성됩니다.",
-      code: buildScript(botId),
-      language: "html",
-    },
-    {
-      key: "iframe",
-      label: "iframe",
-      hint: "페이지 안에 채팅창을 직접 박을 때 사용합니다.",
-      code: buildIframe(botId),
-      language: "html",
-    },
-  ];
-
-  const [active, setActive] = useState(tabs[0].key);
-  const current = tabs.find((t) => t.key === active) ?? tabs[0];
+  const [active, setActive] = useState<"script" | "iframe">("script");
+  const code = active === "script" ? buildScript(botId) : buildIframe(botId);
+  const hint = EMBED_TABS.find((t) => t.key === active)!.hint;
 
   return (
     <div className="flex flex-col gap-3">
       <div className="inline-flex items-center gap-1 p-1 rounded-full bg-bg-sub shadow-border w-fit">
-        {tabs.map((tab) => (
+        {EMBED_TABS.map((tab) => (
           <button
             key={tab.key}
             type="button"
@@ -779,12 +761,8 @@ const EmbedTabs = ({ botId }: { botId: string }) => {
           </button>
         ))}
       </div>
-      {current.hint && (
-        <p className="text-[12px] text-text-sub leading-relaxed">
-          {current.hint}
-        </p>
-      )}
-      <CodeBlock code={current.code} language={current.language} />
+      <p className="text-[12px] text-text-sub leading-relaxed">{hint}</p>
+      <CodeBlock code={code} language="html" />
     </div>
   );
 };

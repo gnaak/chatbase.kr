@@ -1,0 +1,213 @@
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: "Geist";
+  src: url("/fonts/Geist-Variable.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("/fonts/GeistMono-Variable.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  :root {
+    /* ── Brand (Vercel Black & accents) ─────── */
+    --primary: 23 23 23; /* Vercel Black #171717 */
+    --primary-light: 240 240 240; /* near-white surface */
+    --primary-dark: 0 0 0; /* true black */
+
+    /* ── Background ────────────────────────── */
+    --bg: 255 255 255; /* pure white */
+    --bg-card: 255 255 255; /* cards = same as page (depth via shadow) */
+    --bg-sub: 250 250 250; /* #fafafa subtle tint */
+    --bg-hover: 245 245 245; /* gray-50 hover */
+    --bg-active: 235 235 235; /* gray-100 active */
+    --bg-disabled: 250 250 250;
+
+    /* ── Text (achromatic scale) ───────────── */
+    --text-main: 23 23 23; /* #171717 — heading, body */
+    --text-sub: 77 77 77; /* #4d4d4d — secondary */
+    --text-disabled: 128 128 128; /* #808080 */
+    --text-placeholder: 128 128 128;
+    --text-inverse: 255 255 255;
+
+    /* ── Border (used as fallback; prefer shadow-border) ───────── */
+    --border: 235 235 235; /* #ebebeb */
+    --border-strong: 200 200 200;
+    --border-focus: 10 114 239; /* #0a72ef Develop Blue */
+
+    /* ── Form / Input ──────────────────────── */
+    --input-bg: 255 255 255;
+    --input-border: 235 235 235;
+
+    /* ── Point (status colors) ─────────────── */
+    --point-green: 34 197 94; /* green-500 */
+    --point-red: 255 91 79; /* Ship Red #ff5b4f */
+    --point-amber: 245 158 11;
+    --point-blue: 0 112 243; /* Console Blue #0070f3 */
+
+    /* ── Feedback bg (very subtle tints) ───── */
+    --success-bg: 240 253 244;
+    --error-bg: 255 241 240;
+    --warning-bg: 255 251 235;
+    --info-bg: 235 245 255; /* #ebf5ff Vercel pill bg */
+
+    /* ── Overlay / Surface ─────────────────── */
+    --overlay: 250 250 250; /* hsla(0,0%,98%,1) backdrop */
+    --surface-raised: 255 255 255;
+
+    /* ── Skeleton ──────────────────────────── */
+    --skeleton-base: 235 235 235;
+    --skeleton-shine: 250 250 250;
+
+    /* ── Vercel workflow accents ───────────── */
+    --ship: 255 91 79; /* #ff5b4f */
+    --preview: 222 29 141; /* #de1d8d */
+    --develop: 10 114 239; /* #0a72ef */
+  }
+
+  .dark {
+    /* ── Brand ─────────────────────────────── */
+    --primary: 250 250 250; /* near-white */
+    --primary-light: 51 51 51;
+    --primary-dark: 255 255 255;
+
+    /* ── Background (charcoal — 너무 어둡지 않게) ─ */
+    --bg: 18 18 20; /* #121214 */
+    --bg-card: 28 28 32; /* #1c1c20 raised */
+    --bg-sub: 36 36 41; /* #242429 */
+    --bg-hover: 46 46 51; /* #2e2e33 */
+    --bg-active: 60 60 67; /* #3c3c43 */
+    --bg-disabled: 28 28 32;
+
+    /* ── Text ──────────────────────────────── */
+    --text-main: 237 237 240; /* #ededf0 */
+    --text-sub: 170 170 178; /* #aaaaB2 */
+    --text-disabled: 95 95 105;
+    --text-placeholder: 125 125 135;
+    --text-inverse: 18 18 20;
+
+    /* ── Border ────────────────────────────── */
+    --border: 50 50 56; /* #323238 */
+    --border-strong: 75 75 82;
+    --border-focus: 96 165 250;
+
+    /* ── Form / Input ──────────────────────── */
+    --input-bg: 28 28 32;
+    --input-border: 50 50 56;
+
+    /* ── Point ─────────────────────────────── */
+    --point-green: 74 222 128;
+    --point-red: 255 91 79;
+    --point-amber: 251 191 36;
+    --point-blue: 51 153 255;
+
+    /* ── Feedback bg ───────────────────────── */
+    --success-bg: 8 25 16;
+    --error-bg: 32 8 8;
+    --warning-bg: 32 24 6;
+    --info-bg: 6 18 32;
+
+    /* ── Overlay / Surface ─────────────────── */
+    --overlay: 0 0 0;
+    --surface-raised: 17 17 17;
+
+    /* ── Skeleton ──────────────────────────── */
+    --skeleton-base: 38 38 38;
+    --skeleton-shine: 64 64 64;
+
+    /* ── Vercel workflow accents (same in dark) ─ */
+    --ship: 255 91 79;
+    --preview: 222 29 141;
+    --develop: 51 153 255;
+  }
+}
+
+* {
+  font-family: "Geist", "Pretendard", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  font-feature-settings: "liga" 1, "calt" 1;
+  -webkit-user-drag: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+code,
+pre,
+kbd,
+samp,
+.font-mono {
+  font-family: "Geist Mono", ui-monospace, SFMono-Regular, "Roboto Mono", Menlo, Monaco, "Liberation Mono", "DejaVu Sans Mono", "Courier New", monospace;
+  font-feature-settings: "liga" 1, "calt" 1;
+}
+
+*::-webkit-scrollbar {
+  display: none;
+}
+
+html {
+  scrollbar-width: none;
+  background-color: rgb(var(--bg));
+  color: rgb(var(--text-main));
+  scroll-behavior: smooth;
+}
+
+/* 앵커 이동 시 sticky 헤더(h-14)에 가리지 않게 */
+section[id] {
+  scroll-margin-top: 4rem;
+}
+
+body {
+  margin: 0;
+  background-color: rgb(var(--bg));
+  color: rgb(var(--text-main));
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+.hide_scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-visible::-webkit-scrollbar {
+  width: 6px;
+  height: 8px;
+}
+
+.scrollbar-visible::-webkit-scrollbar-track {
+  background: rgb(var(--bg-sub));
+  border-radius: 9999px;
+}
+
+.scrollbar-visible::-webkit-scrollbar-thumb {
+  background-color: rgb(var(--border-strong));
+  border-radius: 9999px;
+  border: 2px solid rgb(var(--bg-sub));
+}
+
+.scrollbar-visible::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(var(--text-disabled));
+}
+
+.scrollbar-visible {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--border-strong)) rgb(var(--bg-sub));
+}
+
+::selection {
+  background-color: rgb(var(--text-main) / 0.95);
+  color: rgb(var(--text-inverse));
+}

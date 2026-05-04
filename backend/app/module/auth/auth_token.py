@@ -15,7 +15,7 @@ from app.core.database.base import now_kst
 class AuthToken:
     env = getattr(settings, "env", "dev")
     samesite = "None" if env == "prod" else "Lax"
-    domain = "none.net" if env == "prod" else None
+    domain = "chatbase.kr" if env == "prod" else None
 
     def __init__(self):
         self.jwt_secret = settings.jwt_secret
@@ -23,8 +23,7 @@ class AuthToken:
         self.algorithm = "HS256"
         self.env = getattr(settings, "env", "dev")
         self.samesite = "None" if self.env == "prod" else "Lax"
-        # TODO: domain 변경
-        self.domain = "none.net" if self.env == "prod" else None
+        self.domain = "chatbase.kr" if self.env == "prod" else None
         self.secure = True if self.env == "prod" else False
     
     # --- 쿠키 접두사 생성 ---

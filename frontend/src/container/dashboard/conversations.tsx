@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, Bot, User, MessagesSquare, Filter } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import Topbar from "@/component/dashboard/layout/topbar";
 import Input from "@/component/dashboard/ui/input";
 import Select, { SelectOption } from "@/component/dashboard/ui/select";
@@ -128,7 +129,7 @@ const Conversations = () => {
             />
           </div>
 
-          <div className="flex-1 overflow-y-auto scrollbar-visible">
+          <div className="flex-1 overflow-y-auto scrollbar-hide">
             {filteredSessions.length === 0 ? (
               <EmptyList />
             ) : (
@@ -211,6 +212,13 @@ const SessionDetail = ({
   botName: string;
 }) => {
   const { session, messages } = detail;
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [session.id, messages.length]);
+
   return (
     <>
       <header className="shrink-0 flex items-center justify-between gap-4 px-6 py-3 border-b border-line bg-bg">
@@ -230,7 +238,10 @@ const SessionDetail = ({
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto scrollbar-visible px-6 py-6 space-y-3">
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto scrollbar-hide px-6 py-6 space-y-3"
+      >
         {messages.length === 0 ? (
           <p className="text-[13px] text-text-sub text-center py-12">
             메시지가 없습니다.
@@ -254,8 +265,8 @@ const MessageRow = ({ message }: { message: MessageDto }) => {
           <Bot className="w-3.5 h-3.5 text-text-sub" />
         </div>
         <div className="flex flex-col gap-1 max-w-[70%]">
-          <div className="px-3 py-2 rounded-comfy bg-bg-card shadow-border text-[13px] leading-relaxed text-text-main whitespace-pre-wrap">
-            {message.content}
+          <div className="px-3 py-2 rounded-comfy bg-bg-card shadow-border text-[13px] leading-relaxed text-text-main">
+            <Markdown text={message.content} />
           </div>
           <span className="text-[10px] font-mono text-text-sub px-1">{at}</span>
         </div>
@@ -274,6 +285,44 @@ const MessageRow = ({ message }: { message: MessageDto }) => {
     </div>
   );
 };
+
+const Markdown = ({ text }: { text: string }) => (
+  <ReactMarkdown
+    components={{
+      p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
+      strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+      em: ({ children }) => <em className="italic">{children}</em>,
+      ul: ({ children }) => <ul className="list-disc pl-4 my-1 space-y-0.5">{children}</ul>,
+      ol: ({ children }) => <ol className="list-decimal pl-4 my-1 space-y-0.5">{children}</ol>,
+      li: ({ children }) => <li>{children}</li>,
+      a: ({ href, children }) => (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline text-text-main hover:opacity-80"
+        >
+          {children}
+        </a>
+      ),
+      code: ({ children }) => (
+        <code className="px-1 py-0.5 rounded bg-bg-sub text-[12px] font-mono">
+          {children}
+        </code>
+      ),
+      pre: ({ children }) => (
+        <pre className="px-2 py-1.5 my-1 rounded bg-bg-sub overflow-x-auto text-[12px] font-mono">
+          {children}
+        </pre>
+      ),
+      h1: ({ children }) => <h3 className="text-[14px] font-semibold mt-1 mb-0.5">{children}</h3>,
+      h2: ({ children }) => <h3 className="text-[14px] font-semibold mt-1 mb-0.5">{children}</h3>,
+      h3: ({ children }) => <h3 className="text-[13px] font-semibold mt-1 mb-0.5">{children}</h3>,
+    }}
+  >
+    {text}
+  </ReactMarkdown>
+);
 
 const EmptyList = () => (
   <div className="flex flex-col items-center justify-center h-full py-16 text-center px-6">

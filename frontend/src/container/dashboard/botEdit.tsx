@@ -20,6 +20,7 @@ import Select, { SelectOption } from "@/component/dashboard/ui/select";
 import LogoUpload from "@/component/dashboard/ui/logoUpload";
 import CodeBlock from "@/component/dashboard/ui/codeBlock";
 import ChatPreview from "@/component/dashboard/bot/chatPreview";
+import FileLearning from "@/component/dashboard/bot/fileLearning";
 import { useDelete, useGet, usePatch, usePost } from "@/hooks/common/useAPI";
 import { useToast } from "@/hooks/common/useToast";
 
@@ -126,10 +127,17 @@ const BotEdit = () => {
 
   const [form, setForm] = useState<BotForm>(DEFAULT_FORM);
   const [active, setActive] = useState(true);
+  const [trainingTab, setTrainingTab] = useState<"text" | "file">("text");
 
   const { data: botDto } = useGet<BotDto>(
     `api/bot/${slug}`,
     ["bot", slug ?? "new"],
+    !isNew,
+  );
+
+  const { data: sessions } = useGet<{ id: number }[]>(
+    `api/chat/sessions?bot_id=${slug}`,
+    ["bot-sessions", slug ?? ""],
     !isNew,
   );
 
@@ -233,7 +241,11 @@ const BotEdit = () => {
         <div className="h-full overflow-y-auto px-8 md:px-12 py-8">
           <div className="flex flex-col gap-6 max-w-4xl mx-auto w-full">
           {!isNew && (
-            <StatsRow active={active} model={form.model} conversations={0} />
+            <StatsRow
+              active={active}
+              model={form.model}
+              conversations={sessions?.length ?? 0}
+            />
           )}
 
           <Section title="기본 정보">
@@ -320,16 +332,50 @@ const BotEdit = () => {
 
           <Section
             title="학습 데이터"
-            description="자주 묻는 질문, 회사/제품 설명, 정책 등을 자유롭게 입력하세요. (MVP는 텍스트만 — URL/파일은 추후 추가)"
+            description="자주 묻는 질문, 회사/제품 설명, 정책 등을 자유롭게 입력하거나 파일로 업로드하세요."
           >
-            <Field>
-              <Textarea
-                rows={12}
-                value={form.trainingData}
-                onChange={(e) => update("trainingData", e.target.value)}
-                placeholder={`Q. 영업시간이 어떻게 되나요?\nA. 평일 오전 10시 ~ 오후 7시입니다.\n\nQ. 환불 정책은 어떻게 되나요?\nA. ...`}
-              />
-            </Field>
+            {!isNew && form.model.startsWith("gpt-") && (
+              <div className="inline-flex items-center gap-1 p-1 rounded-full bg-bg-sub shadow-border w-fit">
+                {(["text", "file"] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setTrainingTab(tab)}
+                    className={[
+                      "h-7 px-3.5 rounded-full text-[12px] font-medium transition-colors",
+                      trainingTab === tab
+                        ? "bg-bg-card text-text-main shadow-border"
+                        : "text-text-sub hover:text-text-main",
+                    ].join(" ")}
+                  >
+                    {tab === "text" ? "텍스트" : "파일"}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {(isNew || !form.model.startsWith("gpt-") || trainingTab === "text") && (
+              <Field
+                label="학습 텍스트"
+                description="짧은 FAQ나 가이드는 직접 입력하는 편이 빠릅니다."
+              >
+                <Textarea
+                  rows={10}
+                  value={form.trainingData}
+                  onChange={(e) => update("trainingData", e.target.value)}
+                  placeholder={`Q. 영업시간이 어떻게 되나요?\nA. 평일 오전 10시 ~ 오후 7시입니다.\n\nQ. 환불 정책은 어떻게 되나요?\nA. ...`}
+                />
+              </Field>
+            )}
+
+            {!isNew && form.model.startsWith("gpt-") && trainingTab === "file" && (
+              <Field
+                label="파일 업로드"
+                description="긴 문서(PDF, DOCX 등)는 OpenAI vector store에 저장 후 답변 시 자동으로 검색해 사용합니다."
+              >
+                <FileLearning slug={slug!} isOpenAIModel={true} />
+              </Field>
+            )}
           </Section>
 
           {!isNew && (
@@ -405,6 +451,7 @@ const BotEdit = () => {
               fallback={form.fallback}
               logo={form.logo}
               widgetIcon={form.widgetIcon}
+              slug={slug}
             />
           </div>
         </div>

@@ -53,17 +53,27 @@ class LLMService:
         system_prompt: str,
         messages: list[dict],
         api_key: str,
+        vector_store_id: str | None = None,
     ) -> AsyncGenerator[str, None]:
         provider = resolve_provider(model)
         api_model = resolve_api_model(model)
         instructions = system_prompt or None
 
         if provider == Provider.OPENAI:
+            tools: list[dict] | None = None
+            if vector_store_id:
+                tools = [
+                    {
+                        "type": "file_search",
+                        "vector_store_ids": [vector_store_id],
+                    }
+                ]
             stream = self._openai.generate_stream(
                 messages=messages,
                 model=api_model,
                 api_key=api_key,
                 instructions=instructions,
+                tools=tools,
             )
         elif provider == Provider.ANTHROPIC:
             stream = self._anthropic.generate_stream(
@@ -91,9 +101,12 @@ class LLMService:
         system_prompt: str,
         messages: list[dict],
         api_key: str,
+        vector_store_id: str | None = None,
     ) -> str:
         """비스트리밍은 스트림을 모아 반환."""
         chunks: list[str] = []
-        async for chunk in self.chat_stream(model, system_prompt, messages, api_key):
+        async for chunk in self.chat_stream(
+            model, system_prompt, messages, api_key, vector_store_id
+        ):
             chunks.append(chunk)
         return "".join(chunks)

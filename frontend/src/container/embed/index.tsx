@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Bot, Send, RotateCcw } from "lucide-react";
+import { useChatStream, useGet } from "@/hooks/common/useAPI";
 import { getVisitorId } from "@/hooks/common/visitorId";
 
 interface BotPublicDto {
@@ -18,9 +19,15 @@ interface ChatMessage {
   created_at: string | null;
 }
 
+interface StreamRequest {
+  bot_id: string;
+  visitor_id: string;
+  content: string;
+  session_id: number | undefined;
+}
+
 const EmbedChat = () => {
   const { botId } = useParams();
-  const [bot, setBot] = useState<BotPublicDto | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sessionId, setSessionId] = useState<number | undefined>();
   const [input, setInput] = useState("");
@@ -29,30 +36,25 @@ const EmbedChat = () => {
   const visitorId = useRef(getVisitorId());
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // 봇 메타 로드 (이름/인사말/로고). 로그인 없이 호출해야 하므로 직접 fetch.
+  const { data: bot } = useGet<BotPublicDto>(
+    `api/bot/public/${botId}`,
+    ["bot-public", botId ?? ""],
+    !!botId,
+  );
+  const { sendMessage } = useChatStream<StreamRequest>("api/chat/stream");
+
   useEffect(() => {
-    if (!botId) return;
-    const baseURL = import.meta.env.VITE_APP_PUBLIC_BASE_URL ?? "";
-    fetch(`${baseURL}/api/bot/public/${botId}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((json) => {
-        if (json?.success && json.data) {
-          const data: BotPublicDto = json.data;
-          setBot(data);
-          if (data.greeting) {
-            setMessages([
-              {
-                id: 0,
-                role: "bot",
-                content: data.greeting,
-                created_at: null,
-              },
-            ]);
-          }
-        }
-      })
-      .catch(() => null);
-  }, [botId]);
+    if (bot?.greeting) {
+      setMessages([
+        {
+          id: 0,
+          role: "bot",
+          content: bot.greeting,
+          created_at: null,
+        },
+      ]);
+    }
+  }, [bot?.greeting]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -86,85 +88,70 @@ const EmbedChat = () => {
     setError(null);
     setIsStreaming(true);
 
-    const baseURL = import.meta.env.VITE_APP_PUBLIC_BASE_URL ?? "";
+    let buffer = "";
+    let acc = "";
+    const handleChunk = (raw: string) => {
+      buffer += raw;
+      const events = buffer.split("\n\n");
+      buffer = events.pop() ?? "";
+
+      for (const block of events) {
+        let evt = "";
+        let dataStr = "";
+        for (const line of block.split("\n")) {
+          if (line.startsWith("event:")) evt = line.slice(6).trim();
+          else if (line.startsWith("data:")) dataStr += line.slice(5).trim();
+        }
+        if (!dataStr) continue;
+        let data: Record<string, unknown>;
+        try {
+          data = JSON.parse(dataStr) as Record<string, unknown>;
+        } catch {
+          continue;
+        }
+
+        if (evt === "meta") {
+          const sid = data.session_id;
+          if (typeof sid === "number") setSessionId(sid);
+          const um = data.user_message as ChatMessage | undefined;
+          if (um) {
+            setMessages((prev) =>
+              prev.map((m) => (m.id === optimisticUserId ? um : m)),
+            );
+          }
+        } else if (evt === "chunk") {
+          acc += typeof data.text === "string" ? data.text : "";
+          const snapshot = acc;
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === streamingBotId ? { ...m, content: snapshot } : m,
+            ),
+          );
+        } else if (evt === "done") {
+          const bm = data.bot_message as ChatMessage | undefined;
+          if (bm) {
+            setMessages((prev) =>
+              prev.map((m) => (m.id === streamingBotId ? bm : m)),
+            );
+          }
+        } else if (evt === "error") {
+          const msg = typeof data.message === "string" ? data.message : "";
+          setError(msg || "응답을 받지 못했습니다.");
+          setMessages((prev) => prev.filter((m) => m.id !== streamingBotId));
+        }
+      }
+    };
 
     try {
-      const response = await fetch(`${baseURL}/api/chat/stream`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          bot_id: botId, // slug
+      await sendMessage(
+        {
+          bot_id: botId,
           visitor_id: visitorId.current,
           content: text,
           session_id: sessionId,
-        }),
-      });
-
-      if (!response.ok || !response.body) {
-        throw new Error(`서버 오류 ${response.status}`);
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let acc = "";
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        const events = buffer.split("\n\n");
-        buffer = events.pop() ?? "";
-
-        for (const block of events) {
-          let evt = "";
-          let dataStr = "";
-          for (const line of block.split("\n")) {
-            if (line.startsWith("event:")) evt = line.slice(6).trim();
-            else if (line.startsWith("data:")) dataStr += line.slice(5).trim();
-          }
-          if (!dataStr) continue;
-          let data: any;
-          try {
-            data = JSON.parse(dataStr);
-          } catch {
-            continue;
-          }
-
-          if (evt === "meta") {
-            if (data.session_id) setSessionId(data.session_id);
-            if (data.user_message) {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === optimisticUserId ? data.user_message : m,
-                ),
-              );
-            }
-          } else if (evt === "chunk") {
-            acc += data.text ?? "";
-            const snapshot = acc;
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === streamingBotId ? { ...m, content: snapshot } : m,
-              ),
-            );
-          } else if (evt === "done") {
-            if (data.bot_message) {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === streamingBotId ? data.bot_message : m,
-                ),
-              );
-            }
-          } else if (evt === "error") {
-            setError(data.message || "응답을 받지 못했습니다.");
-            setMessages((prev) =>
-              prev.filter((m) => m.id !== streamingBotId),
-            );
-          }
-        }
-      }
+        },
+        handleChunk,
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : "응답을 받지 못했습니다.";
       setError(msg);

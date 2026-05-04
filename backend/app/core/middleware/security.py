@@ -1,21 +1,34 @@
-from fastapi import FastAPI, Request
-from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi import FastAPI
+
+# Starlette BaseHTTPMiddleware는 StreamingResponse + downstream request.json()
+# 조합에서 deadlock을 유발한다. ASGI raw 미들웨어로 작성한다.
+
+SECURITY_HEADERS = [
+    (b"x-content-type-options", b"nosniff"),
+    (b"x-frame-options", b"DENY"),
+    (b"x-xss-protection", b"1; mode=block"),
+    (b"strict-transport-security", b"max-age=31536000; includeSubDomains"),
+]
 
 
-# 이름 축소: Security
-class Security(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
+class Security:
+    def __init__(self, app):
+        self.app = app
 
-        h = response.headers
-        h["X-Content-Type-Options"] = "nosniff"
-        h["X-Frame-Options"] = "DENY"
-        h["X-XSS-Protection"] = "1; mode=block"
-        h["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
 
-        return response
+        async def send_with_security(message):
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                headers.extend(SECURITY_HEADERS)
+                message = {**message, "headers": headers}
+            await send(message)
+
+        await self.app(scope, receive, send_with_security)
 
 
-# 함수명 축소: setup_security 또는 add_security
 def setup_security(app: FastAPI):
     app.add_middleware(Security)

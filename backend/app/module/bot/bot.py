@@ -44,6 +44,7 @@ class Bot(Base):
     training_text = Column(Text, nullable=True)
     fallback = Column(String(500), nullable=True)
     model = Column(String(50), nullable=False, default="gpt-4o-mini")
+    vector_store_id = Column(String(64), nullable=True)
 
     active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=now_kst, nullable=False)

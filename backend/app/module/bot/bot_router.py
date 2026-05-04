@@ -49,3 +49,25 @@ async def update_bot(p: ServiceProvider):
 @with_login()
 async def delete_bot(p: ServiceProvider):
     return await p.bot_service.delete_bot(p.request)
+
+
+# ── 학습 파일 ─────────────────────────────────────
+@router.get("/{slug}/files")
+@with_provider
+@with_login()
+async def list_files(p: ServiceProvider):
+    return await p.bot_service.list_files(p.request)
+
+
+@router.post("/{slug}/files")
+@with_provider
+@with_login()
+async def upload_files(p: ServiceProvider):
+    return await p.bot_service.upload_files(p.request)
+
+
+@router.delete("/{slug}/files/{file_id}")
+@with_provider
+@with_login()
+async def delete_file(p: ServiceProvider):
+    return await p.bot_service.delete_file(p.request)

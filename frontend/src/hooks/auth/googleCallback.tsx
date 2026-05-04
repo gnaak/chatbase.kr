@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { baseURL } from "@/hooks/common/useAPI";
+import { usePost } from "@/hooks/common/useAPI";
 
 interface GoogleCallbackProps {
   apiURL: string;
@@ -11,6 +11,7 @@ interface GoogleCallbackProps {
 
 const GoogleCallback = ({ apiURL, redirectURL, onSuccess, onError }: GoogleCallbackProps) => {
   const navigate = useNavigate();
+  const exchangeMutation = usePost<{ code: string }, unknown>(apiURL);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -27,33 +28,25 @@ const GoogleCallback = ({ apiURL, redirectURL, onSuccess, onError }: GoogleCallb
       if (rawState) stateObj = JSON.parse(decodeURIComponent(rawState));
     } catch {}
 
-    const exchange = async () => {
-      try {
-        const response = await fetch(`${baseURL}/${apiURL}`, {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code }),
-        });
-
-        if (!response.ok) {
-          onError({ status: response.status });
-          return;
-        }
-
-        if (stateObj.isPopup && window.opener) {
-          window.opener.postMessage({ type: "GOOGLE_LOGIN_SUCCESS", next: stateObj.next }, window.location.origin);
-          window.close();
-        } else {
-          onSuccess();
-          navigate(stateObj.next || redirectURL);
-        }
-      } catch {
-        onError({ message: "네트워크 오류" });
-      }
-    };
-
-    exchange();
+    exchangeMutation.mutate(
+      { code },
+      {
+        onSuccess: () => {
+          if (stateObj.isPopup && window.opener) {
+            window.opener.postMessage(
+              { type: "GOOGLE_LOGIN_SUCCESS", next: stateObj.next },
+              window.location.origin,
+            );
+            window.close();
+          } else {
+            onSuccess();
+            navigate(stateObj.next || redirectURL);
+          }
+        },
+        onError: (err) => onError({ status: err?.status, message: err?.message }),
+      },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return null;

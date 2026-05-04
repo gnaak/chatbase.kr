@@ -28,13 +28,17 @@ async def stream_message(p: ServiceProvider):
       - chunk: { text }
       - done: { bot_message }
       - error: { message }
+
+    body는 라우터에서 미리 읽어 generator에 넘긴다. StreamingResponse가
+    시작된 후 generator 내부에서 receive를 호출하면 uvicorn이 hang하므로.
     """
+    body = await p.request.json()
     return StreamingResponse(
-        p.chat_service.stream_message(p.request),
+        p.chat_service.stream_message(body),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",  # nginx 버퍼링 방지
+            "X-Accel-Buffering": "no",
         },
     )
 

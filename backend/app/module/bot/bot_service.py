@@ -1,6 +1,11 @@
 from app.core.utils.response import fail, success
+from app.module.api_key.api_key import Provider
+from app.module.api_key.api_key_service import ApiKeyService
 from app.module.bot.bot import Bot
+from app.module.bot.bot_file import BotFile
 from app.module.bot.bot_repository import BotRepository
+from app.module.infra.llm.llm_service import resolve_provider
+from app.module.infra.openai.vector_store_service import VectorStoreService
 
 ALLOWED_MODELS = {
     "gpt-4o-mini",
@@ -13,9 +18,8 @@ ALLOWED_MODELS = {
 
 
 def _bot_to_dict(bot: Bot) -> dict:
-    """외부 응답에서 numeric id는 노출하지 않고 slug만 식별자로 사용."""
     return {
-        "id": bot.slug,            # 외부 식별자
+        "id": bot.slug,
         "name": bot.name,
         "logo": bot.logo,
         "widget_icon": bot.widget_icon,
@@ -25,14 +29,32 @@ def _bot_to_dict(bot: Bot) -> dict:
         "fallback": bot.fallback,
         "model": bot.model,
         "active": bot.active,
+        "has_vector_store": bool(bot.vector_store_id),
         "created_at": bot.created_at.isoformat() if bot.created_at else None,
         "updated_at": bot.updated_at.isoformat() if bot.updated_at else None,
     }
 
 
+def _file_to_dict(f: BotFile) -> dict:
+    return {
+        "id": f.id,
+        "filename": f.filename,
+        "size": f.size,
+        "mime_type": f.mime_type,
+        "uploaded_at": f.created_at.isoformat() if f.created_at else None,
+    }
+
+
 class BotService:
-    def __init__(self, bot_repo: BotRepository):
+    def __init__(
+        self,
+        bot_repo: BotRepository,
+        api_key_service: ApiKeyService,
+        vector_store_service: VectorStoreService,
+    ):
         self.bot_repo = bot_repo
+        self.api_key_service = api_key_service
+        self.vector_store_service = vector_store_service
 
     async def _ensure_owner(self, slug: str, user_id: int) -> Bot:
         bot = await self.bot_repo.find_by_slug(slug)
@@ -42,11 +64,17 @@ class BotService:
             fail("권한이 없습니다.", "FORBIDDEN", 403)
         return bot
 
-    async def get_public_bot(self, request):
-        """임베드 위젯용 — 인증 없이 챗봇 헤더에 표시할 정보만 반환.
+    async def _require_openai_key(self, user_id: int) -> str:
+        api_key = await self.api_key_service.get_decrypted_key(user_id, Provider.OPENAI)
+        if not api_key:
+            fail(
+                "파일 학습은 OpenAI API 키 등록이 필요합니다.",
+                "OPENAI_KEY_MISSING",
+                424,
+            )
+        return api_key
 
-        widget.js가 외부 도메인에서 호출하므로 응답에 ACAO * 추가.
-        """
+    async def get_public_bot(self, request):
         slug = request.path_params.get("slug")
         bot = await self.bot_repo.find_by_slug(slug)
         if not bot:
@@ -137,6 +165,95 @@ class BotService:
         slug = request.path_params.get("slug")
         bot = await self._ensure_owner(slug, user_id)
 
+        # vector store best-effort cleanup (OpenAI 키 있는 경우만)
+        if bot.vector_store_id:
+            api_key = await self.api_key_service.get_decrypted_key(
+                user_id, Provider.OPENAI
+            )
+            if api_key:
+                await self.vector_store_service.delete_vector_store(
+                    api_key, bot.vector_store_id
+                )
+
         await self.bot_repo.delete(bot)
+        await self.bot_repo.db.commit()
+        return success(message="deleted")
+
+    # ── 학습 파일 ───────────────────────────────
+    async def list_files(self, request):
+        user_id = request.user_id
+        slug = request.path_params.get("slug")
+        bot = await self._ensure_owner(slug, user_id)
+        files = await self.bot_repo.find_files_by_bot(bot.id)
+        return success(data=[_file_to_dict(f) for f in files])
+
+    async def upload_files(self, request):
+        user_id = request.user_id
+        slug = request.path_params.get("slug")
+        bot = await self._ensure_owner(slug, user_id)
+
+        # OpenAI 모델만 RAG 가능 (Phase 1: GPT 우선)
+        if resolve_provider(bot.model) != Provider.OPENAI:
+            fail(
+                "파일 학습은 현재 OpenAI 모델에서만 사용할 수 있습니다.",
+                "RAG_PROVIDER_UNSUPPORTED",
+                400,
+            )
+
+        api_key = await self._require_openai_key(user_id)
+
+        form = await request.form()
+        uploads = [v for v in form.getlist("files") if hasattr(v, "read")]
+        if not uploads:
+            fail("업로드할 파일이 없습니다.", "FILES_REQUIRED")
+
+        # vector store 없으면 자동 생성
+        if not bot.vector_store_id:
+            bot.vector_store_id = await self.vector_store_service.create_vector_store(
+                api_key, bot.slug
+            )
+
+        records = await self.vector_store_service.add_files(
+            api_key, bot.vector_store_id, uploads
+        )
+
+        created: list[BotFile] = []
+        for r in records:
+            entity = BotFile(
+                bot_id=bot.id,
+                filename=r["filename"],
+                mime_type=r["mime_type"],
+                size=r["size"],
+                openai_file_id=r["openai_file_id"],
+            )
+            await self.bot_repo.add_file(entity)
+            created.append(entity)
+
+        await self.bot_repo.db.commit()
+        for f in created:
+            await self.bot_repo.db.refresh(f)
+
+        return success(data=[_file_to_dict(f) for f in created])
+
+    async def delete_file(self, request):
+        user_id = request.user_id
+        slug = request.path_params.get("slug")
+        file_id = int(request.path_params.get("file_id"))
+
+        bot = await self._ensure_owner(slug, user_id)
+        f = await self.bot_repo.find_file_by_id(file_id)
+        if not f or f.bot_id != bot.id:
+            fail("파일을 찾을 수 없습니다.", "FILE_NOT_FOUND", 404)
+
+        if bot.vector_store_id and f.openai_file_id:
+            api_key = await self.api_key_service.get_decrypted_key(
+                user_id, Provider.OPENAI
+            )
+            if api_key:
+                await self.vector_store_service.remove_file(
+                    api_key, bot.vector_store_id, f.openai_file_id
+                )
+
+        await self.bot_repo.delete_file(f)
         await self.bot_repo.db.commit()
         return success(message="deleted")

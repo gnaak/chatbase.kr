@@ -32,6 +32,7 @@ dependencies = [
     # Utility
     "pytz>=2026.1.post1",
     "google-genai>=1.74.0",
+    "python-multipart>=0.0.27",
 ]
 
 [tool.uv]

@@ -25,6 +25,7 @@ class ServiceProvider:
         self._chat_repo = None
         self._chat_service = None
         self._llm_service = None
+        self._vector_store_service = None
 
     # ── 기존 도메인 ─────────────────────────
     @property
@@ -88,8 +89,19 @@ class ServiceProvider:
     def bot_service(self):
         if not self._bot_service:
             from app.module.bot.bot_service import BotService
-            self._bot_service = BotService(self.bot_repo)
+            self._bot_service = BotService(
+                bot_repo=self.bot_repo,
+                api_key_service=self.api_key_service,
+                vector_store_service=self.vector_store_service,
+            )
         return self._bot_service
+
+    @property
+    def vector_store_service(self):
+        if not self._vector_store_service:
+            from app.module.infra.openai.vector_store_service import VectorStoreService
+            self._vector_store_service = VectorStoreService()
+        return self._vector_store_service
 
     @property
     def api_key_repo(self):

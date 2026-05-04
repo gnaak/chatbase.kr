@@ -32,5 +32,6 @@ class BotFile(Base):
     size = Column(Integer, nullable=False)             # bytes
     storage_path = Column(String(500), nullable=True)  # /media 경로 또는 외부 URL
     extracted_text = Column(Text, nullable=True)       # 파싱 결과 캐시
+    openai_file_id = Column(String(64), nullable=True, index=True)
 
     created_at = Column(DateTime, default=now_kst, nullable=False)

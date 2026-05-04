@@ -125,6 +125,7 @@ class ChatService:
                 system_prompt=system,
                 messages=api_messages,
                 api_key=api_key,
+                vector_store_id=bot.vector_store_id,
             )
         except Exception as exc:
             answer = bot.fallback or "죄송합니다, 답변을 생성하지 못했습니다."
@@ -156,18 +157,16 @@ class ChatService:
         )
 
     # ── 임베드 위젯 streaming (SSE) ────────────
-    async def stream_message(self, request) -> AsyncGenerator[str, None]:
+    async def stream_message(self, body: dict) -> AsyncGenerator[str, None]:
         """SSE 청크를 yield. 라우터에서 StreamingResponse로 감싸서 반환.
+
+        body는 라우터에서 미리 파싱해 인자로 전달받는다. (StreamingResponse
+        시작 후 receive 호출 시 uvicorn hang 회피)
 
         주입된 self.chat_repo/bot_repo의 세션은 라우터 return 후 dependency
         cleanup으로 닫히므로, 이 메서드는 자체 SessionLocal 컨텍스트를 연다.
         """
-        try:
-            body = await request.json()
-        except Exception as exc:
-            yield _sse("error", {"message": f"본문 파싱 실패: {exc}"})
-            return
-
+        print("[stream] entered generator")
         bot_slug = (body.get("bot_id") or "").strip()
         visitor_id = (body.get("visitor_id") or "").strip()
         content = (body.get("content") or "").strip()
@@ -177,7 +176,9 @@ class ChatService:
             yield _sse("error", {"message": "bot_id, visitor_id, content가 필요합니다."})
             return
 
+        print("[stream] opening SessionLocal...")
         async with SessionLocal() as db:
+            print("[stream] db acquired")
             chat_repo = ChatRepository(db)
             bot_repo = BotRepository(db)
             api_key_repo = ApiKeyRepository(db)
@@ -185,6 +186,7 @@ class ChatService:
 
             try:
                 bot = await bot_repo.find_by_slug(bot_slug)
+                print(f"[stream] bot loaded: {bot.id if bot else None}")
                 if not bot or not bot.active:
                     yield _sse("error", {"message": "이 챗봇은 현재 사용할 수 없습니다."})
                     return
@@ -208,6 +210,7 @@ class ChatService:
                 await db.refresh(user_msg)
                 await db.refresh(session)
 
+                print("[stream] yielding meta")
                 yield _sse(
                     "meta",
                     {
@@ -215,6 +218,7 @@ class ChatService:
                         "user_message": _msg_to_dict(user_msg),
                     },
                 )
+                print("[stream] meta yielded")
 
                 provider = resolve_provider(bot.model)
                 api_key = await api_key_service.get_decrypted_key(bot.user_id, provider)
@@ -251,13 +255,17 @@ class ChatService:
                 ]
 
                 full_text = ""
+                print(f"[stream] starting LLM call: {bot.model}")
                 try:
                     async for chunk in self.llm_service.chat_stream(
                         model=bot.model,
                         system_prompt=system,
                         messages=api_messages,
                         api_key=api_key,
+                        vector_store_id=bot.vector_store_id,
                     ):
+                        if not full_text:
+                            print("[stream] first LLM chunk received")
                         full_text += chunk
                         yield _sse("chunk", {"text": chunk})
                 except Exception as exc:

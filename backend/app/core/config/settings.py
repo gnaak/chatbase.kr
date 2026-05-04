@@ -67,15 +67,9 @@ class Settings:
         self.MEDIA_ROOT = self.BASE_DIR / "media"
 
     def _detect_env(self) -> str:
-        app_env = os.getenv("APP_ENV", "").lower()
-        if app_env in ("prod", "production"):
-            return "prod"
-        if app_env in ("local", "development"):
-            return "local"
-        hostname = socket.gethostname().lower()
-        if hostname == "homeserver":
-            return "prod"
-        return "local"
+        hostname = socket.gethostname()
+        return "prod" if hostname.startswith("ip-") or hostname.startswith("ec2-") else "local"
+
 
     # MySQL 설정
     @property

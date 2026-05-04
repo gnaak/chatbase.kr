@@ -139,7 +139,7 @@ const EmbedChat = () => {
     <div className={[
       "flex flex-col bg-bg-card overflow-hidden",
       isWidgetMode
-        ? "w-full h-svh"
+        ? "w-full h-screen"
         : "w-[360px] h-[560px] rounded-comfy shadow-[0_8px_32px_rgba(0,0,0,0.18)] animate-fade-slide",
     ].join(" ")}>
       <header className="shrink-0 flex items-center justify-between px-3.5 h-12 border-b border-line">

@@ -142,7 +142,7 @@ const buildScript = (botId: string) =>
 
 const buildIframe = (botId: string) =>
   `<iframe
-  src="${EMBED_ORIGIN}/embed/${botId}"
+  src="${EMBED_ORIGIN}/embed/${botId}?mode=widget"
   style="position:fixed;bottom:0;right:0;width:420px;height:640px;border:none;z-index:2147483647;background:transparent;"
   allow="clipboard-write"
   title="채팅 위젯"></iframe>`;

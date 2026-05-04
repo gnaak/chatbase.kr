@@ -10,6 +10,9 @@ SECURITY_HEADERS = [
     (b"strict-transport-security", b"max-age=31536000; includeSubDomains"),
 ]
 
+# /embed/* 는 widget.js가 iframe으로 로드하므로 X-Frame-Options를 제외한다.
+EMBED_HEADERS = [h for h in SECURITY_HEADERS if h[0] != b"x-frame-options"]
+
 
 class Security:
     def __init__(self, app):
@@ -20,10 +23,13 @@ class Security:
             await self.app(scope, receive, send)
             return
 
+        path = scope.get("path", "")
+        headers_to_add = EMBED_HEADERS if path.startswith("/embed/") else SECURITY_HEADERS
+
         async def send_with_security(message):
             if message["type"] == "http.response.start":
                 headers = list(message.get("headers", []))
-                headers.extend(SECURITY_HEADERS)
+                headers.extend(headers_to_add)
                 message = {**message, "headers": headers}
             await send(message)
 

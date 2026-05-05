@@ -6,6 +6,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    JSON,
     String,
     Text,
 )
@@ -46,6 +47,7 @@ class Bot(Base):
     fallback = Column(String(500), nullable=True)
     model = Column(String(50), nullable=False, default="gpt-5.4-mini")
     vector_store_id = Column(String(64), nullable=True)
+    faqs = Column(JSON, nullable=True)  # [{q: str, a: str}]
 
     active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=now_kst, nullable=False)

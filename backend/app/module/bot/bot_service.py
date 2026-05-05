@@ -30,6 +30,7 @@ def _bot_to_dict(bot: Bot) -> dict:
         "model": bot.model,
         "active": bot.active,
         "has_vector_store": bool(bot.vector_store_id),
+        "faqs": bot.faqs or [],
         "created_at": bot.created_at.isoformat() if bot.created_at else None,
         "updated_at": bot.updated_at.isoformat() if bot.updated_at else None,
     }
@@ -91,6 +92,7 @@ class BotService:
                 "widget_icon": bot.widget_icon,
                 "greeting": bot.greeting,
                 "active": bot.active,
+                "faqs": bot.faqs or [],
             }
         )
         response.headers["Access-Control-Allow-Origin"] = "*"
@@ -129,6 +131,7 @@ class BotService:
             training_type=_normalize_training_type(body.get("training_type")),
             fallback=body.get("fallback"),
             model=model,
+            faqs=body.get("faqs"),
             active=body.get("active", True),
         )
         await self.bot_repo.add(bot)
@@ -152,6 +155,7 @@ class BotService:
             "training_type",
             "fallback",
             "model",
+            "faqs",
             "active",
         ):
             if field in body:

@@ -13,6 +13,7 @@ interface BotPublicDto {
   widget_icon: string | null;
   greeting: string | null;
   active: boolean;
+  faqs: { q: string; a: string }[] | null;
 }
 
 interface ChatMessage {
@@ -63,9 +64,7 @@ const EmbedChat = () => {
     el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [messages.length, lastContent]);
 
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const text = input.trim();
+  const sendText = async (text: string) => {
     if (!text || !botId || isStreaming) return;
 
     const optimisticUserId = -Date.now();
@@ -76,7 +75,6 @@ const EmbedChat = () => {
       { id: optimisticUserId, role: "user", content: text, created_at: new Date().toISOString() },
       { id: streamingBotId, role: "bot", content: "", created_at: null },
     ]);
-    setInput("");
     setError(null);
     setIsStreaming(true);
 
@@ -127,6 +125,25 @@ const EmbedChat = () => {
     } finally {
       setIsStreaming(false);
     }
+  };
+
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const text = input.trim();
+    if (!text) return;
+    await sendText(text);
+    setInput("");
+  };
+
+  const handleFaq = (q: string, a: string) => {
+    if (isStreaming) return;
+    const userId = -Date.now();
+    const botId_ = userId - 1;
+    setMessages((prev) => [
+      ...prev,
+      { id: userId, role: "user", content: q, created_at: new Date().toISOString() },
+      { id: botId_, role: "bot", content: a, created_at: new Date().toISOString() },
+    ]);
   };
 
   const handleReset = () => {
@@ -199,6 +216,22 @@ const EmbedChat = () => {
         })}
         {error && <p className="text-[11px] text-point-red text-center">{error}</p>}
       </div>
+
+      {bot?.faqs && bot.faqs.length > 0 && (
+        <div className="shrink-0 flex flex-wrap gap-1.5 px-3.5 py-2 border-t border-line bg-bg-card">
+          {bot.faqs.map((faq, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => handleFaq(faq.q, faq.a)}
+              disabled={isStreaming}
+              className="px-3 py-1.5 rounded-full bg-bg-sub shadow-border text-[12px] text-text-main hover:bg-bg-hover transition-colors disabled:opacity-50"
+            >
+              {faq.q}
+            </button>
+          ))}
+        </div>
+      )}
 
       <form onSubmit={handleSend} className="shrink-0 flex items-center gap-2 px-3 py-2.5 border-t border-line bg-bg-card">
         <input

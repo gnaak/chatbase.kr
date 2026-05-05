@@ -1,6 +1,9 @@
 media/*
 !media/.keep
 
+logs/
+*.log
+
 venv/
 __pycache__/
 *.pyc

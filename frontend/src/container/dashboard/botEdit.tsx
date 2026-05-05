@@ -9,6 +9,7 @@ import {
   Power,
   PowerOff,
   Trash2,
+  X,
 } from "lucide-react";
 import Topbar from "@/component/dashboard/layout/topbar";
 import Button from "@/component/dashboard/ui/button";
@@ -65,6 +66,7 @@ interface BotForm {
   trainingType: TrainingType;
   fallback: string;
   model: string;
+  faqs: { q: string; a: string }[];
 }
 
 interface BotDto {
@@ -79,6 +81,7 @@ interface BotDto {
   fallback: string | null;
   model: string;
   active: boolean;
+  faqs: { q: string; a: string }[] | null;
 }
 
 interface BotPayload {
@@ -91,6 +94,7 @@ interface BotPayload {
   training_type?: TrainingType;
   fallback?: string;
   model: string;
+  faqs?: { q: string; a: string }[] | null;
   active?: boolean;
 }
 
@@ -104,6 +108,7 @@ const DEFAULT_FORM: BotForm = {
   trainingType: "text",
   fallback: "",
   model: "",
+  faqs: [],
 };
 
 const dtoToForm = (dto: BotDto): BotForm => ({
@@ -116,6 +121,7 @@ const dtoToForm = (dto: BotDto): BotForm => ({
   trainingType: dto.training_type === "file" ? "file" : "text",
   fallback: dto.fallback ?? "",
   model: dto.model,
+  faqs: dto.faqs ?? [],
 });
 
 const formToPayload = (form: BotForm): BotPayload => ({
@@ -128,6 +134,7 @@ const formToPayload = (form: BotForm): BotPayload => ({
   training_type: form.trainingType,
   fallback: form.fallback,
   model: form.model,
+  faqs: form.faqs.length > 0 ? form.faqs : null,
 });
 
 const EMBED_ORIGIN =
@@ -409,6 +416,16 @@ const BotEdit = () => {
             </Field>
 
             <Field
+              label="FAQ 버튼"
+              description="채팅창이 열릴 때 인사말 아래 버튼으로 표시됩니다. 클릭하면 LLM 없이 바로 답변이 노출됩니다."
+            >
+              <FaqEditor
+                value={form.faqs}
+                onChange={(v) => update("faqs", v)}
+              />
+            </Field>
+
+            <Field
               label="시스템 프롬프트"
               description="페르소나, 톤, 답변 규칙을 정의합니다. 1,000~3,000자 권장 (길수록 토큰 비용 ↑)."
               count={form.systemPrompt.length}
@@ -591,6 +608,7 @@ A. 서울 본사 매장은 영업시간 내 방문 픽업이 가능합니다.`}
               model={form.model}
               systemPrompt={form.systemPrompt}
               trainingData={form.trainingData}
+              faqs={form.faqs}
             />
           </div>
         </div>
@@ -763,6 +781,69 @@ const EmbedTabs = ({ botId }: { botId: string }) => {
       </div>
       <p className="text-[12px] text-text-sub leading-relaxed">{hint}</p>
       <CodeBlock code={code} language="html" />
+    </div>
+  );
+};
+
+type Faq = { q: string; a: string };
+
+const FaqEditor = ({ value, onChange }: { value: Faq[]; onChange: (v: Faq[]) => void }) => {
+  const [q, setQ] = useState("");
+  const [a, setA] = useState("");
+
+  const add = () => {
+    if (!q.trim() || !a.trim() || value.length >= 6) return;
+    onChange([...value, { q: q.trim().slice(0, 60), a: a.trim().slice(0, 500) }]);
+    setQ("");
+    setA("");
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      {value.map((faq, i) => (
+        <div key={i} className="flex flex-col gap-1 px-3 py-2.5 rounded-comfy bg-bg-sub shadow-border">
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-[12px] font-medium text-text-main">{faq.q}</span>
+            <button
+              type="button"
+              onClick={() => onChange(value.filter((_, j) => j !== i))}
+              className="shrink-0 text-text-disabled hover:text-text-main transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <p className="text-[12px] text-text-sub leading-relaxed">{faq.a}</p>
+        </div>
+      ))}
+      {value.length < 6 && (
+        <div className="flex flex-col gap-2">
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="질문 예: 배송은 얼마나 걸리나요?"
+            maxLength={60}
+            className="h-9 px-3 rounded-comfy bg-input-bg shadow-border text-[13px] text-text-main placeholder:text-text-placeholder outline-none focus:shadow-[0_0_0_1px_rgb(var(--text-main))] transition-shadow"
+          />
+          <div className="flex gap-2">
+            <input
+              value={a}
+              onChange={(e) => setA(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), add())}
+              placeholder="답변 예: 보통 2~3 영업일 내 도착합니다."
+              maxLength={500}
+              className="flex-1 h-9 px-3 rounded-comfy bg-input-bg shadow-border text-[13px] text-text-main placeholder:text-text-placeholder outline-none focus:shadow-[0_0_0_1px_rgb(var(--text-main))] transition-shadow"
+            />
+            <button
+              type="button"
+              onClick={add}
+              disabled={!q.trim() || !a.trim()}
+              className="h-9 px-3.5 rounded-comfy bg-bg-sub shadow-border text-[12px] font-medium text-text-main hover:bg-bg-hover disabled:opacity-40 transition-colors"
+            >
+              추가
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

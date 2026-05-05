@@ -23,6 +23,8 @@ interface QuickStreamRequest {
   history?: { role: string; content: string }[];
 }
 
+type Faq = { q: string; a: string };
+
 interface ChatPreviewProps {
   botName: string;
   greeting: string;
@@ -33,6 +35,7 @@ interface ChatPreviewProps {
   model?: string;
   systemPrompt?: string;
   trainingData?: string;
+  faqs?: Faq[];
 }
 
 interface PreviewMessage {
@@ -50,6 +53,7 @@ const ChatPreview = ({
   model,
   systemPrompt,
   trainingData,
+  faqs,
 }: ChatPreviewProps) => {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -66,6 +70,7 @@ const ChatPreview = ({
             model={model}
             systemPrompt={systemPrompt}
             trainingData={trainingData}
+            faqs={faqs}
             onClose={() => setIsOpen(false)}
           />
         )}
@@ -104,6 +109,7 @@ const ChatWindow = ({
   model,
   systemPrompt,
   trainingData,
+  faqs,
   onClose,
 }: ChatWindowProps) => {
   const initialMessages: PreviewMessage[] = [
@@ -239,6 +245,15 @@ const ChatWindow = ({
     }
   };
 
+  const handleFaq = (q: string, a: string) => {
+    if (pending) return;
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", text: q },
+      { role: "bot", text: a },
+    ]);
+  };
+
   const handleReset = () => {
     setMessages([{ role: "bot", text: greeting || "안녕하세요!" }]);
     setInput("");
@@ -292,6 +307,22 @@ const ChatWindow = ({
           />
         ))}
       </div>
+
+      {faqs && faqs.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 px-3.5 py-2 border-t border-line bg-bg-card">
+          {faqs.map((faq, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => handleFaq(faq.q, faq.a)}
+              disabled={pending}
+              className="px-3 py-1.5 rounded-full bg-bg-sub shadow-border text-[12px] text-text-main hover:bg-bg-hover transition-colors disabled:opacity-50"
+            >
+              {faq.q}
+            </button>
+          ))}
+        </div>
+      )}
 
       <form
         onSubmit={handleSend}

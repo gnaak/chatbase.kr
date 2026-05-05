@@ -102,7 +102,7 @@ class BotService:
         except Exception as e:
             return fail(f"URL을 불러올 수 없습니다: {e}")
 
-        soup = BeautifulSoup(resp.text, "lxml")
+        soup = BeautifulSoup(resp.text, "html.parser")
         for tag in soup(_STRIP_TAGS):
             tag.decompose()
 

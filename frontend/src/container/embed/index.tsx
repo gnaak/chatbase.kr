@@ -250,6 +250,16 @@ const EmbedChat = () => {
           <Send className="w-4 h-4" />
         </button>
       </form>
+      <div className="shrink-0 flex justify-center py-1.5 bg-bg-card">
+        <a
+          href="https://chatbase.kr"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[10px] text-text-disabled hover:text-text-sub transition-colors"
+        >
+          Powered by chatbase.kr
+        </a>
+      </div>
     </div>
   );
 

@@ -9,7 +9,7 @@ const FEATURES = [
   },
   {
     icon: KeyRound,
-    title: "BYOK · 사용량 비용 0원",
+    title: "BYOK · 수수료 없음",
     description:
       "OpenAI / Anthropic / Google API 키를 직접 등록할 수 있습니다. 호출 비용은 본인 계정으로 청구되어, 사용량이 폭증해도 추가 결제가 발생하지 않습니다.",
   },

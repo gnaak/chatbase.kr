@@ -5,7 +5,7 @@ import Button from "@/component/dashboard/ui/button";
 const BETA_FEATURES = [
   "챗봇 개수 무제한",
   "OpenAI / Anthropic / Google 모델 자유 선택",
-  "자기 API 키 사용 (호출 비용 0원)",
+  "자기 API 키 사용 (플랫폼 수수료 없음)",
   "임베드 위젯 + iframe 둘 다 지원",
   "대화 로그 + 통계 무제한 보관",
   "정식 출시 후 베타 사용자 전용 할인",

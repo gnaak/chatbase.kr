@@ -30,6 +30,13 @@ async def create_bot(p: ServiceProvider):
     return await p.bot_service.create_bot(p.request)
 
 
+@router.post("/fetch-url")
+@with_provider
+@with_login()
+async def fetch_url(p: ServiceProvider):
+    return await p.bot_service.fetch_url(p.request)
+
+
 @router.get("/{slug}")
 @with_provider
 @with_login()

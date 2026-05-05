@@ -1,3 +1,6 @@
+import httpx
+from bs4 import BeautifulSoup
+
 from app.core.utils.response import fail, success
 from app.module.api_key.api_key import Provider
 from app.module.api_key.api_key_service import ApiKeyService
@@ -6,6 +9,9 @@ from app.module.bot.bot_file import BotFile
 from app.module.bot.bot_repository import BotRepository
 from app.module.infra.llm.llm_service import resolve_provider
 from app.module.infra.openai.vector_store_service import VectorStoreService
+
+_MAX_CRAWL_CHARS = 20_000
+_STRIP_TAGS = ["script", "style", "nav", "footer", "header", "aside", "iframe", "noscript"]
 
 
 def _validate_model(model: str) -> None:
@@ -78,6 +84,32 @@ class BotService:
                 424,
             )
         return api_key
+
+    async def fetch_url(self, request):
+        body = await request.json()
+        url = (body.get("url") or "").strip()
+        if not url:
+            return fail("URL을 입력해주세요.")
+        if not url.startswith(("http://", "https://")):
+            url = "https://" + url
+
+        try:
+            async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+                resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+                resp.raise_for_status()
+        except httpx.TimeoutException:
+            return fail("요청 시간이 초과됐습니다.")
+        except Exception as e:
+            return fail(f"URL을 불러올 수 없습니다: {e}")
+
+        soup = BeautifulSoup(resp.text, "lxml")
+        for tag in soup(_STRIP_TAGS):
+            tag.decompose()
+
+        lines = [l.strip() for l in soup.get_text(separator="\n").splitlines() if l.strip()]
+        text = "\n".join(lines)[:_MAX_CRAWL_CHARS]
+
+        return success({"text": text, "char_count": len(text)})
 
     async def get_public_bot(self, request):
         slug = request.path_params.get("slug")

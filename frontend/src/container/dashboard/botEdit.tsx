@@ -166,6 +166,7 @@ const BotEdit = () => {
   const [active, setActive] = useState(true);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [confirmKind, setConfirmKind] = useState<"toggle" | "delete" | null>(null);
+  const [crawlUrl, setCrawlUrl] = useState("");
 
   const { data: botDto } = useGet<BotDto>(
     `api/bot/${slug}`,
@@ -231,9 +232,29 @@ const BotEdit = () => {
   const createMutation = usePost<BotPayload, BotDto>("api/bot/");
   const updateMutation = usePatch<BotDto, BotPayload>(`api/bot/${slug ?? ""}`);
   const deleteMutation = useDelete<void>(`api/bot/${slug ?? ""}`);
+  const fetchUrlMutation = usePost<{ url: string }, { text: string; char_count: number }>("api/bot/fetch-url");
 
   const update = <K extends keyof BotForm>(key: K, value: BotForm[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
+
+  const handleFetchUrl = () => {
+    if (!crawlUrl.trim()) return;
+    fetchUrlMutation.mutate(
+      { url: crawlUrl.trim() },
+      {
+        onSuccess: (res) => {
+          if (res?.text) {
+            update("trainingData", res.text);
+            setCrawlUrl("");
+            toast.success(`${res.char_count.toLocaleString()}자 가져왔습니다.`);
+          }
+        },
+        onError: (err) => {
+          toast.error(err.message || "URL에서 텍스트를 가져오지 못했습니다.");
+        },
+      },
+    );
+  };
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["bots"] });
@@ -486,6 +507,23 @@ const BotEdit = () => {
                 count={form.trainingData.length}
                 max={20000}
               >
+                <div className="flex gap-2 mb-2">
+                  <Input
+                    className="flex-1"
+                    value={crawlUrl}
+                    onChange={(e) => setCrawlUrl(e.target.value)}
+                    placeholder="URL에서 가져오기 (예: https://example.com)"
+                    onKeyDown={(e) => e.key === "Enter" && handleFetchUrl()}
+                  />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleFetchUrl}
+                    disabled={!crawlUrl.trim() || fetchUrlMutation.isPending}
+                  >
+                    {fetchUrlMutation.isPending ? "가져오는 중..." : "가져오기"}
+                  </Button>
+                </div>
                 <Textarea
                   rows={10}
                   value={form.trainingData}

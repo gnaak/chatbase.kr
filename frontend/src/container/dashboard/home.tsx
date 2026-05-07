@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Plus, Bot } from "lucide-react";
+import { Plus, Bot, KeyRound } from "lucide-react";
 import Topbar from "@/component/dashboard/layout/topbar";
 import Button from "@/component/dashboard/ui/button";
 import BotCard, { BotCardData } from "@/component/dashboard/bot/botCard";
@@ -45,12 +45,15 @@ const mapBot = (bot: BotDto): BotCardData => {
 const DashboardHome = () => {
   const navigate = useNavigate();
   const { data, isLoading } = useGet<BotDto[]>("api/bot/", ["bots"]);
+  const { data: apiKeys, isLoading: keysLoading } = useGet<{ provider: string }[]>("api/api-key/", ["api-keys"]);
 
   const bots = (data ?? []).map(mapBot);
   const isEmpty = !isLoading && bots.length === 0;
+  const hasNoKeys = !keysLoading && apiKeys !== undefined && apiKeys.length === 0;
 
   const goNew = () => navigate("/dashboard/bots/new");
   const goDetail = (bot: BotCardData) => navigate(`/dashboard/bots/${bot.id}`);
+  const goKeys = () => navigate("/dashboard/keys");
 
   return (
     <>
@@ -70,7 +73,9 @@ const DashboardHome = () => {
       />
 
       <div className="flex-1 overflow-y-auto px-8 md:px-12 py-8">
-        {isEmpty ? (
+        {hasNoKeys ? (
+          <NoApiKeyState onGoKeys={goKeys} />
+        ) : isEmpty ? (
           <EmptyState onCreate={goNew} />
         ) : (
           <BotGrid bots={bots} onSelect={goDetail} />
@@ -91,6 +96,23 @@ const BotGrid = ({
     {bots.map((bot) => (
       <BotCard key={bot.id} bot={bot} onClick={onSelect} />
     ))}
+  </div>
+);
+
+const NoApiKeyState = ({ onGoKeys }: { onGoKeys: () => void }) => (
+  <div className="flex flex-col items-center justify-center py-24 text-center">
+    <div className="w-12 h-12 rounded-DEFAULT bg-bg-sub shadow-border flex items-center justify-center mb-5">
+      <KeyRound className="w-5 h-5 text-text-sub" />
+    </div>
+    <h2 className="text-[18px] font-semibold tracking-tight text-text-main mb-1.5">
+      API 키가 없습니다
+    </h2>
+    <p className="text-[13px] text-text-sub max-w-sm mb-6">
+      챗봇을 만들려면 먼저 AI 모델 API 키를 등록해야 합니다.
+    </p>
+    <Button pill leftIcon={<KeyRound className="w-4 h-4" />} onClick={onGoKeys}>
+      API 키 등록하러 가기
+    </Button>
   </div>
 );
 

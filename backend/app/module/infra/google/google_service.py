@@ -34,22 +34,8 @@ class GoogleService:
             "grant_type": "authorization_code",
         }
 
-        logger.error(
-            "[GOOGLE TOKEN REQ] env=%s redirect=%s client_id=%s code_prefix=%s",
-            settings.env,
-            settings.google_redirect_uri,
-            (settings.google_client_id or "")[:24],
-            (code or "")[:12],
-        )
-
         async with httpx.AsyncClient() as client:
             token_resp = await client.post(GOOGLE_TOKEN_URL, data=token_data)
-
-            logger.error(
-                "[GOOGLE TOKEN RESP] status=%s body=%s",
-                token_resp.status_code,
-                token_resp.text,
-            )
 
             try:
                 token_resp.raise_for_status()

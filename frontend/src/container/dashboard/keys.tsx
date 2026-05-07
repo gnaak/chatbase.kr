@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Eye, EyeOff, Check, KeyRound, Trash2, ExternalLink } from "lucide-react";
+import { Eye, EyeOff, Check, KeyRound, Trash2, ExternalLink, BookOpen, ChevronDown } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import Topbar from "@/component/dashboard/layout/topbar";
 import Button from "@/component/dashboard/ui/button";
@@ -171,6 +171,7 @@ const Keys = () => {
       <div className="flex-1 overflow-y-auto px-8 md:px-12 py-8">
         <div className="flex flex-col gap-4 max-w-4xl mx-auto">
           <Notice />
+          <KeyGuide />
           {providers.map((provider) => (
             <ProviderCard
               key={provider.id}
@@ -183,6 +184,93 @@ const Keys = () => {
         </div>
       </div>
     </>
+  );
+};
+
+const GUIDE_STEPS: { provider: ProviderMeta; steps: string[] }[] = [
+  {
+    provider: PROVIDER_META[0],
+    steps: [
+      "platform.openai.com 에 로그인",
+      "우측 상단 프로필 → API keys 메뉴 진입",
+      "Create new secret key 클릭 → 키 복사",
+      "아래 OpenAI 카드에서 키 등록",
+    ],
+  },
+  {
+    provider: PROVIDER_META[1],
+    steps: [
+      "console.anthropic.com 에 로그인",
+      "좌측 메뉴 → API Keys 진입",
+      "Create Key 클릭 → 키 복사",
+      "아래 Anthropic 카드에서 키 등록",
+    ],
+  },
+  {
+    provider: PROVIDER_META[2],
+    steps: [
+      "aistudio.google.com 에 로그인",
+      "좌측 메뉴 → Get API key 클릭",
+      "Create API key 클릭 → 키 복사",
+      "아래 Google 카드에서 키 등록",
+    ],
+  },
+];
+
+const KeyGuide = () => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="rounded-comfy bg-bg-card shadow-border overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-5 py-4 text-left"
+      >
+        <div className="flex items-center gap-2">
+          <BookOpen className="w-4 h-4 text-text-sub" />
+          <span className="text-[14px] font-medium text-text-main">
+            API 키 발급 방법
+          </span>
+        </div>
+        <ChevronDown
+          className={`w-4 h-4 text-text-sub transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <div className="px-5 pb-5 border-t border-line grid grid-cols-1 md:grid-cols-3 gap-5 pt-5">
+          {GUIDE_STEPS.map(({ provider, steps }) => (
+            <div key={provider.id} className="flex flex-col gap-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[13px] font-semibold text-text-main">
+                  {provider.name}
+                </span>
+                <a
+                  href={provider.docsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-[11px] text-text-sub hover:text-text-main transition-colors"
+                >
+                  키 발급 페이지
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+              <ol className="flex flex-col gap-1.5">
+                {steps.map((step, i) => (
+                  <li key={i} className="flex items-start gap-2 text-[12px] text-text-sub leading-relaxed">
+                    <span className="shrink-0 w-4 h-4 mt-0.5 rounded-full bg-bg-sub shadow-border text-[10px] font-semibold text-text-main flex items-center justify-center">
+                      {i + 1}
+                    </span>
+                    {step}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 };
 

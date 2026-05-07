@@ -1,6 +1,7 @@
 # Base Template — CLAUDE.md
 
-풀스택 프로젝트 베이스 템플릿. 세부 규칙은 `frontend/CLAUDE.md`, `backend/CLAUDE.md` 참고.
+모노레포 구조: `chat/`(챗봇 서비스), `scheduler/`(스케줄러 서비스).
+세부 규칙은 `chat/frontend/CLAUDE.md`, `chat/backend/CLAUDE.md` 참고.
 
 ## 기술 스택
 

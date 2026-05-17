@@ -8,57 +8,51 @@ React 19 + TypeScript + Vite + TanStack Query v5 + Tailwind CSS v3 + lucide-reac
 src/
 ├── App.tsx                  # 루트 라우터
 ├── container/               # 라우터 연결 페이지 (비즈니스 로직 + 훅)
-│   ├── admin/layout.tsx
-│   └── client/layout.tsx, auth/google.tsx, auth/kakao.tsx
+│   ├── admin/               # 관리자 페이지 (customers, models, payments, group, login ...)
+│   ├── dashboard/           # 사용자 대시보드 (home, botEdit, keys, billing ...)
+│   ├── auth/ client/        # 로그인 / OAuth 콜백
+│   ├── embed/ legal/        # 임베드 위젯 / 약관
+│   └── landing.tsx guide.tsx notfound.tsx
 ├── component/
-│   ├── admin/ client/
-│   └── common/              # ★ 공통 컴포넌트 — 반드시 사용
-│       ├── feedback/        alert.tsx modal.tsx formModal.tsx toast.tsx
-│       ├── form/            button.tsx inputbox.tsx selectBox.tsx textareaBox.tsx
-│       │                    checkbox.tsx radioButton.tsx toggle.tsx calendar.tsx
-│       ├── table/table.tsx
-│       ├── loading.tsx
-│       └── pagination.tsx
-├── hooks/common/            useAPI.ts useAuth.ts getCookie.ts useAudioWs.ts
-├── context/AuthProvider.tsx
-├── types/                   user.ts auth.ts admin/ user/
-└── utils/format/            date.ts number.ts time.ts
+│   ├── admin/               # 관리자 전용 UI (layout/ modal/ ui/)
+│   ├── dashboard/           # 사용자 대시보드 전용 UI (bot/ layout/ ui/)
+│   ├── auth/                # 로그인·OAuth 관련 UI
+│   └── landing/             # 랜딩 페이지 UI
+├── hooks/                   # auth/ · common/(useAPI useAuth getCookie useAudioWs ...)
+├── context/                 # AuthProvider · ThemeProvider · ToastProvider
+├── types/                   # user.ts auth.ts admin/
+└── utils/format/            # date.ts number.ts time.ts
 ```
 
-## 공통 컴포넌트
+## UI 컴포넌트
 
-새 UI 작성 시 아래 컴포넌트가 있으면 **반드시** 사용. 직접 만들지 않는다.
+공통 `component/common/` 폴더는 **없다**. UI 컴포넌트는 화면 영역별로 나뉘어 있다.
+새 화면을 만들 때는 해당 영역의 기존 컴포넌트를 재사용하고, 직접 새로 만들지 않는다.
+각 컴포넌트의 props는 해당 파일 상단 인터페이스를 참고한다.
 
-### Feedback
+### 관리자 — `component/admin/ui/`
 
-| 컴포넌트 | import | 주요 props |
-|----------|--------|------------|
-| `<Alert />` | `@/component/common/feedback/alert` | `type("info"\|"success"\|"warning"\|"error")` `size("sm"\|"md"\|"lg")` `title` `description` `closable` `onClose` |
-| `<Modal />` | `@/component/common/feedback/modal` | `open` `onClose` `title` `description` `size` `buttonCount(0\|1\|2)` `primaryText` `onPrimary` `secondaryText` `onSecondary` `icon` |
-| `<FormModal />` | `@/component/common/feedback/formModal` | `open` `onClose` `title` `headerType("center"\|"left"\|"none")` `footerType(0\|1\|2)` `primaryText` `onPrimary` |
-| `<Toast />` | `@/component/common/feedback/toast` | `open` `onClose` `type` `title` `duration(ms, 0=무한)` |
+관리자 페이지(`container/admin/*`)에서 사용.
 
-### Form
+| 분류 | 컴포넌트 |
+|------|----------|
+| `feedback/` | alert, modal, confirmModal, formModal, toast |
+| `form/` | button, inputbox, selectBox, comboBox, textareaBox, checkbox, radioButton, toggle, calendar |
+| `table/` | table (+ tableHeader, tableBody) |
+| 기타 | loading, pagination |
 
-| 컴포넌트 | import | 주요 props |
-|----------|--------|------------|
-| `<Button />` | `@/component/common/form/button` | `variant("main"\|"sub1"\|"sub2")` `size("sm"\|"md"\|"lg")` `leftIcon` `full` |
-| `<InputBox />` | `@/component/common/form/inputbox` | `value` `onChange` `type` `placeholder` `error` `errorMessage` `leftIcon` |
-| `<SelectBox />` | `@/component/common/form/selectBox` | `value` `onChange` `options({label,value}[])` `placeholder` `position("top"\|"bottom")` |
-| `<TextareaBox />` | `@/component/common/form/textareaBox` | `value` `onChange` `rows` `error` |
-| `<Checkbox />` | `@/component/common/form/checkbox` | `label` `checked` `onChange` |
-| `<RadioButton />` | `@/component/common/form/radioButton` | `name` `label` `value` `checked` `onChange` |
-| `<Toggle />` | `@/component/common/form/toggle` | `checked` `onChange` `size` |
-| `<Calendar />` | `@/component/common/form/calendar` | `value({start,end})` `onChange` `position("top"\|"bottom"\|"left"\|"right")` |
-| `<DepartmentTreeSelect />` | `@/component/common/form/departmentTreeSelect` | `value` `onChange` `options` |
+import 예: `import Table from "@/component/admin/ui/table/table";`
 
-### Data Display
+### 사용자 대시보드 — `component/dashboard/ui/`
 
-| 컴포넌트 | import | 주요 props |
-|----------|--------|------------|
-| `<Table />` | `@/component/common/table/table` | `columns({key,header,width?,align?,render?,icon?}[])` `data` `size` `striped` `onRowClick` `rowCount` |
-| `<Pagination />` | `@/component/common/pagination` | `page` `total` `pageSize` `onChange` |
-| `<Loading />` | `@/component/common/loading` | — |
+대시보드 페이지(`container/dashboard/*`)에서 사용.
+
+| 컴포넌트 |
+|----------|
+| button, card, input, textarea, select, field |
+| confirmModal, codeBlock, logoUpload, themeToggle |
+
+import 예: `import Button from "@/component/dashboard/ui/button";`
 
 ## 코딩 컨벤션
 

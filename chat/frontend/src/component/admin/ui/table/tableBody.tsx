@@ -48,11 +48,28 @@ const TableBody = ({
 }: TableBodyProps) => {
   const target = rowCount && rowCount > 0 ? rowCount : data.length;
   const emptyCount = Math.max(0, target - data.length);
+
+  // 데이터가 없을 경우 테이블 바디 영역에 안내 메시지 출력
+  if (data.length === 0) {
+    return (
+      <tbody>
+        <tr>
+          <td
+            colSpan={columns.length}
+            className="px-3 py-16 text-center text-[13px] text-text-disabled"
+          >
+            데이터가 없습니다.
+          </td>
+        </tr>
+      </tbody>
+    );
+  }
+
   return (
     <tbody>
       {data.map((row, index) => {
         const stripedClass =
-          striped && index % 2 === 1 ? "bg-neutral-50/60" : "bg-white";
+          striped && index % 2 === 1 ? "bg-bg-sub" : "bg-bg-card";
         const clickable = !!onRowClick;
         return (
           <tr
@@ -60,7 +77,7 @@ const TableBody = ({
             className={[
               rowSizeClass,
               stripedClass,
-              "transition-colors hover:bg-neutral-50",
+              "transition-colors hover:bg-bg-hover",
               clickable ? "cursor-pointer" : "",
             ].join(" ")}
             onClick={() => {
@@ -79,11 +96,9 @@ const TableBody = ({
                 <td
                   key={col.key}
                   className={[
-                    "px-3 py-2.5 align-middle text-neutral-800",
+                    "px-3 py-2.5 align-middle text-text-main",
                     alignClass,
-                    index < data.length - 1
-                      ? "border-b border-neutral-100"
-                      : "",
+                    index < data.length - 1 ? "border-b border-line" : "",
                   ].join(" ")}
                 >
                   {col.render ? col.render(row) : ((row as any)[col.key] ?? "")}
@@ -100,7 +115,7 @@ const TableBody = ({
             {columns.map((col) => (
               <td
                 key={col.key}
-                className="px-3 py-2.5 bg-white border-b border-neutral-50"
+                className="px-3 py-2.5 bg-bg-card border-b border-line"
               >
                 &nbsp;
               </td>

@@ -33,7 +33,7 @@ const AdminCustomers = () => {
         align: "center",
         render: (r: UserDto) => (
           <span
-            className="font-mono text-[12px] text-neutral-800 truncate block"
+            className="font-mono text-[12px] text-text-main truncate block"
             title={r.email}
           >
             {r.email}
@@ -51,14 +51,14 @@ const AdminCustomers = () => {
               {r.key_providers.map((p) => (
                 <span
                   key={p}
-                  className="inline-flex items-center px-1.5 h-5 rounded bg-neutral-100 text-[11px] font-medium text-neutral-700"
+                  className="inline-flex items-center px-1.5 h-5 rounded bg-bg-sub text-[11px] font-medium text-text-sub"
                 >
                   {p}
                 </span>
               ))}
             </div>
           ) : (
-            <span className="text-neutral-400 text-[11px]">—</span>
+            <span className="text-text-disabled text-[11px]">—</span>
           ),
       },
       {
@@ -85,11 +85,11 @@ const AdminCustomers = () => {
         width: "84px",
         align: "center",
         render: (r: UserDto) => (
-          <span className="inline-flex items-center gap-1.5 text-[11px] text-neutral-600">
+          <span className="inline-flex items-center gap-1.5 text-[11px] text-text-sub">
             <span
               className={[
                 "w-1.5 h-1.5 rounded-full",
-                r.active ? "bg-emerald-500" : "bg-neutral-300",
+                r.active ? "bg-point-green" : "bg-text-disabled",
               ].join(" ")}
             />
             {r.active ? "활성" : "비활성"}
@@ -102,7 +102,7 @@ const AdminCustomers = () => {
         width: "150px",
         align: "center",
         render: (r: UserDto) => (
-          <span className="text-[11px] text-neutral-500">
+          <span className="text-[11px] text-text-sub">
             {formatDate(r.created_at)}
           </span>
         ),
@@ -113,7 +113,7 @@ const AdminCustomers = () => {
         width: "150px",
         align: "center",
         render: (r: UserDto) => (
-          <span className="text-[11px] text-neutral-500">
+          <span className="text-[11px] text-text-sub">
             {formatDate(r.last_login_at)}
           </span>
         ),
@@ -126,16 +126,16 @@ const AdminCustomers = () => {
     <div className="px-6 md:px-8 py-6 flex flex-col gap-5">
       <div className="flex items-end justify-between gap-3">
         <div>
-          <h1 className="text-[18px] font-semibold tracking-tight text-neutral-900">
+          <h1 className="text-[18px] font-semibold tracking-tight text-text-main">
             고객 관리
           </h1>
-          <p className="text-[13px] text-neutral-500 mt-1">
+          <p className="text-[13px] text-text-sub mt-1">
             전체 사용자 · 봇 수 · 등록 키 provider · 누적 세션 수
           </p>
         </div>
         {users && (
-          <span className="text-[12px] text-neutral-500">
-            총 <span className="font-semibold text-neutral-800">{users.length}</span>명
+          <span className="text-[12px] text-text-sub">
+            총 <span className="font-semibold text-text-main">{users.length}</span>명
           </span>
         )}
       </div>

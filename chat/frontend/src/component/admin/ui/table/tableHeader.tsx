@@ -29,7 +29,7 @@ interface TableHeaderProps {
  */
 const TableHeader = ({ columns, rowSizeClass }: TableHeaderProps) => {
   return (
-    <thead className="bg-neutral-50/80 border-b border-neutral-200">
+    <thead className="bg-bg-sub border-b border-line">
       <tr className={rowSizeClass}>
         {columns.map((col) => {
           const alignClass =
@@ -42,13 +42,13 @@ const TableHeader = ({ columns, rowSizeClass }: TableHeaderProps) => {
           return (
             <th
               key={col.key}
-              className="px-3 py-2 text-[12px] font-semibold uppercase tracking-tight text-neutral-500"
+              className="px-3 py-2 text-[12px] font-semibold uppercase tracking-tight text-text-sub"
               style={col.width ? { width: col.width } : undefined}
             >
               <div className={`flex items-center gap-1 ${alignClass}`}>
                 <span>{col.header}</span>
                 {col.icon && (
-                  <span className="text-neutral-400">{col.icon}</span>
+                  <span className="text-text-disabled">{col.icon}</span>
                 )}
               </div>
             </th>

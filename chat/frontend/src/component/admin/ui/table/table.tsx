@@ -100,12 +100,11 @@ const Table = ({
   rowCount,
 }: TableProps) => {
   const rowSizeClass = sizeStyles[size];
-  const isEmpty = data.length === 0;
   return (
     <div
       className={[
         "relative w-full overflow-x-auto flex flex-col",
-        "rounded-xl bg-white ring-1 ring-neutral-200/70",
+        "rounded-xl bg-bg-card ring-1 ring-line",
         className,
       ].join(" ")}
     >
@@ -120,12 +119,6 @@ const Table = ({
           onRowClick={onRowClick}
         />
       </table>
-
-      {isEmpty && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <span className="text-[13px] text-neutral-400">데이터가 없습니다.</span>
-        </div>
-      )}
     </div>
   );
 };

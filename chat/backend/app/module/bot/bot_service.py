@@ -114,7 +114,8 @@ class BotService:
     async def get_public_bot(self, request):
         slug = request.path_params.get("slug")
         bot = await self.bot_repo.find_by_slug(slug)
-        if not bot:
+        # 비활성 봇은 공개 위젯에서 조회 불가 (chat 엔드포인트와 동일 정책)
+        if not bot or not bot.active:
             fail("봇이 존재하지 않습니다.", "BOT_NOT_FOUND", 404)
         response = success(
             data={
@@ -151,6 +152,16 @@ class BotService:
 
         model = body.get("model") or "gpt-5.4-mini"
         _validate_model(model)
+
+        # API 키가 등록되지 않은 provider의 모델로는 챗봇을 만들 수 없음
+        provider = resolve_provider(model)
+        api_key = await self.api_key_service.get_decrypted_key(user_id, provider)
+        if not api_key:
+            fail(
+                "챗봇을 만들려면 먼저 해당 모델의 API 키를 등록해야 합니다.",
+                "API_KEY_REQUIRED",
+                424,
+            )
 
         bot = Bot(
             user_id=user_id,

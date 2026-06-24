@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Bot, KeyRound } from "lucide-react";
 import Topbar from "@/component/dashboard/layout/topbar";
 import Button from "@/component/dashboard/ui/button";
+import ConfirmModal from "@/component/dashboard/ui/confirmModal";
 import BotCard, { BotCardData } from "@/component/dashboard/bot/botCard";
 import { useGet } from "@/hooks/common/useAPI";
 
@@ -47,11 +49,20 @@ const DashboardHome = () => {
   const { data, isLoading } = useGet<BotDto[]>("api/bot/", ["bots"]);
   const { data: apiKeys, isLoading: keysLoading } = useGet<{ provider: string }[]>("api/api-key/", ["api-keys"]);
 
+  const [showKeyModal, setShowKeyModal] = useState(false);
+
   const bots = (data ?? []).map(mapBot);
   const isEmpty = !isLoading && bots.length === 0;
   const hasNoKeys = !keysLoading && apiKeys !== undefined && apiKeys.length === 0;
 
-  const goNew = () => navigate("/dashboard/bots/new");
+  // API 키가 없으면 챗봇 생성 페이지로 보내지 않고 안내 모달을 띄운다
+  const goNew = () => {
+    if (hasNoKeys) {
+      setShowKeyModal(true);
+      return;
+    }
+    navigate("/dashboard/bots/new");
+  };
   const goDetail = (bot: BotCardData) => navigate(`/dashboard/bots/${bot.id}`);
   const goKeys = () => navigate("/dashboard/keys");
 
@@ -81,6 +92,19 @@ const DashboardHome = () => {
           <BotGrid bots={bots} onSelect={goDetail} />
         )}
       </div>
+
+      <ConfirmModal
+        open={showKeyModal}
+        title="API 키 등록이 필요합니다"
+        description="챗봇을 만들려면 먼저 AI 모델 API 키를 등록해야 합니다. 지금 등록하러 가시겠어요?"
+        confirmLabel="API 키 등록하러 가기"
+        cancelLabel="닫기"
+        onConfirm={() => {
+          setShowKeyModal(false);
+          goKeys();
+        }}
+        onCancel={() => setShowKeyModal(false)}
+      />
     </>
   );
 };

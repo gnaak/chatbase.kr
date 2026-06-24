@@ -160,7 +160,12 @@ class ChatService:
         # 1) 세션 확보
         if session_id:
             session = await self.chat_repo.find_session(int(session_id))
-            if not session or session.bot_id != bot.id:
+            # 세션 소유 방문자까지 검증 — bot_id만 보면 다른 방문자 세션 탈취 가능(IDOR)
+            if (
+                not session
+                or session.bot_id != bot.id
+                or session.visitor_id != visitor_id
+            ):
                 fail("세션이 유효하지 않습니다.", "INVALID_SESSION", 400)
         else:
             session = ChatSession(
@@ -275,7 +280,12 @@ class ChatService:
 
                 if session_id:
                     session = await chat_repo.find_session(int(session_id))
-                    if not session or session.bot_id != bot.id:
+                    # 세션 소유 방문자까지 검증 — bot_id만 보면 다른 방문자 세션 탈취 가능(IDOR)
+                    if (
+                        not session
+                        or session.bot_id != bot.id
+                        or session.visitor_id != visitor_id
+                    ):
                         yield _sse("error", {"message": "세션이 유효하지 않습니다."})
                         return
                 else:

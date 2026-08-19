@@ -1,9 +1,16 @@
-import { createContext, useEffect, useState, ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useLayoutEffect,
+  useState,
+  ReactNode,
+} from "react";
 
 export type Theme = "light" | "dark" | "system";
 
 interface ThemeContextValue {
   theme: Theme;
+  isDark: boolean;
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
 }
@@ -24,29 +31,56 @@ const getInitialTheme = (): Theme => {
   return "system";
 };
 
+// 테마 전환 중에는 .theme-switching 으로 모든 transition 을 끈다.
+// 색이 150ms 페이드로 번지지 않고 한 프레임에 바로 바뀌도록.
+const applyTheme = (isDark: boolean) => {
+  const root = document.documentElement;
+
+  root.classList.add("theme-switching");
+  root.classList.toggle("dark", isDark);
+
+  document
+    .querySelector('meta[name="theme-color"]')
+    ?.setAttribute("content", isDark ? "#121214" : "#ffffff");
+
+  // 강제 리플로우 — transition 이 꺼진 상태로 새 색을 확정시킨다.
+  void root.offsetHeight;
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => root.classList.remove("theme-switching"));
+  });
+};
+
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const [theme, setThemeState] = useState<Theme>(getInitialTheme);
+  const [isDark, setIsDark] = useState(() => resolveIsDark(getInitialTheme()));
 
-  useEffect(() => {
-    const root = document.documentElement;
-    root.classList.toggle("dark", resolveIsDark(theme));
+  const sync = useCallback((next: boolean) => {
+    setIsDark(next);
+    applyTheme(next);
+  }, []);
+
+  // paint 전에 적용되도록 useLayoutEffect — 한 프레임도 이전 테마가 보이지 않게.
+  useLayoutEffect(() => {
+    sync(resolveIsDark(theme));
     localStorage.setItem("theme", theme);
 
     if (theme !== "system") return;
 
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = (e: MediaQueryListEvent) =>
-      root.classList.toggle("dark", e.matches);
+    const handler = (e: MediaQueryListEvent) => sync(e.matches);
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
-  }, [theme]);
+  }, [theme, sync]);
 
-  const setTheme = (next: Theme) => setThemeState(next);
-  const toggleTheme = () =>
-    setThemeState((t) => (resolveIsDark(t) ? "light" : "dark"));
+  const setTheme = useCallback((next: Theme) => setThemeState(next), []);
+  const toggleTheme = useCallback(
+    () => setThemeState((t) => (resolveIsDark(t) ? "light" : "dark")),
+    [],
+  );
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, isDark, setTheme, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );

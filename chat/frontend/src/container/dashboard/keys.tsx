@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Eye, EyeOff, Check, KeyRound, Trash2, ExternalLink, BookOpen, ChevronDown } from "lucide-react";
+import { Eye, EyeOff, Check, KeyRound, Pencil, Trash2, ExternalLink, BookOpen, ChevronDown } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import Topbar from "@/component/dashboard/layout/topbar";
 import Button from "@/component/dashboard/ui/button";
@@ -378,20 +378,37 @@ const ProviderCard = ({ provider, state, onSave, onRemove }: ProviderCardProps) 
             <span className="text-text-sub">{"•".repeat(20)}</span>
             <span>{state.last4}</span>
           </div>
-          <div className="flex items-center gap-1 shrink-0">
-            <Button size="sm" pill variant="secondary" onClick={() => setEditing(true)}>
-              변경
-            </Button>
-            <Button
-              size="sm"
-              pill
-              variant="ghost"
-              leftIcon={<Trash2 className="w-3.5 h-3.5" />}
-              onClick={onRemove}
-              className="text-text-sub hover:text-point-red"
+          <div className="flex items-center gap-0.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              aria-label="키 변경"
+              title="키 변경"
+              className="
+                inline-flex items-center justify-center w-7 h-7 rounded-full
+                text-text-sub hover:text-text-main
+                hover:bg-bg-hover active:bg-bg-active
+                transition-colors duration-150
+                focus:outline-none focus-visible:shadow-focus
+              "
             >
-              삭제
-            </Button>
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={onRemove}
+              aria-label="키 삭제"
+              title="키 삭제"
+              className="
+                inline-flex items-center justify-center w-7 h-7 rounded-full
+                text-text-sub hover:text-point-red
+                hover:bg-bg-hover active:bg-bg-active
+                transition-colors duration-150
+                focus:outline-none focus-visible:shadow-focus
+              "
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       )}

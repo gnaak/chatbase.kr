@@ -26,8 +26,8 @@ export default {
         "nav-pill": "100px",
       },
       boxShadow: {
-        // Shadow-as-border (the signature)
-        border: "rgba(0, 0, 0, 0.08) 0px 0px 0px 1px",
+        // Shadow-as-border (the signature) — index.css 의 --shadow-border 로 테마 전환
+        border: "var(--shadow-border)",
         "border-light": "rgb(235, 235, 235) 0px 0px 0px 1px",
         "border-dark": "rgba(255, 255, 255, 0.1) 0px 0px 0px 1px",
         // Subtle elevation

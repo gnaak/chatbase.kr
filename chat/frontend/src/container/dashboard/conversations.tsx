@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, Bot, User, MessagesSquare, Filter } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Topbar from "@/component/dashboard/layout/topbar";
@@ -120,7 +121,7 @@ const Conversations = () => {
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(320px,380px)_minmax(0,1fr)] min-h-0">
         {/* 좌측: 세션 리스트 */}
-        <aside className="flex flex-col border-r border-line min-h-0">
+        <aside className="relative flex flex-col border-r border-line min-h-0">
           <div className="px-4 py-3 border-b border-line shrink-0">
             <Input
               value={search}
@@ -131,34 +132,42 @@ const Conversations = () => {
           </div>
 
           <div className="flex-1 overflow-y-auto scrollbar-hide">
-            {filteredSessions.length === 0 ? (
-              <EmptyList />
-            ) : (
-              <ul>
-                {filteredSessions.map((s) => (
-                  <li key={s.id}>
-                    <SessionRow
-                      session={s}
-                      botName={botNameMap.get(s.bot_id) ?? "봇"}
-                      active={s.id === selectedId}
-                      onClick={() => setSelectedId(s.id)}
-                    />
-                  </li>
-                ))}
-              </ul>
-            )}
+            <ul>
+              {filteredSessions.map((s) => (
+                <li key={s.id}>
+                  <SessionRow
+                    session={s}
+                    botName={botNameMap.get(s.bot_id) ?? "봇"}
+                    active={s.id === selectedId}
+                    onClick={() => setSelectedId(s.id)}
+                  />
+                </li>
+              ))}
+            </ul>
           </div>
+
+          {filteredSessions.length === 0 && (
+            <EmptyPanel
+              icon={Search}
+              title="결과 없음"
+              description="아직 대화 세션이 없거나 검색어가 일치하지 않습니다."
+            />
+          )}
         </aside>
 
         {/* 우측: 선택된 세션 디테일 */}
-        <section className="flex flex-col min-h-0 bg-bg-sub/30">
+        <section className="relative flex flex-col min-h-0 bg-bg-sub/30">
           {selected && detail ? (
             <SessionDetail
               detail={detail}
               botName={botNameMap.get(selected.bot_id) ?? "봇"}
             />
           ) : (
-            <NoSelection />
+            <EmptyPanel
+              icon={MessagesSquare}
+              title="대화를 선택하세요"
+              description="좌측 리스트에서 세션을 클릭하면 전체 대화 내용이 표시됩니다."
+            />
           )}
         </section>
       </div>
@@ -341,26 +350,23 @@ const Markdown = ({ text }: { text: string }) => (
   </ReactMarkdown>
 );
 
-const EmptyList = () => (
-  <div className="flex flex-col items-center justify-center h-full py-16 text-center px-6">
-    <div className="w-10 h-10 rounded-DEFAULT bg-bg-sub shadow-border flex items-center justify-center mb-3">
-      <Search className="w-4 h-4 text-text-sub" />
-    </div>
-    <p className="text-[13px] font-medium text-text-main mb-1">결과 없음</p>
-    <p className="text-[12px] text-text-sub">
-      아직 대화 세션이 없거나 검색어가 일치하지 않습니다.
-    </p>
-  </div>
-);
-
-const NoSelection = () => (
-  <div className="flex flex-col items-center justify-center h-full text-center px-6">
+// 좌우 패널의 빈 상태를 같은 기준 박스(패널 전체) 중앙에 동일한 모양으로 배치한다
+const EmptyPanel = ({
+  icon: Icon,
+  title,
+  description,
+}: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+}) => (
+  <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 pointer-events-none">
     <div className="w-12 h-12 rounded-DEFAULT bg-bg-sub shadow-border flex items-center justify-center mb-4">
-      <MessagesSquare className="w-5 h-5 text-text-sub" />
+      <Icon className="w-5 h-5 text-text-sub" />
     </div>
-    <p className="text-[14px] font-semibold text-text-main mb-1">대화를 선택하세요</p>
+    <p className="text-[14px] font-semibold text-text-main mb-1">{title}</p>
     <p className="text-[12px] text-text-sub max-w-xs leading-relaxed">
-      좌측 리스트에서 세션을 클릭하면 전체 대화 내용이 표시됩니다.
+      {description}
     </p>
   </div>
 );

@@ -61,7 +61,7 @@ const Sidebar = () => {
         </Link>
       </div>
 
-      <nav className="flex flex-col gap-1 px-2 py-2">
+      <nav className="flex flex-col gap-1.5 px-2 py-3">
         {navItems.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
@@ -69,7 +69,7 @@ const Sidebar = () => {
             end={end}
             className={({ isActive }) =>
               [
-                "group flex items-center gap-2.5 h-8 px-3 rounded-full",
+                "group flex items-center gap-2.5 h-9 px-3 rounded-full",
                 "text-[13px] font-medium transition-colors duration-150",
                 isActive
                   ? "bg-bg-hover text-text-main"

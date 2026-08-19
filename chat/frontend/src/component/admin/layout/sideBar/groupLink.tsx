@@ -8,12 +8,12 @@ const GroupLink = ({ item }: GroupProps) => {
   const Icon = item?.icon;
 
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="flex flex-col gap-1">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="
-          flex items-center gap-2.5 h-8 px-3 rounded-full
+          flex items-center gap-2.5 h-9 px-3 rounded-full
           text-[12px] font-medium uppercase tracking-tight
           text-text-sub hover:text-text-main hover:bg-bg-hover
           transition-colors duration-150
@@ -30,7 +30,7 @@ const GroupLink = ({ item }: GroupProps) => {
       </button>
 
       {open && (
-        <div className="flex flex-col gap-1 pl-2">
+        <div className="flex flex-col gap-1.5 pl-2">
           {item.children.map((link) => (
             <SubLink key={link.to} {...link} />
           ))}

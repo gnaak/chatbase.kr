@@ -29,7 +29,7 @@ const AdminSidebar = ({ adminMenu }: AdminSidebarProps) => {
         </span>
       </div>
 
-      <nav className="flex flex-col gap-1 px-2 py-2">
+      <nav className="flex flex-col gap-1.5 px-2 py-3">
         {adminMenu.map((item, idx) =>
           item.type === "link" ? (
             <SubLink key={`${item.to}-${idx}`} {...item} />

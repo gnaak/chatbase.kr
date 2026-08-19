@@ -54,6 +54,8 @@ const DashboardHome = () => {
   const bots = (data ?? []).map(mapBot);
   const isEmpty = !isLoading && bots.length === 0;
   const hasNoKeys = !keysLoading && apiKeys !== undefined && apiKeys.length === 0;
+  // 빈 상태(챗봇 없음 / API 키 없음)는 콘텐츠 영역 중앙에 배치한다
+  const isCentered = hasNoKeys || isEmpty;
 
   // API 키가 없으면 챗봇 생성 페이지로 보내지 않고 안내 모달을 띄운다
   const goNew = () => {
@@ -83,7 +85,11 @@ const DashboardHome = () => {
         }
       />
 
-      <div className="flex-1 overflow-y-auto px-8 md:px-12 py-8">
+      <div
+        className={`flex-1 overflow-y-auto px-8 md:px-12 py-8${
+          isCentered ? " flex items-center justify-center" : ""
+        }`}
+      >
         {hasNoKeys ? (
           <NoApiKeyState onGoKeys={goKeys} />
         ) : isEmpty ? (
@@ -124,7 +130,7 @@ const BotGrid = ({
 );
 
 const NoApiKeyState = ({ onGoKeys }: { onGoKeys: () => void }) => (
-  <div className="flex flex-col items-center justify-center py-24 text-center">
+  <div className="flex flex-col items-center justify-center text-center">
     <div className="w-12 h-12 rounded-DEFAULT bg-bg-sub shadow-border flex items-center justify-center mb-5">
       <KeyRound className="w-5 h-5 text-text-sub" />
     </div>
@@ -141,7 +147,7 @@ const NoApiKeyState = ({ onGoKeys }: { onGoKeys: () => void }) => (
 );
 
 const EmptyState = ({ onCreate }: { onCreate: () => void }) => (
-  <div className="flex flex-col items-center justify-center py-24 text-center">
+  <div className="flex flex-col items-center justify-center text-center">
     <div className="w-12 h-12 rounded-DEFAULT bg-bg-sub shadow-border flex items-center justify-center mb-5">
       <Bot className="w-5 h-5 text-text-sub" />
     </div>

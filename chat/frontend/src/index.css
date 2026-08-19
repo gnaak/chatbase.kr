@@ -22,6 +22,7 @@
 
 @layer base {
   :root {
+    color-scheme: light;
     /* ── Brand (Vercel Black & accents) ─────── */
     --primary: 23 23 23; /* Vercel Black #171717 */
     --primary-light: 240 240 240; /* near-white surface */
@@ -46,6 +47,8 @@
     --border: 235 235 235; /* #ebebeb */
     --border-strong: 200 200 200;
     --border-focus: 10 114 239; /* #0a72ef Develop Blue */
+    /* shadow-border 유틸의 실제 값 (라이트/다크 자동 전환) */
+    --shadow-border: rgba(0, 0, 0, 0.08) 0px 0px 0px 1px;
 
     /* ── Form / Input ──────────────────────── */
     --input-bg: 255 255 255;
@@ -78,6 +81,7 @@
   }
 
   .dark {
+    color-scheme: dark;
     /* ── Brand ─────────────────────────────── */
     --primary: 250 250 250; /* near-white */
     --primary-light: 51 51 51;
@@ -102,6 +106,7 @@
     --border: 50 50 56; /* #323238 */
     --border-strong: 75 75 82;
     --border-focus: 96 165 250;
+    --shadow-border: rgba(255, 255, 255, 0.1) 0px 0px 0px 1px;
 
     /* ── Form / Input ──────────────────────── */
     --input-bg: 28 28 32;
@@ -210,4 +215,14 @@ body {
 ::selection {
   background-color: rgb(var(--text-main) / 0.95);
   color: rgb(var(--text-inverse));
+}
+
+/* ── 테마 전환 순간에만 붙는 클래스 ──────────────
+   앱 전역의 transition-colors / shadow 가 제각각 페이드되면서
+   깜빡이는 걸 막는다. ThemeProvider 가 2프레임 뒤 제거. */
+html.theme-switching,
+html.theme-switching *,
+html.theme-switching *::before,
+html.theme-switching *::after {
+  transition: none !important;
 }

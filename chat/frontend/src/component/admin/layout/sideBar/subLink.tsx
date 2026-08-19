@@ -8,7 +8,7 @@ const SubLink = ({ to, label, icon: Icon, end = false }: SubLinkProps) => {
       end={end}
       className={({ isActive }) =>
         [
-          "group flex items-center gap-2.5 h-8 px-3 rounded-full",
+          "group flex items-center gap-2.5 h-9 px-3 rounded-full",
           "text-[13px] font-medium transition-colors duration-150",
           isActive
             ? "bg-bg-hover text-text-main"

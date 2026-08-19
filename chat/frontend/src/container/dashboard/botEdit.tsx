@@ -480,6 +480,17 @@ const BotEdit = () => {
             title="학습 데이터"
             description="자주 묻는 질문, 회사/제품 설명, 정책 등을 자유롭게 입력하거나 파일로 업로드하세요."
           >
+            {!isOpenAIModel && (
+              <div className="rounded-comfy bg-bg-sub/40 shadow-border px-4 py-3 text-[12px] text-text-sub leading-relaxed">
+                <span className="font-medium text-text-main">
+                  파일 업로드 학습은 OpenAI 모델에서만 지원됩니다.
+                </span>
+                <br />
+                현재 선택한 모델은 아래 학습 텍스트만 사용합니다. 파일(PDF, DOCX
+                등)로 학습하려면 모델을 OpenAI로 변경하세요.
+              </div>
+            )}
+
             {isOpenAIModel && (
               <div className="inline-flex items-center gap-1 p-1 rounded-full bg-bg-sub shadow-border w-fit">
                 {(["text", "file"] as const).map((tab) => (
@@ -646,6 +657,7 @@ A. 서울 본사 매장은 영업시간 내 방문 픽업이 가능합니다.`}
               model={form.model}
               systemPrompt={form.systemPrompt}
               trainingData={form.trainingData}
+              trainingType={form.trainingType}
               faqs={form.faqs}
             />
           </div>

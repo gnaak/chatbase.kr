@@ -26,22 +26,31 @@ def _resolve_effective_model(bot_model: str, override: str | None) -> str:
         return bot_model
 
 
-def _build_system_prompt(bot) -> str:
+def _build_system_prompt(bot, vector_store_id: str | None = None) -> str:
     """봇 system_prompt + 학습 텍스트 + (fallback 또는 web search) 규칙 합성.
 
     - 학습 자료 + fallback 있음: 자료에 없는 질문은 fallback 그대로 답변.
     - 학습 자료 + fallback 없음: 자료에 없는 질문은 web search로 답변.
     - 학습 자료 없음: 일반 자유 응답.
+
+    vector_store_id는 provider 게이팅을 마친 값(= 실제로 LLM 호출에 전달되는 값)을 받는다.
+    OpenAI가 아닌 모델은 파일 지식이 전달되지 않으므로, bot.vector_store_id가 남아 있어도
+    '자료 한정' 규칙을 붙이면 안 된다. (붙이면 모든 질문에 fallback만 뱉는 봇이 됨)
     """
     parts: list[str] = []
     if (bot.system_prompt or "").strip():
         parts.append(bot.system_prompt.strip())
-    if bot.training_text:
+
+    # training_type이 "file"이면 텍스트 학습은 쓰지 않는다.
+    # (모드를 바꿔도 예전 training_text가 DB에 남아 조용히 주입되는 것 방지)
+    training_type = getattr(bot, "training_type", None) or "text"
+    training_text = bot.training_text if training_type != "file" else None
+    if training_text:
         parts.append(
-            "다음은 답변에 활용할 참고 자료입니다:\n" + bot.training_text
+            "다음은 답변에 활용할 참고 자료입니다:\n" + training_text
         )
 
-    has_knowledge = bool(bot.training_text) or bool(bot.vector_store_id)
+    has_knowledge = bool(training_text) or bool(vector_store_id)
     if has_knowledge:
         fallback = (bot.fallback or "").strip()
         if fallback:
@@ -196,14 +205,13 @@ class ChatService:
             for m in history
         ]
 
-        system = _build_system_prompt(bot)
-
         # vector_store는 OpenAI 모델일 때만 의미 있음
         vec_id = (
             bot.vector_store_id
             if provider == Provider.OPENAI
             else None
         )
+        system = _build_system_prompt(bot, vec_id)
         try:
             answer = await self.llm_service.chat(
                 model=effective_model,
@@ -319,7 +327,13 @@ class ChatService:
                     await api_key_service.get_decrypted_key(bot.user_id, provider)
                 ) or ""
 
-                system = _build_system_prompt(bot)
+                # vector_store는 OpenAI 모델일 때만 의미 있음
+                vec_id = (
+                    bot.vector_store_id
+                    if provider == Provider.OPENAI
+                    else None
+                )
+                system = _build_system_prompt(bot, vec_id)
 
                 history = await chat_repo.find_messages(session.id)
                 api_messages = [
@@ -330,11 +344,6 @@ class ChatService:
                     for m in history
                 ]
 
-                vec_id = (
-                    bot.vector_store_id
-                    if provider == Provider.OPENAI
-                    else None
-                )
                 full_text = ""
                 print(f"[stream] starting LLM call: {effective_model}")
                 try:
@@ -452,6 +461,9 @@ class ChatService:
                     fallback=body.get("fallback")
                     if "fallback" in body
                     else bot.fallback,
+                    training_type=body.get("training_type")
+                    if "training_type" in body
+                    else bot.training_type,
                     vector_store_id=bot.vector_store_id,
                 )
 
@@ -461,7 +473,12 @@ class ChatService:
                     await api_key_service.get_decrypted_key(user_id, provider)
                 ) or ""
 
-                system = _build_system_prompt(preview_bot)
+                vec_id = (
+                    preview_bot.vector_store_id
+                    if provider == Provider.OPENAI
+                    else None
+                )
+                system = _build_system_prompt(preview_bot, vec_id)
                 history = await chat_repo.find_messages(session.id)
                 api_messages = [
                     {
@@ -470,12 +487,6 @@ class ChatService:
                     }
                     for m in history
                 ]
-
-                vec_id = (
-                    preview_bot.vector_store_id
-                    if provider == Provider.OPENAI
-                    else None
-                )
 
                 full_text = ""
                 try:
@@ -538,6 +549,7 @@ class ChatService:
                     system_prompt=body.get("system_prompt"),
                     training_text=body.get("training_text"),
                     fallback=body.get("fallback"),
+                    training_type=body.get("training_type") or "text",
                     vector_store_id=None,
                 )
 
@@ -547,7 +559,7 @@ class ChatService:
                     await api_key_service.get_decrypted_key(user_id, provider)
                 ) or ""
 
-                system = _build_system_prompt(preview_bot)
+                system = _build_system_prompt(preview_bot, None)
 
                 raw_history = body.get("history") or []
                 api_messages = [

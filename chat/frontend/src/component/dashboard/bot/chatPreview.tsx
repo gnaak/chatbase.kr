@@ -11,6 +11,7 @@ interface PreviewStreamRequest {
   model?: string;
   system_prompt?: string;
   training_text?: string;
+  training_type?: TrainingType;
   fallback?: string;
 }
 
@@ -19,11 +20,13 @@ interface QuickStreamRequest {
   model: string;
   system_prompt?: string;
   training_text?: string;
+  training_type?: TrainingType;
   fallback?: string;
   history?: { role: string; content: string }[];
 }
 
 type Faq = { q: string; a: string };
+type TrainingType = "text" | "file";
 
 interface ChatPreviewProps {
   botName: string;
@@ -35,6 +38,7 @@ interface ChatPreviewProps {
   model?: string;
   systemPrompt?: string;
   trainingData?: string;
+  trainingType?: TrainingType;
   faqs?: Faq[];
 }
 
@@ -53,6 +57,7 @@ const ChatPreview = ({
   model,
   systemPrompt,
   trainingData,
+  trainingType,
   faqs,
 }: ChatPreviewProps) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -70,6 +75,7 @@ const ChatPreview = ({
             model={model}
             systemPrompt={systemPrompt}
             trainingData={trainingData}
+            trainingType={trainingType}
             faqs={faqs}
             onClose={() => setIsOpen(false)}
           />
@@ -109,6 +115,7 @@ const ChatWindow = ({
   model,
   systemPrompt,
   trainingData,
+  trainingType,
   faqs,
   onClose,
 }: ChatWindowProps) => {
@@ -218,6 +225,7 @@ const ChatWindow = ({
             model: model ?? "",
             ...(systemPrompt !== undefined ? { system_prompt: systemPrompt } : {}),
             ...(trainingData !== undefined ? { training_text: trainingData } : {}),
+            ...(trainingType ? { training_type: trainingType } : {}),
             fallback: fallback ?? "",
             history,
           },
@@ -232,6 +240,7 @@ const ChatWindow = ({
             ...(model ? { model } : {}),
             ...(systemPrompt !== undefined ? { system_prompt: systemPrompt } : {}),
             ...(trainingData !== undefined ? { training_text: trainingData } : {}),
+            ...(trainingType ? { training_type: trainingType } : {}),
             fallback: fallback ?? "",
           },
           handleChunk,

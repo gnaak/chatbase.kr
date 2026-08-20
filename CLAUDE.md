@@ -1,7 +1,7 @@
-# Base Template — CLAUDE.md
+# chatbase.kr — CLAUDE.md
 
-모노레포 구조: `chat/`(챗봇 서비스), `scheduler/`(스케줄러 서비스).
-세부 규칙은 `chat/frontend/CLAUDE.md`, `chat/backend/CLAUDE.md` 참고.
+단일 서비스 구조: `frontend/`(React), `backend/`(FastAPI).
+세부 규칙은 `frontend/CLAUDE.md`, `backend/CLAUDE.md` 참고.
 
 ## 기술 스택
 

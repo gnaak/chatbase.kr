@@ -23,6 +23,7 @@ import LogoUpload from "@/component/dashboard/ui/logoUpload";
 import CodeBlock from "@/component/dashboard/ui/codeBlock";
 import ChatPreview from "@/component/dashboard/bot/chatPreview";
 import FileLearning from "@/component/dashboard/bot/fileLearning";
+import KakaoConnect from "@/component/dashboard/bot/kakaoConnect";
 import { baseURL, useDelete, useGet, usePatch, usePost } from "@/hooks/common/useAPI";
 import { useToast } from "@/hooks/common/useToast";
 
@@ -587,6 +588,15 @@ A. 서울 본사 매장은 영업시간 내 방문 픽업이 가능합니다.`}
               description="아래 코드를 자기 사이트의 </body> 직전에 붙여넣으세요."
             >
               <EmbedTabs botId={slug!} />
+            </Section>
+          )}
+
+          {!isNew && (
+            <Section
+              title="카카오톡 채널 연결"
+              description="카카오 i 오픈빌더 스킬 서버로 이 봇을 연결합니다."
+            >
+              <KakaoConnect botId={slug!} />
             </Section>
           )}
 

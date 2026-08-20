@@ -24,6 +24,7 @@ class ServiceProvider:
         self._api_key_service = None
         self._chat_repo = None
         self._chat_service = None
+        self._kakao_skill_service = None
         self._llm_service = None
         self._vector_store_service = None
         self._llm_model_repo = None
@@ -180,6 +181,18 @@ class ServiceProvider:
                 llm_service=self.llm_service,
             )
         return self._chat_service
+
+    @property
+    def kakao_skill_service(self):
+        if not self._kakao_skill_service:
+            from app.module.kakao_skill.kakao_skill_service import KakaoSkillService
+            self._kakao_skill_service = KakaoSkillService(
+                chat_repo=self.chat_repo,
+                bot_repo=self.bot_repo,
+                api_key_service=self.api_key_service,
+                llm_service=self.llm_service,
+            )
+        return self._kakao_skill_service
 
     @property
     def llm_service(self):

@@ -24,6 +24,39 @@ class ChatRepository:
         )
         return list(result.scalars().all())
 
+    async def find_latest_session_by_visitor(
+        self,
+        bot_id: int,
+        visitor_id: str,
+    ) -> ChatSession | None:
+        result = await self.db.execute(
+            select(ChatSession)
+            .where(
+                ChatSession.bot_id == bot_id,
+                ChatSession.visitor_id == visitor_id,
+            )
+            .order_by(ChatSession.last_message_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def find_latest_session_by_prefix(
+        self,
+        bot_id: int,
+        prefix: str,
+    ) -> ChatSession | None:
+        """visitor_id 접두사로 유입 채널(예: kakao:)별 최근 세션을 찾는다."""
+        result = await self.db.execute(
+            select(ChatSession)
+            .where(
+                ChatSession.bot_id == bot_id,
+                ChatSession.visitor_id.like(f"{prefix}%"),
+            )
+            .order_by(ChatSession.last_message_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def add_session(self, session: ChatSession) -> ChatSession:
         self.db.add(session)
         await self.db.flush()

@@ -8,7 +8,7 @@ const AdminPayments = () => {
           결제 관리
         </h1>
         <p className="text-[13px] text-text-sub mt-1">
-          PMF 검증 후 토스페이먼츠 도입 예정.
+          토스페이먼츠 정기결제 연동 예정.
         </p>
       </div>
 
@@ -21,8 +21,8 @@ const AdminPayments = () => {
             아직 결제 기능이 없습니다.
           </p>
           <p className="text-[12px] text-text-sub max-w-md leading-relaxed">
-            베타 무료 운영 중. 사용자 피드백/리텐션 검증이 끝나면 토스페이먼츠
-            SDK + 사업자등록 절차를 진행한 뒤 이 페이지에 결제 내역, 구독 상태,
+            사업자등록과 카드 자동결제 계약을 마친 뒤 토스페이먼츠 빌링키 연동을
+            진행합니다. 이후 이 페이지에 결제 내역, 구독 상태, 플랜 수동 부여,
             환불 처리 UI가 추가됩니다.
           </p>
         </div>

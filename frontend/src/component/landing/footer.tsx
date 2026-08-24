@@ -14,7 +14,7 @@ const Footer = () => {
                 chatbase.kr
               </div>
               <p className="text-[12px] text-text-sub mt-1">
-                한국 SMB를 위한 챗봇 임베드 SaaS
+                고객 응대부터 사내 매뉴얼까지, 우리 자료로 답하는 AI 챗봇
               </p>
             </div>
 

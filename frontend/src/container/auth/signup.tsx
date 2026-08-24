@@ -80,7 +80,7 @@ const Signup = () => {
             가입하기
           </h1>
           <p className="text-[13px] text-text-sub mb-6">
-            30초면 챗봇 만들 준비 완료. 베타 무료.
+            30초면 챗봇 만들 준비 완료. 카드 등록은 필요 없습니다.
           </p>
 
           <div className="flex flex-col gap-2 mb-5">

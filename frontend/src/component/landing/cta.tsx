@@ -11,8 +11,7 @@ const CTA = () => {
             오늘 만들어, 오늘 배포.
           </h2>
           <p className="mt-4 text-[15px] md:text-[17px] opacity-70 max-w-2xl mx-auto leading-relaxed">
-            계정 만드는 데 30초, 챗봇 만드는 데 30초. 베타 기간엔 카드 등록도
-            필요 없습니다.
+            계정 만드는 데 30초, 챗봇 만드는 데 30초. 카드 등록은 필요 없습니다.
           </p>
           <div className="mt-10">
             <Link to="/dashboard">

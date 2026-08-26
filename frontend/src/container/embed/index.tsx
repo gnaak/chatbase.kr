@@ -14,6 +14,8 @@ interface BotPublicDto {
   greeting: string | null;
   active: boolean;
   faqs: { q: string; a: string }[] | null;
+  /** 유료 플랜은 false. 응답 전이거나 필드가 없으면 표시하는 쪽으로 기운다. */
+  show_badge?: boolean;
 }
 
 interface ChatMessage {
@@ -250,16 +252,18 @@ const EmbedChat = () => {
           <Send className="w-4 h-4" />
         </button>
       </form>
-      <div className="shrink-0 flex justify-center py-1.5 bg-bg-card">
-        <a
-          href="https://chatbase.kr"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-[10px] text-text-disabled hover:text-text-sub transition-colors"
-        >
-          Powered by chatbase.kr
-        </a>
-      </div>
+      {bot?.show_badge !== false && (
+        <div className="shrink-0 flex justify-center py-1.5 bg-bg-card">
+          <a
+            href="https://chatbase.kr"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[10px] text-text-disabled hover:text-text-sub transition-colors"
+          >
+            Powered by chatbase.kr
+          </a>
+        </div>
+      )}
     </div>
   );
 

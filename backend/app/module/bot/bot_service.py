@@ -1,7 +1,6 @@
 import httpx
 from bs4 import BeautifulSoup
 
-from app.core.config.settings import settings
 from app.core.utils.plan import limits_for
 from app.core.utils.response import fail, success
 from app.module.api_key.api_key import Provider
@@ -14,6 +13,22 @@ from app.module.infra.openai.vector_store_service import VectorStoreService
 
 _MAX_CRAWL_CHARS = 20_000
 _STRIP_TAGS = ["script", "style", "nav", "footer", "header", "aside", "iframe", "noscript"]
+
+#: logo / widget_icon(base64 data URL) 문자 수 상한 — 약 220KB 이미지.
+#: 프론트가 256px로 줄여 보내므로 정상 경로에서는 40KB 안쪽이다.
+#: 이 검증이 없으면 큰 이미지가 DB까지 내려가 DataError(1406) 500으로 터진다.
+_MAX_IMAGE_DATA_CHARS = 300_000
+_IMAGE_FIELD_LABEL = {"logo": "로고", "widget_icon": "위젯 아이콘"}
+
+
+def _validate_image_field(field: str, value) -> None:
+    if isinstance(value, str) and len(value) > _MAX_IMAGE_DATA_CHARS:
+        fail(
+            f"{_IMAGE_FIELD_LABEL.get(field, field)} 이미지가 너무 큽니다. "
+            "더 작은 이미지를 사용해주세요.",
+            "IMAGE_TOO_LARGE",
+            413,
+        )
 
 
 def _validate_model(model: str) -> None:
@@ -70,6 +85,23 @@ class BotService:
         self.api_key_service = api_key_service
         self.vector_store_service = vector_store_service
         self.user_repo = user_repo
+
+    async def _ensure_bot_slot(self, user_id: int) -> None:
+        """켜져 있는 봇을 한 자리 더 쓸 수 있는지 확인한다.
+
+        비활성 봇은 세지 않으므로 안 쓰는 봇을 끄면 자리가 빈다.
+        """
+        limits = await self._plan_limits(user_id)
+        if limits.bots is None:
+            return
+        active = await self.bot_repo.count_active_by_user(user_id)
+        if active >= limits.bots:
+            fail(
+                f"현재 플랜에서는 챗봇을 {limits.bots}개까지 켜둘 수 있습니다. "
+                "쓰지 않는 챗봇을 끄거나 플랜을 올려주세요.",
+                "BOT_LIMIT_EXCEEDED",
+                403,
+            )
 
     async def _plan_limits(self, user_id: int):
         """사용자 플랜 한도. user_repo가 없으면(구 호출부) Free로 본다."""
@@ -128,6 +160,9 @@ class BotService:
         # 비활성 봇은 공개 위젯에서 조회 불가 (chat 엔드포인트와 동일 정책)
         if not bot or not bot.active:
             fail("봇이 존재하지 않습니다.", "BOT_NOT_FOUND", 404)
+        # 인증 없이 열려 있고 CORS가 * 인 엔드포인트다. 플랜 이름을 그대로 내리면
+        # 남의 봇 slug만 알아도 결제 상태가 노출되므로 불리언만 파생해서 준다.
+        limits = await self._plan_limits(bot.user_id)
         response = success(
             data={
                 "id": bot.slug,
@@ -137,6 +172,7 @@ class BotService:
                 "greeting": bot.greeting,
                 "active": bot.active,
                 "faqs": bot.faqs or [],
+                "show_badge": not limits.remove_badge,
             }
         )
         response.headers["Access-Control-Allow-Origin"] = "*"
@@ -164,17 +200,8 @@ class BotService:
         model = body.get("model") or "gpt-5.4-mini"
         _validate_model(model)
 
-        # 플랜별 챗봇 개수 제한. 결제가 붙기 전에는 플래그가 꺼져 있어 통과한다.
-        limits = await self._plan_limits(user_id)
-        if settings.enforce_plan_limits and limits.bots is not None:
-            owned = await self.bot_repo.find_by_user(user_id)
-            if len(owned) >= limits.bots:
-                fail(
-                    f"현재 플랜에서는 챗봇을 {limits.bots}개까지 만들 수 있습니다. "
-                    "플랜을 올리면 더 만들 수 있습니다.",
-                    "BOT_LIMIT_EXCEEDED",
-                    403,
-                )
+        # 플랜별 챗봇 개수 제한
+        await self._ensure_bot_slot(user_id)
 
         # API 키가 등록되지 않은 provider의 모델로는 챗봇을 만들 수 없음
         provider = resolve_provider(model)
@@ -185,6 +212,9 @@ class BotService:
                 "API_KEY_REQUIRED",
                 424,
             )
+
+        for image_field in ("logo", "widget_icon"):
+            _validate_image_field(image_field, body.get(image_field))
 
         bot = Bot(
             user_id=user_id,
@@ -211,6 +241,7 @@ class BotService:
         bot = await self._ensure_owner(slug, user_id)
 
         body = await request.json()
+        was_active = bool(bot.active)
         for field in (
             "name",
             "logo",
@@ -229,10 +260,17 @@ class BotService:
                     _validate_model(body[field])
                 if field == "name" and not (body[field] or "").strip():
                     fail("이름이 비어있습니다.", "NAME_REQUIRED")
+                if field in _IMAGE_FIELD_LABEL:
+                    _validate_image_field(field, body[field])
                 if field == "training_type":
                     setattr(bot, field, _normalize_training_type(body[field]))
                     continue
                 setattr(bot, field, body[field])
+
+        # 꺼져 있던 봇을 켤 때도 상한을 본다. 안 보면 "끄고 만들고 다시 켜기"로
+        # 개수 제한을 그대로 우회할 수 있다.
+        if bot.active and not was_active:
+            await self._ensure_bot_slot(user_id)
 
         await self.bot_repo.db.commit()
         await self.bot_repo.db.refresh(bot)
@@ -272,7 +310,7 @@ class BotService:
 
         # 파일 학습은 유료 플랜 기능
         limits = await self._plan_limits(user_id)
-        if settings.enforce_plan_limits and not limits.file_learning:
+        if not limits.file_learning:
             fail(
                 "파일 학습은 유료 플랜에서 이용할 수 있습니다.",
                 "PLAN_UPGRADE_REQUIRED",

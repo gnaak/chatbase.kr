@@ -10,6 +10,7 @@ from sqlalchemy import (
     String,
     Text,
 )
+from sqlalchemy.dialects.mysql import MEDIUMTEXT
 
 from app.core.database.base import Base, now_kst
 
@@ -38,8 +39,10 @@ class Bot(Base):
     )
 
     name = Column(String(60), nullable=False)
-    logo = Column(Text, nullable=True)             # base64 또는 업로드 URL
-    widget_icon = Column(Text, nullable=True)      # 위젯 버블 아이콘
+    # base64 data URL을 그대로 담는다. TEXT(64KB)로는 작은 PNG도 넘치므로 MEDIUMTEXT.
+    # 프론트에서 256px로 줄여 보내지만, 상한은 서비스단(_MAX_IMAGE_DATA_CHARS)에서 막는다.
+    logo = Column(MEDIUMTEXT, nullable=True)             # base64 또는 업로드 URL
+    widget_icon = Column(MEDIUMTEXT, nullable=True)      # 위젯 버블 아이콘
     greeting = Column(String(500), nullable=True)
     system_prompt = Column(Text, nullable=True)
     training_text = Column(Text, nullable=True)

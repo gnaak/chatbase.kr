@@ -6,6 +6,7 @@ import Button from "@/component/dashboard/ui/button";
 import ConfirmModal from "@/component/dashboard/ui/confirmModal";
 import BotCard, { BotCardData } from "@/component/dashboard/bot/botCard";
 import { useGet } from "@/hooks/common/useAPI";
+import type { UsageSummary } from "@/types/usage";
 
 interface BotDto {
   id: string; // slug
@@ -49,11 +50,20 @@ const DashboardHome = () => {
   const { data, isLoading } = useGet<BotDto[]>("api/bot/", ["bots"]);
   const { data: apiKeys, isLoading: keysLoading } = useGet<{ provider: string }[]>("api/api-key/", ["api-keys"]);
 
+  const { data: usage } = useGet<UsageSummary>("api/usage/", ["usage"]);
+
   const [showKeyModal, setShowKeyModal] = useState(false);
+  const [showLimitModal, setShowLimitModal] = useState(false);
 
   const bots = (data ?? []).map(mapBot);
   const isEmpty = !isLoading && bots.length === 0;
   const hasNoKeys = !keysLoading && apiKeys !== undefined && apiKeys.length === 0;
+
+  // 개수 제한은 켜져 있는 봇만 센다(비활성은 자리를 차지하지 않는다).
+  const activeCount = bots.filter((bot) => bot.active).length;
+  const botsLimit = usage?.bots_limit ?? null;
+  const atBotLimit = botsLimit !== null && activeCount >= botsLimit;
+  const currentPlanLabel = (usage?.plan ?? "free").toUpperCase();
   // 빈 상태(챗봇 없음 / API 키 없음)는 콘텐츠 영역 중앙에 배치한다
   const isCentered = hasNoKeys || isEmpty;
 
@@ -61,6 +71,11 @@ const DashboardHome = () => {
   const goNew = () => {
     if (hasNoKeys) {
       setShowKeyModal(true);
+      return;
+    }
+    // 폼을 다 채운 뒤 저장에서 403을 맞는 걸 막기 위해 진입 전에 알린다.
+    if (atBotLimit) {
+      setShowLimitModal(true);
       return;
     }
     navigate("/dashboard/bots/new");
@@ -101,15 +116,36 @@ const DashboardHome = () => {
 
       <ConfirmModal
         open={showKeyModal}
-        title="API 키 등록이 필요합니다"
-        description="챗봇을 만들려면 먼저 AI 모델 API 키를 등록해야 합니다. 지금 등록하러 가시겠어요?"
-        confirmLabel="API 키 등록하러 가기"
+        icon={<KeyRound className="w-4 h-4" />}
+        title="API 키 등록이 필요해요"
+        description="챗봇을 만들려면 AI 모델 API 키가 먼저 필요해요."
+        confirmLabel="키 등록하기"
         cancelLabel="닫기"
         onConfirm={() => {
           setShowKeyModal(false);
           goKeys();
         }}
         onCancel={() => setShowKeyModal(false)}
+      />
+
+      <ConfirmModal
+        open={showLimitModal}
+        icon={<Bot className="w-4 h-4" />}
+        title={`${currentPlanLabel} 플랜은 챗봇 ${botsLimit}개까지예요`}
+        description={
+          <>
+            사용하지 않는 챗봇을 비활성화 하면 자리가 비어요.
+            <br />
+            더 필요하시면 플랜을 업그레이드 해주세요.
+          </>
+        }
+        confirmLabel="업그레이드"
+        cancelLabel="닫기"
+        onConfirm={() => {
+          setShowLimitModal(false);
+          navigate("/dashboard/billing");
+        }}
+        onCancel={() => setShowLimitModal(false)}
       />
     </>
   );

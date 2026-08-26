@@ -38,7 +38,7 @@ export interface Plan {
 
 export const PLANS: Plan[] = [
   {
-    name: "Free",
+    name: "FREE",
     price: "₩0",
     tagline: "내 사이트에서 먼저 써보기",
     features: [
@@ -53,7 +53,7 @@ export const PLANS: Plan[] = [
     href: "/dashboard",
   },
   {
-    name: "Standard",
+    name: "STANDARD",
     price: "₩19,000",
     unit: "/ 월 · VAT 별도",
     tagline: "홈페이지 상담 자동화",
@@ -68,7 +68,7 @@ export const PLANS: Plan[] = [
     href: "/dashboard",
   },
   {
-    name: "Premium",
+    name: "PREMIUM",
     price: "₩49,000",
     unit: "/ 월 · VAT 별도",
     tagline: "여러 채널 · 여러 봇 운영",

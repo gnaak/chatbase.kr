@@ -27,6 +27,8 @@ class PlanLimits:
     monthly_messages: int | None
     file_learning: bool
     kakao_channel: bool
+    #: True면 위젯 하단 "Powered by chatbase.kr" 배지를 숨긴다.
+    remove_badge: bool
     #: 대화 기록 보관 일수. None = 무제한
     history_days: int | None
 
@@ -37,6 +39,7 @@ PLAN_LIMITS: dict[Plan, PlanLimits] = {
         monthly_messages=100,
         file_learning=False,
         kakao_channel=False,
+        remove_badge=False,
         history_days=7,
     ),
     Plan.STANDARD: PlanLimits(
@@ -44,6 +47,7 @@ PLAN_LIMITS: dict[Plan, PlanLimits] = {
         monthly_messages=None,
         file_learning=True,
         kakao_channel=False,
+        remove_badge=True,
         history_days=90,
     ),
     Plan.PREMIUM: PlanLimits(
@@ -51,6 +55,7 @@ PLAN_LIMITS: dict[Plan, PlanLimits] = {
         monthly_messages=None,
         file_learning=True,
         kakao_channel=True,
+        remove_badge=True,
         history_days=None,
     ),
 }

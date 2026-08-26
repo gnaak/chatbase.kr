@@ -56,7 +56,7 @@
 
     /* ── Point (status colors) ─────────────── */
     --point-green: 34 197 94; /* green-500 */
-    --point-red: 255 91 79; /* Ship Red #ff5b4f */
+    --point-red: 220 38 38; /* red-600 #dc2626 — 흰 배경 대비 4.8:1 */
     --point-amber: 245 158 11;
     --point-blue: 0 112 243; /* Console Blue #0070f3 */
 
@@ -114,7 +114,7 @@
 
     /* ── Point ─────────────────────────────── */
     --point-green: 74 222 128;
-    --point-red: 255 91 79;
+    --point-red: 239 68 68; /* red-500 #ef4444 — 어두운 배경에서 가독성 유지 */
     --point-amber: 251 191 36;
     --point-blue: 51 153 255;
 

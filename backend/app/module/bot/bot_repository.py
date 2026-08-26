@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.module.bot.bot import Bot
@@ -16,6 +16,20 @@ class BotRepository:
     async def find_by_slug(self, slug: str) -> Bot | None:
         result = await self.db.execute(select(Bot).where(Bot.slug == slug))
         return result.scalar_one_or_none()
+
+    async def count_active_by_user(self, user_id: int) -> int:
+        """켜져 있는 봇 수. 플랜 개수 제한은 비활성 봇을 세지 않는다.
+
+        비활성은 자리를 차지하지 않으므로, 안 쓰는 봇을 끄고 새로 만들 수 있다.
+        대신 "끄고 만든 뒤 다시 켜기"로 상한을 넘길 수 있어 활성화 시점에도 막는다
+        (`bot_service.update_bot`).
+        """
+        result = await self.db.execute(
+            select(func.count())
+            .select_from(Bot)
+            .where(Bot.user_id == user_id, Bot.active.is_(True))
+        )
+        return int(result.scalar() or 0)
 
     async def find_by_user(self, user_id: int) -> list[Bot]:
         result = await self.db.execute(

@@ -37,10 +37,6 @@ class RawEnv(BaseSettings):
     admin_anthropic_api_key: Optional[str] = None
     admin_gemini_api_key: Optional[str] = None
 
-    # 플랜 한도 강제 여부. False면 초과를 로그만 남기고 통과시킨다(계측 전용).
-    # 결제가 붙기 전에 True로 켜면 Free 사용자가 한도 소진 후 업그레이드 경로 없이 갇힌다.
-    enforce_plan_limits: bool = False
-
     # KAKAO
     kakao_client_id: Optional[str] = None
     kakao_client_secret: Optional[str] = None
@@ -132,9 +128,6 @@ class Settings:
     def admin_gemini_api_key(self) -> Optional[str]:
         return self.raw.admin_gemini_api_key or self.raw.gemini_api_key
 
-    @property
-    def enforce_plan_limits(self) -> bool:
-        return bool(self.raw.enforce_plan_limits)
 
     @property
     def kakao_client_id(self) -> Optional[str]:

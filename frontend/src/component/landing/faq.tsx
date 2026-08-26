@@ -96,7 +96,7 @@ const ITEMS: FaqItem[] = [
         <span className="text-text-sub">
           링크를 아는 사람이면 누구나 이용할 수 있으니, 민감한 자료는 이 점을
           고려해주세요. 사내 구성원만 쓰는 전용 챗봇 사이트가 필요하시면
-          Enterprise 구축으로 문의해주세요.
+          ENTERPRISE 구축으로 문의해주세요.
         </span>
       </>
     ),
@@ -133,9 +133,9 @@ const ITEMS: FaqItem[] = [
       <>
         무료 플랜은 챗봇 1개에 <strong>월 대화 100건</strong>까지이고, 내 사이트
         임베드도 그대로 됩니다. 먼저 붙여보시고 한도가 모자라면 올리시면 됩니다.
-        Standard(월 19,000원)부터는 <strong>대화 건수 제한이 없고</strong>,
-        카카오톡 채널까지 쓰시려면 Premium(월 49,000원)입니다. 부가세 별도이며,
-        사내 전용 챗봇 구축은 Enterprise로 별도 협의합니다. 자세한 구성은{" "}
+        STANDARD(월 19,000원)부터는 <strong>대화 건수 제한이 없고</strong>,
+        카카오톡 채널까지 쓰시려면 PREMIUM(월 49,000원)입니다. 부가세 별도이며,
+        사내 전용 챗봇 구축은 ENTERPRISE로 별도 협의합니다. 자세한 구성은{" "}
         <a href="#pricing" className="text-text-main underline underline-offset-2">
           가격
         </a>{" "}

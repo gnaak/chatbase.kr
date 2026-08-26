@@ -6,7 +6,7 @@ import {
   CreditCard,
   Settings,
   MessagesSquare,
-  MessageCircle,
+  // MessageCircle,  // 카카오톡 메뉴 보류
   LogOut,
   BookOpen,
 } from "lucide-react";
@@ -23,7 +23,8 @@ const navItems = [
   { to: "/dashboard", label: "챗봇", icon: Bot, end: true },
   { to: "/dashboard/conversations", label: "대화 로그", icon: MessagesSquare },
   { to: "/dashboard/keys", label: "API 키", icon: KeyRound },
-  { to: "/dashboard/kakao", label: "카카오톡", icon: MessageCircle },
+  // 카카오톡 연동 보류 — PROGRESS.md '(보류) 카카오톡 연동 온보딩' 참고
+  // { to: "/dashboard/kakao", label: "카카오톡", icon: MessageCircle },
   { to: "/dashboard/billing", label: "결제", icon: CreditCard },
   { to: "/dashboard/settings", label: "설정", icon: Settings },
   { to: "/dashboard/guide", label: "가이드", icon: BookOpen },

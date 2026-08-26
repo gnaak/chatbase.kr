@@ -10,7 +10,7 @@ const Billing = () => {
   const { data: usage } = useGet<UsageSummary>("api/usage/", ["usage"]);
 
   // 플랜을 못 불러온 동안은 가장 보수적인 Free로 그린다(권한을 넓게 보여주지 않는다).
-  const currentPlanName = usage ? planToPlanName(usage.plan) : "Free";
+  const currentPlanName = usage ? planToPlanName(usage.plan) : "FREE";
   const foundIdx = PLANS.findIndex((plan) => plan.name === currentPlanName);
   const currentIdx = foundIdx >= 0 ? foundIdx : 0;
   const currentPlan = PLANS[currentIdx];
@@ -97,10 +97,8 @@ const Billing = () => {
                 </div>
                 {usage?.exceeded ? (
                   <p className="mt-2.5 text-[12px] text-text-sub leading-relaxed">
-                    한도를 모두 사용했습니다.
-                    {usage.enforced
-                      ? " 플랜을 올리면 제한 없이 이용할 수 있습니다."
-                      : " 지금은 제한이 적용되지 않아 계속 응답합니다."}
+                    한도를 모두 사용했습니다. 플랜을 올리면 제한 없이 이용할 수
+                    있습니다.
                   </p>
                 ) : usage?.warn ? (
                   <p className="mt-2.5 text-[12px] text-text-sub leading-relaxed">

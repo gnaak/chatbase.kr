@@ -10,12 +10,10 @@ export interface UsageSummary {
   /** 한도의 80% 이상 사용 */
   warn: boolean;
   exceeded: boolean;
-  /** 서버에서 한도를 실제로 강제하는 중인지(enforce_plan_limits). false면 초과해도 통과된다. */
-  enforced: boolean;
   bots_limit: number | null;
   per_bot: { bot_id: number; bot_name: string | null; message_count: number }[];
 }
 
-/** plan 값("free") → 가격표 플랜명("Free") */
+/** plan 값("free") → 가격표 플랜명("FREE"). `PLANS[].name`과 정확히 일치해야 한다. */
 export const planToPlanName = (plan: UsageSummary["plan"]): string =>
-  plan.charAt(0).toUpperCase() + plan.slice(1);
+  plan.toUpperCase();

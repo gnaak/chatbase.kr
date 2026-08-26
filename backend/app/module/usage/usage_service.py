@@ -1,6 +1,5 @@
 import logging
 
-from app.core.config.settings import settings
 from app.core.utils.plan import limits_for, resolve_plan
 from app.core.utils.response import fail, success
 from app.module.usage.usage_repository import UsageRepository, current_year_month
@@ -46,12 +45,7 @@ class UsageService:
 
     # ── 대화 경로에서 호출 ──────────────────────
     async def is_blocked(self, bot) -> bool:
-        """이 요청을 막아야 하는가.
-
-        `settings.enforce_plan_limits`가 False면 초과를 로그만 남기고 False를 준다.
-        결제(토스페이먼츠)가 붙기 전에 차단을 켜면 Free 사용자가 한도를 쓴 뒤
-        업그레이드할 방법 없이 갇히기 때문이다. 계측은 플래그와 무관하게 항상 돈다.
-        """
+        """이 요청을 막아야 하는가. 월 대화 한도 초과 여부."""
         limits = limits_for(await self._plan_of(bot.user_id))
         if limits.monthly_messages is None:
             return False
@@ -62,33 +56,18 @@ class UsageService:
         if used < limits.monthly_messages:
             return False
 
-        if not settings.enforce_plan_limits:
-            logger.info(
-                "quota exceeded but enforcement off user_id=%s used=%s limit=%s",
-                bot.user_id,
-                used,
-                limits.monthly_messages,
-            )
-            return False
+        logger.info(
+            "quota exceeded user_id=%s used=%s limit=%s",
+            bot.user_id,
+            used,
+            limits.monthly_messages,
+        )
         return True
 
     async def is_feature_blocked(self, bot, feature: str) -> bool:
-        """플랜에 없는 기능인가. `PlanLimits`의 bool 필드명을 그대로 받는다.
-
-        한도(`is_blocked`)와 같은 규칙 — `enforce_plan_limits`가 꺼져 있으면
-        로그만 남기고 통과시킨다.
-        """
+        """플랜에 없는 기능인가. `PlanLimits`의 bool 필드명을 그대로 받는다."""
         limits = limits_for(await self._plan_of(bot.user_id))
-        if getattr(limits, feature, True):
-            return False
-        if not settings.enforce_plan_limits:
-            logger.info(
-                "feature %s not in plan but enforcement off user_id=%s",
-                feature,
-                bot.user_id,
-            )
-            return False
-        return True
+        return not getattr(limits, feature, True)
 
     async def ensure_can_send(self, bot) -> None:
         """HTTP 경로용. 막아야 하면 429로 끊는다.
@@ -134,7 +113,6 @@ class UsageService:
                 "unlimited": limit is None,
                 "warn": limit is not None and used >= limit * WARN_RATIO,
                 "exceeded": limit is not None and used >= limit,
-                "enforced": settings.enforce_plan_limits,
                 "bots_limit": limits.bots,
                 "per_bot": [
                     {

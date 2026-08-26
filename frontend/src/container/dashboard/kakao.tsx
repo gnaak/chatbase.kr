@@ -27,8 +27,7 @@ const Kakao = () => {
 
   // 플랜을 못 불러온 동안은 보수적으로 미포함 취급.
   const included = usage?.plan === "premium";
-  // 서버가 실제로 막고 있는지. 결제 전에는 enforced=false라 안내만 하고 사용은 열어둔다.
-  const blocked = included ? false : !!usage?.enforced;
+  const blocked = !included;
 
   return (
     <>
@@ -50,12 +49,10 @@ const Kakao = () => {
                 </div>
                 <div className="min-w-0">
                   <div className="text-[13px] font-medium text-text-main">
-                    카카오톡 채널 연동은 Premium 플랜 기능입니다
+                    카카오톡 채널 연동은 PREMIUM 플랜 기능입니다
                   </div>
                   <p className="text-[12px] text-text-sub mt-0.5 leading-relaxed">
-                    {blocked
-                      ? "플랜을 올리면 카카오톡 채널에서도 같은 챗봇이 답합니다."
-                      : "아직 제한이 적용되지 않아 지금은 그대로 사용하실 수 있습니다."}
+                    플랜을 올리면 카카오톡 채널에서도 같은 챗봇이 답합니다.
                   </p>
                 </div>
               </div>

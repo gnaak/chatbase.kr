@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Save,
@@ -621,13 +621,15 @@ A. 서울 본사 매장은 영업시간 내 방문 픽업이 가능합니다.`}
             </Section>
           )}
 
+          {/* 카카오톡 채널 연결 보류 — 오픈빌더 온보딩이 무거워 화면을 내려뒀다.
+              되살릴 때는 /dashboard/kakao(container/dashboard/kakao.tsx)를 먼저 켜고
+              아래 블록의 주석을 해제한다. PROGRESS.md '(보류) 카카오톡 연동 온보딩' 참고.
+
           {!isNew && (
             <Section
               title="카카오톡 채널 연결"
               description="카카오 i 오픈빌더 스킬 서버로 이 봇을 연결합니다."
             >
-              {/* 연결 절차는 한 번만 하는 셋업이라 전용 화면으로 분리했다.
-                  봇 편집 화면이 길어지는 것도 막는다. */}
               <Card variant="outline" className="p-5">
                 <div className="flex items-center justify-between gap-4 flex-wrap">
                   <p className="text-[13px] text-text-sub leading-relaxed min-w-0">
@@ -642,6 +644,7 @@ A. 서울 본사 매장은 영업시간 내 방문 픽업이 가능합니다.`}
               </Card>
             </Section>
           )}
+          */}
 
           {!isNew && (
             <Section

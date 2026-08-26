@@ -55,7 +55,7 @@ export const PLANS: Plan[] = [
   {
     name: "Standard",
     price: "₩19,000",
-    unit: "/ 월",
+    unit: "/ 월 · VAT 별도",
     tagline: "홈페이지 상담 자동화",
     features: [
       { label: "챗봇 3개" },
@@ -70,7 +70,7 @@ export const PLANS: Plan[] = [
   {
     name: "Premium",
     price: "₩49,000",
-    unit: "/ 월",
+    unit: "/ 월 · VAT 별도",
     tagline: "여러 채널 · 여러 봇 운영",
     features: [
       { label: "Standard의 모든 기능" },

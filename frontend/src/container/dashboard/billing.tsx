@@ -196,12 +196,6 @@ const Billing = () => {
               </a>
             </div>
           </Card>
-
-          {/* 메모 */}
-          <p className="text-[11px] text-text-sub text-center font-mono leading-relaxed">
-            모델 사용료는 등록하신 OpenAI / Anthropic / Google 키로 각 제공자에
-            직접 결제됩니다 (BYOK).
-          </p>
         </div>
       </div>
     </>

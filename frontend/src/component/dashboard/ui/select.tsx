@@ -4,6 +4,8 @@ import { ChevronDown, Check } from "lucide-react";
 export interface SelectOption {
   value: string;
   label: string;
+  /** 라벨 아래 한 줄로 붙는 보조 설명. 목록에서만 보이고 닫힌 트리거에는 안 나온다. */
+  description?: string;
   disabled?: boolean;
 }
 
@@ -174,7 +176,11 @@ const Select = ({
                 }}
                 onMouseEnter={() => !isDisabled && setHighlight(idx)}
                 className={[
-                  "w-full flex items-center gap-2 h-8 px-2.5 rounded-DEFAULT",
+                  "w-full flex gap-2 px-2.5 rounded-DEFAULT",
+                  // 설명이 있으면 2줄이 되므로 고정 높이를 풀고 상단 정렬한다
+                  opt.description
+                    ? "items-start py-1.5"
+                    : "items-center h-8",
                   "text-[13px] text-left transition-colors",
                   isHighlight ? "bg-bg-hover" : "",
                   isDisabled
@@ -184,9 +190,26 @@ const Select = ({
                       : "text-text-main",
                 ].join(" ")}
               >
-                <span className="flex-1 truncate">{opt.label}</span>
+                <span className="flex-1 min-w-0">
+                  <span className="block truncate">{opt.label}</span>
+                  {opt.description && (
+                    <span
+                      className={[
+                        "block mt-0.5 text-[11px] font-normal truncate",
+                        isDisabled ? "text-text-disabled" : "text-text-sub",
+                      ].join(" ")}
+                    >
+                      {opt.description}
+                    </span>
+                  )}
+                </span>
                 {isSelected && !isDisabled && (
-                  <Check className="shrink-0 w-3.5 h-3.5 text-text-main" />
+                  <Check
+                    className={[
+                      "shrink-0 w-3.5 h-3.5 text-text-main",
+                      opt.description ? "mt-0.5" : "",
+                    ].join(" ")}
+                  />
                 )}
               </button>
             );

@@ -1,7 +1,4 @@
-import { parseUserInfo, refreshExp } from "@/hooks/common/getCookie";
-import { useRefreshToken } from "@/hooks/common/useAPI";
-import { useEffect } from "react";
-import { Outlet, useNavigate } from "react-router-dom";
+import { Outlet } from "react-router-dom";
 import AdminSidebar from "@/component/admin/layout/sideBar/sideBar";
 import { AdminMenuItem } from "@/types/admin/sidebar";
 import {
@@ -39,33 +36,8 @@ const adminMenu: AdminMenuItem[] = [
   },
 ];
 
+/** 인증 판정은 AdminProtectedRoute가 담당한다. 여기는 레이아웃만. */
 const AdminLayout = () => {
-  const user = parseUserInfo("admin");
-  const isRefresh = refreshExp("admin");
-  const refresh = useRefreshToken();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!user && isRefresh) {
-      refresh()
-        .then(() => {
-          window.location.reload();
-        })
-        .catch(() => {
-          navigate("/admin/login");
-        });
-      return;
-    }
-
-    if (!user || user.auth_type !== "admin") {
-      navigate("/admin/login");
-    }
-  }, [user, isRefresh, navigate, refresh]);
-
-  if (!user || user.auth_type !== "admin") {
-    return null;
-  }
-
   return (
     <div className="flex h-svh overflow-hidden bg-bg text-text-main">
       <AdminSidebar adminMenu={adminMenu} />

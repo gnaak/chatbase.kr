@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Save,
@@ -23,16 +23,39 @@ import LogoUpload from "@/component/dashboard/ui/logoUpload";
 import CodeBlock from "@/component/dashboard/ui/codeBlock";
 import ChatPreview from "@/component/dashboard/bot/chatPreview";
 import FileLearning from "@/component/dashboard/bot/fileLearning";
-import KakaoConnect from "@/component/dashboard/bot/kakaoConnect";
 import { baseURL, useDelete, useGet, usePatch, usePost } from "@/hooks/common/useAPI";
 import { useToast } from "@/hooks/common/useToast";
 
 interface ModelDto {
   value: string;
   label: string;
+  description: string | null;
   provider: "openai" | "anthropic" | "gemini";
   type: "chat" | "image";
+  /** USD per 1M 토큰. LiteLLM 데이터 기준으로 카탈로그 갱신 시 채워진다. */
+  pricing_input: number | null;
+  pricing_output: number | null;
 }
+
+/** $0.15 처럼 불필요한 0을 떼고 표시. */
+const formatUsd = (v: number) => `$${Number(v.toFixed(4))}`;
+
+/**
+ * 드롭다운 라벨 아래 줄. BYOK라 모델 사용료를 사용자가 직접 부담하므로
+ * 운영자가 쓴 설명과 함께 토큰 단가를 같이 보여준다.
+ * 설명이 비어 있어도 단가는 나오므로 빈 줄이 생기지 않는다.
+ */
+const buildModelDescription = (m: ModelDto, hasKey: boolean): string => {
+  if (!hasKey) return "API 키를 먼저 등록해주세요";
+  const parts: string[] = [];
+  if (m.description) parts.push(m.description);
+  if (m.pricing_input !== null && m.pricing_output !== null) {
+    parts.push(
+      `입력 ${formatUsd(m.pricing_input)} · 출력 ${formatUsd(m.pricing_output)} /1M`,
+    );
+  }
+  return parts.join(" · ");
+};
 
 interface ApiKeyDto {
   provider: "openai" | "anthropic" | "google";
@@ -214,9 +237,8 @@ const BotEdit = () => {
       const providerLabel = PROVIDER_LABEL[m.provider] ?? m.provider;
       return {
         value: m.value,
-        label: hasKey
-          ? `${providerLabel} · ${m.label}`
-          : `${providerLabel} · ${m.label} (키 미등록)`,
+        label: `${providerLabel} · ${m.label}`,
+        description: buildModelDescription(m, hasKey),
         disabled: !hasKey,
       };
     });
@@ -519,22 +541,30 @@ const BotEdit = () => {
                 count={form.trainingData.length}
                 max={20000}
               >
-                <div className="flex gap-2 mb-2">
-                  <Input
-                    className="flex-1"
-                    value={crawlUrl}
-                    onChange={(e) => setCrawlUrl(e.target.value)}
-                    placeholder="URL에서 가져오기 (예: https://example.com)"
-                    onKeyDown={(e) => e.key === "Enter" && handleFetchUrl()}
-                  />
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleFetchUrl}
-                    disabled={!crawlUrl.trim() || fetchUrlMutation.isPending}
-                  >
-                    {fetchUrlMutation.isPending ? "가져오는 중..." : "가져오기"}
-                  </Button>
+                <div className="flex flex-col gap-1.5 mb-2">
+                  <div className="flex gap-2">
+                    <Input
+                      className="flex-1"
+                      value={crawlUrl}
+                      onChange={(e) => setCrawlUrl(e.target.value)}
+                      placeholder="URL에서 가져오기 (예: https://example.com)"
+                      onKeyDown={(e) => e.key === "Enter" && handleFetchUrl()}
+                    />
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleFetchUrl}
+                      disabled={!crawlUrl.trim() || fetchUrlMutation.isPending}
+                    >
+                      {fetchUrlMutation.isPending ? "가져오는 중..." : "가져오기"}
+                    </Button>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-text-sub">
+                    입력한 주소 <span className="text-text-main">한 페이지의 본문 텍스트</span>를 그대로 가져옵니다
+                    (최대 20,000자). 메뉴·푸터·스크립트는 자동으로 걸러지고, 하위 링크는 따라가지 않습니다.
+                    가져오면 <span className="text-text-main">아래 학습 텍스트를 덮어쓰니</span> 먼저 확인해주세요.
+                    로그인이 필요한 페이지나 자바스크립트로 그려지는 페이지는 내용이 비어 있을 수 있습니다.
+                  </p>
                 </div>
                 <Textarea
                   rows={10}
@@ -596,7 +626,20 @@ A. 서울 본사 매장은 영업시간 내 방문 픽업이 가능합니다.`}
               title="카카오톡 채널 연결"
               description="카카오 i 오픈빌더 스킬 서버로 이 봇을 연결합니다."
             >
-              <KakaoConnect botId={slug!} />
+              {/* 연결 절차는 한 번만 하는 셋업이라 전용 화면으로 분리했다.
+                  봇 편집 화면이 길어지는 것도 막는다. */}
+              <Card variant="outline" className="p-5">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <p className="text-[13px] text-text-sub leading-relaxed min-w-0">
+                    스킬 URL 발급과 연결 상태는 카카오톡 설정에서 관리합니다.
+                  </p>
+                  <Link to="/dashboard/kakao" className="shrink-0">
+                    <Button size="sm" pill variant="secondary">
+                      카카오톡 설정으로 이동
+                    </Button>
+                  </Link>
+                </div>
+              </Card>
             </Section>
           )}
 

@@ -27,6 +27,7 @@ from app.module.chat.chat_session import ChatSession
 from app.module.infra.llm.llm_service import resolve_provider
 
 # 프롬프트 합성 규칙은 위젯과 반드시 같아야 하므로 chat_service를 SOT로 재사용한다.
+from app.module.usage.usage_service import PLAN_FEATURE_MESSAGE, QUOTA_MESSAGE
 from app.module.chat.chat_service import (
     _build_system_prompt,
     _format_llm_error,
@@ -143,11 +144,19 @@ def _base_url(request) -> str:
 
 
 class KakaoSkillService:
-    def __init__(self, chat_repo, bot_repo, api_key_service, llm_service):
+    def __init__(
+        self,
+        chat_repo,
+        bot_repo,
+        api_key_service,
+        llm_service,
+        usage_service=None,
+    ):
         self.chat_repo = chat_repo
         self.bot_repo = bot_repo
         self.api_key_service = api_key_service
         self.llm_service = llm_service
+        self.usage_service = usage_service
 
     # ── 오픈빌더 스킬 요청 처리 ──────────────
     async def handle_skill(self, request) -> JSONResponse:
@@ -185,6 +194,13 @@ class KakaoSkillService:
         if not bot or not bot.active:
             return skill_response("⚠️ 연결된 챗봇을 찾을 수 없거나 비활성 상태입니다.")
 
+        # 오픈빌더에는 4xx를 주면 원인이 감춰지므로 200 + 안내 문구로 돌려준다.
+        if self.usage_service:
+            if await self.usage_service.is_feature_blocked(bot, "kakao_channel"):
+                return skill_response(PLAN_FEATURE_MESSAGE)
+            if await self.usage_service.is_blocked(bot):
+                return skill_response(QUOTA_MESSAGE)
+
         session = await self._ensure_session(bot.id, _visitor_id(kakao_user_id))
 
         user_msg = ChatMessage(
@@ -204,6 +220,8 @@ class KakaoSkillService:
             )
         )
         session.last_message_at = now_kst()
+        if self.usage_service:
+            await self.usage_service.record_message(bot)
         await self.chat_repo.db.commit()
 
         return skill_response(to_kakao_text(answer))

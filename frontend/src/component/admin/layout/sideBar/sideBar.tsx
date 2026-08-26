@@ -5,19 +5,23 @@ import GroupLink from "./groupLink";
 import SubLink from "./subLink";
 import { usePost } from "@/hooks/common/useAPI";
 import { AdminSidebarProps } from "@/types/admin/sidebar";
-import { parseUserInfo } from "@/hooks/common/getCookie";
+import { useAuth } from "@/hooks/common/useAuth";
 import ConfirmModal from "@/component/admin/ui/feedback/confirmModal";
 
 const AdminSidebar = ({ adminMenu }: AdminSidebarProps) => {
   const navigate = useNavigate();
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
   const logoutMutation = usePost<void, void>("api/auth/logout_admin");
-  const user = parseUserInfo("admin");
-  const initial = (user?.email || "A").trim().charAt(0).toUpperCase();
+  const { admin, setAdmin } = useAuth();
+  const name = admin?.user_nickname || "관리자";
+  const initial = name.trim().charAt(0).toUpperCase();
 
   const handleLogout = () => {
     logoutMutation.mutate(undefined, {
-      onSuccess: () => navigate("/admin/login"),
+      onSuccess: () => {
+        setAdmin(null);
+        navigate("/admin/login", { replace: true });
+      },
     });
   };
 
@@ -46,7 +50,7 @@ const AdminSidebar = ({ adminMenu }: AdminSidebarProps) => {
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-[13px] font-medium text-text-main truncate">
-              {user?.email ?? "관리자"}
+              {name}
             </div>
             <div className="text-[11px] text-text-sub truncate">관리자</div>
           </div>

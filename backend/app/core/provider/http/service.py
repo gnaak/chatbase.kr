@@ -32,6 +32,8 @@ class ServiceProvider:
         self._openai_model_service = None
         self._anthropic_model_service = None
         self._gemini_model_service = None
+        self._usage_repo = None
+        self._usage_service = None
 
     # ── 기존 도메인 ─────────────────────────
     @property
@@ -104,6 +106,7 @@ class ServiceProvider:
                 bot_repo=self.bot_repo,
                 api_key_service=self.api_key_service,
                 vector_store_service=self.vector_store_service,
+                user_repo=self.user_repo,
             )
         return self._bot_service
 
@@ -164,6 +167,20 @@ class ServiceProvider:
         return self._api_key_service
 
     @property
+    def usage_repo(self):
+        if not self._usage_repo:
+            from app.module.usage.usage_repository import UsageRepository
+            self._usage_repo = UsageRepository(self.db)
+        return self._usage_repo
+
+    @property
+    def usage_service(self):
+        if not self._usage_service:
+            from app.module.usage.usage_service import UsageService
+            self._usage_service = UsageService(self.usage_repo, self.user_repo)
+        return self._usage_service
+
+    @property
     def chat_repo(self):
         if not self._chat_repo:
             from app.module.chat.chat_repository import ChatRepository
@@ -179,6 +196,7 @@ class ServiceProvider:
                 bot_repo=self.bot_repo,
                 api_key_service=self.api_key_service,
                 llm_service=self.llm_service,
+                usage_service=self.usage_service,
             )
         return self._chat_service
 
@@ -191,6 +209,7 @@ class ServiceProvider:
                 bot_repo=self.bot_repo,
                 api_key_service=self.api_key_service,
                 llm_service=self.llm_service,
+                usage_service=self.usage_service,
             )
         return self._kakao_skill_service
 

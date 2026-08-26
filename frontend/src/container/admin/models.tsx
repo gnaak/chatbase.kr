@@ -8,11 +8,15 @@ import {
   ImageIcon,
   Loader2Icon,
   MessageSquareIcon,
+  PencilIcon,
   RefreshCwIcon,
   UsersIcon,
 } from "lucide-react";
-import { useGet, usePost } from "@/hooks/common/useAPI";
+import { useGet, usePatch, usePost } from "@/hooks/common/useAPI";
 import ConfirmModal from "@/component/admin/ui/feedback/confirmModal";
+import FormModal from "@/component/admin/ui/feedback/formModal";
+import InputBox from "@/component/admin/ui/form/inputbox";
+import TextareaBox from "@/component/admin/ui/form/textareaBox";
 
 type ModelKind = "chat" | "image";
 
@@ -33,6 +37,8 @@ interface DiscoveredModel {
   id: number;
   value: string;
   label: string;
+  /** 사용자 모델 드롭다운에 라벨 아래로 노출된다. 비어 있으면 단가만 보인다. */
+  description: string | null;
   pricing: Pricing | null;
   registered: boolean;
   bot_count: number;
@@ -87,6 +93,45 @@ const AdminModels = () => {
   );
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [confirmModel, setConfirmModel] = useState<DiscoveredModel | null>(null);
+
+  // 표시 정보(라벨/설명) 편집. refresh_catalog은 이 두 값을 덮지 않으므로 여기서 쓴 건 보존된다.
+  const [editing, setEditing] = useState<DiscoveredModel | null>(null);
+  const [editLabel, setEditLabel] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editError, setEditError] = useState<string | null>(null);
+
+  const updateMutation = usePatch<
+    DiscoveredModel,
+    { label: string; description: string }
+  >(`api/admin/models/${editing?.id ?? 0}`);
+
+  const openEdit = (m: DiscoveredModel) => {
+    setEditing(m);
+    setEditLabel(m.label);
+    setEditDescription(m.description ?? "");
+    setEditError(null);
+  };
+
+  const closeEdit = () => {
+    setEditing(null);
+    setEditError(null);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editing) return;
+    setEditError(null);
+    updateMutation.mutate(
+      { label: editLabel, description: editDescription },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+          closeEdit();
+        },
+        onError: (err) =>
+          setEditError(err?.message || "저장에 실패했습니다."),
+      },
+    );
+  };
 
   const toggleCollapsed = (provider: string) =>
     setCollapsed((prev) => ({ ...prev, [provider]: !prev[provider] }));
@@ -230,6 +275,7 @@ const AdminModels = () => {
               key={provider.provider}
               provider={provider}
               onToggle={handleToggle}
+              onEdit={openEdit}
               pendingValue={pendingValue}
               collapsed={!!collapsed[provider.provider]}
               onToggleCollapsed={() => toggleCollapsed(provider.provider)}
@@ -301,6 +347,59 @@ const AdminModels = () => {
           ) : undefined
         }
       />
+
+      <FormModal
+        open={!!editing}
+        onClose={closeEdit}
+        headerType="left"
+        title="모델 표시 정보"
+        description={editing?.value}
+        size="md"
+        footerType={2}
+        footerAlign="right"
+        primaryText="저장"
+        secondaryText="취소"
+        onPrimary={handleSaveEdit}
+        onSecondary={closeEdit}
+        primaryDisabled={updateMutation.isPending}
+      >
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[12px] font-semibold text-neutral-700">
+              라벨
+            </label>
+            <InputBox
+              value={editLabel}
+              onChange={(v) => setEditLabel(v.slice(0, 120))}
+              placeholder="예) GPT-5 mini"
+            />
+            <p className="text-[11px] text-neutral-500 leading-relaxed">
+              사용자 모델 선택 목록에 굵게 표시됩니다. 비워두면 기존 값이
+              유지됩니다.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[12px] font-semibold text-neutral-700">
+              설명
+            </label>
+            <TextareaBox
+              value={editDescription}
+              onChange={(v) => setEditDescription(v.slice(0, 200))}
+              rows={3}
+              placeholder="예) 빠르고 저렴합니다. 일반 상담용으로 충분합니다."
+            />
+            <p className="text-[11px] text-neutral-500 leading-relaxed">
+              라벨 아래 한 줄로 붙습니다. 토큰 단가는 자동으로 함께 표시되니
+              모델의 성격만 적어주세요. {editDescription.length}/200
+            </p>
+          </div>
+
+          {editError && (
+            <p className="text-[12px] text-red-600">{editError}</p>
+          )}
+        </div>
+      </FormModal>
     </div>
   );
 };
@@ -325,6 +424,7 @@ const Empty = () => (
 interface ProviderSectionProps {
   provider: ProviderBlock;
   onToggle: (m: DiscoveredModel) => void;
+  onEdit: (m: DiscoveredModel) => void;
   pendingValue: string | null;
   collapsed: boolean;
   onToggleCollapsed: () => void;
@@ -333,6 +433,7 @@ interface ProviderSectionProps {
 const ProviderSection = ({
   provider,
   onToggle,
+  onEdit,
   pendingValue,
   collapsed,
   onToggleCollapsed,
@@ -385,6 +486,7 @@ const ProviderSection = ({
             kind="chat"
             models={provider.chat}
             onToggle={onToggle}
+            onEdit={onEdit}
             pendingValue={pendingValue}
           />
           {provider.image.length > 0 && (
@@ -392,6 +494,7 @@ const ProviderSection = ({
               kind="image"
               models={provider.image}
               onToggle={onToggle}
+              onEdit={onEdit}
               pendingValue={pendingValue}
             />
           )}
@@ -405,6 +508,7 @@ interface ModelGroupProps {
   kind: ModelKind;
   models: DiscoveredModel[];
   onToggle: (m: DiscoveredModel) => void;
+  onEdit: (m: DiscoveredModel) => void;
   pendingValue: string | null;
 }
 
@@ -412,6 +516,7 @@ const ModelGroup = ({
   kind,
   models,
   onToggle,
+  onEdit,
   pendingValue,
 }: ModelGroupProps) => {
   if (models.length === 0) return null;
@@ -432,6 +537,7 @@ const ModelGroup = ({
             model={m}
             kind={kind}
             onToggle={onToggle}
+            onEdit={onEdit}
             pending={pendingValue === m.value}
           />
         ))}
@@ -444,10 +550,17 @@ interface ModelRowProps {
   model: DiscoveredModel;
   kind: ModelKind;
   onToggle: (m: DiscoveredModel) => void;
+  onEdit: (m: DiscoveredModel) => void;
   pending: boolean;
 }
 
-const ModelRow = ({ model, kind, onToggle, pending }: ModelRowProps) => {
+const ModelRow = ({
+  model,
+  kind,
+  onToggle,
+  onEdit,
+  pending,
+}: ModelRowProps) => {
   const pricing =
     kind === "chat"
       ? formatChatPricing(model.pricing)
@@ -485,7 +598,27 @@ const ModelRow = ({ model, kind, onToggle, pending }: ModelRowProps) => {
           <span className="text-text-disabled">·</span>
           <span className="font-mono">{pricing}</span>
         </div>
+        <p
+          className={[
+            "text-[11px] leading-relaxed truncate",
+            model.description ? "text-text-sub" : "text-text-disabled italic",
+          ].join(" ")}
+        >
+          {model.description || "설명 없음 — 사용자에게는 단가만 표시됩니다"}
+        </p>
       </div>
+      <button
+        onClick={() => onEdit(model)}
+        aria-label="표시 정보 편집"
+        title="라벨 · 설명 편집"
+        className="
+          shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-full
+          text-text-sub hover:text-text-main hover:bg-bg-hover
+          transition-colors
+        "
+      >
+        <PencilIcon className="w-3.5 h-3.5" />
+      </button>
       <button
         onClick={() => onToggle(model)}
         disabled={pending}

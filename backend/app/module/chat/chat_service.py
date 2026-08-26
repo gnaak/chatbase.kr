@@ -12,6 +12,7 @@ from app.module.chat.chat_message import ChatMessage, MessageRole
 from app.module.chat.chat_repository import ChatRepository
 from app.module.chat.chat_session import ChatSession
 from app.module.infra.llm.llm_service import LLMService, resolve_provider
+from app.module.usage.usage_service import QUOTA_MESSAGE, usage_service_for
 
 
 def _resolve_effective_model(bot_model: str, override: str | None) -> str:
@@ -138,11 +139,13 @@ class ChatService:
         bot_repo: BotRepository,
         api_key_service: ApiKeyService,
         llm_service: LLMService,
+        usage_service=None,
     ):
         self.chat_repo = chat_repo
         self.bot_repo = bot_repo
         self.api_key_service = api_key_service
         self.llm_service = llm_service
+        self.usage_service = usage_service
 
     # ── 임베드 위젯에서 호출 (인증 없음) ──────────
     async def send_message(self, request):
@@ -163,6 +166,10 @@ class ChatService:
         bot = await self.bot_repo.find_by_slug(bot_slug)
         if not bot or not bot.active:
             fail("이 챗봇은 현재 사용할 수 없습니다.", "BOT_UNAVAILABLE", 404)
+
+        # 실제 방문자 대화 경로 — 월 대화 한도 확인. 프리뷰 경로에는 걸지 않는다.
+        if self.usage_service:
+            await self.usage_service.ensure_can_send(bot)
 
         effective_model = _resolve_effective_model(bot.model, model_override)
 
@@ -238,6 +245,8 @@ class ChatService:
         await self.chat_repo.add_message(bot_msg)
 
         session.last_message_at = now_kst()
+        if self.usage_service:
+            await self.usage_service.record_message(bot)
         await self.chat_repo.db.commit()
         await self.chat_repo.db.refresh(user_msg)
         await self.chat_repo.db.refresh(bot_msg)
@@ -278,12 +287,18 @@ class ChatService:
             bot_repo = BotRepository(db)
             api_key_repo = ApiKeyRepository(db)
             api_key_service = ApiKeyService(api_key_repo)
+            usage_service = usage_service_for(db)
 
             try:
                 bot = await bot_repo.find_by_slug(bot_slug)
                 print(f"[stream] bot loaded: {bot.id if bot else None}")
                 if not bot or not bot.active:
                     yield _sse("error", {"message": "이 챗봇은 현재 사용할 수 없습니다."})
+                    return
+
+                # 스트림 시작 후엔 예외를 못 던지므로 SSE error로 알린다.
+                if await usage_service.is_blocked(bot):
+                    yield _sse("error", {"message": QUOTA_MESSAGE})
                     return
 
                 if session_id:
@@ -376,6 +391,7 @@ class ChatService:
                 )
                 await chat_repo.add_message(bot_msg)
                 session.last_message_at = now_kst()
+                await usage_service.record_message(bot)
                 await db.commit()
                 await db.refresh(bot_msg)
 

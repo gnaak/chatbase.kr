@@ -12,6 +12,7 @@ def _to_dict(m: LLMModel) -> dict:
         "id": m.id,
         "value": m.value,
         "label": m.label,
+        "description": m.description,
         "provider": m.provider.value,
         "type": m.type.value,
         "is_active": m.is_active,
@@ -70,6 +71,7 @@ class LLMModelService:
             type=type_,
             value=value,
             label=label,
+            description=(body.get("description") or "").strip() or None,
             provider=provider,
             is_active=bool(body.get("is_active", True)),
             sort_order=int(body.get("sort_order") or 0),
@@ -91,6 +93,8 @@ class LLMModelService:
         body = await request.json()
         if "label" in body:
             m.label = (body["label"] or "").strip() or m.label
+        if "description" in body:
+            m.description = (body["description"] or "").strip() or None
         if "is_active" in body:
             m.is_active = bool(body["is_active"])
         if "sort_order" in body:

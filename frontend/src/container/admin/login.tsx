@@ -1,16 +1,15 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { usePost, useRefreshToken } from "@/hooks/common/useAPI";
-import { parseUserInfo, refreshExp } from "@/hooks/common/getCookie";
+import { usePost } from "@/hooks/common/useAPI";
+import { parseUserInfo } from "@/hooks/common/getCookie";
+import { useAuth } from "@/hooks/common/useAuth";
 import { LoginRequest, LoginResponse } from "@/types/admin/login";
 import LoginForm from "@/component/admin/layout/login/loginForm";
 import LoginErrorModal from "@/component/admin/modal/loginErrorModal";
 
 const LoginPage = () => {
   const navigate = useNavigate();
-  const user = parseUserInfo("admin");
-  const isRefresh = refreshExp();
-  const refresh = useRefreshToken();
+  const { setAdmin } = useAuth();
   const [adminId, setAdminId] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -24,7 +23,8 @@ const LoginPage = () => {
       { email: adminId, password, type: "admin" },
       {
         onSuccess: () => {
-          navigate("/admin");
+          setAdmin(parseUserInfo("admin"));
+          navigate("/admin", { replace: true });
         },
         onError: () => {
           setErrorModal(true);
@@ -32,17 +32,6 @@ const LoginPage = () => {
       },
     );
   };
-
-  useEffect(() => {
-    if (user && isRefresh) {
-      refresh()
-        .then(() => {
-          window.location.reload();
-        })
-        .catch(() => {});
-      navigate("/admin");
-    }
-  }, [user]);
 
   return (
     <div className="min-h-screen bg-neutral-50 flex items-center justify-center px-4 py-10 font-sans text-neutral-900">

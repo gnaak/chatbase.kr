@@ -42,6 +42,7 @@ def _model_to_dict(m: LLMModel, usage: dict | None = None) -> dict:
         "id": m.id,
         "value": m.value,
         "label": m.label,
+        "description": m.description,
         "pricing": pricing or None,
         "registered": m.is_active,
         "bot_count": usage.get("bot_count", 0),

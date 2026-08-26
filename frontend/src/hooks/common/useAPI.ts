@@ -1,5 +1,6 @@
 import { useMutation, useQuery, keepPreviousData } from "@tanstack/react-query";
-import { useRef } from "react";
+import { useCallback, useRef } from "react";
+import type { AuthType } from "./getCookie";
 
 // baseURL 설정
 export const hostname = window.location.hostname;
@@ -17,43 +18,42 @@ export interface BaseResponse<T> {
 /**
  * Refresh Token을 사용해 세션을 갱신하는 함수
  *
- * 현재 경로가 `/admin`으로 시작하면 admin refresh API를,
- * 그 외에는 user refresh API를 호출합니다.
+ * authType을 넘기면 해당 타입의 refresh API를 호출하고,
+ * 생략하면 현재 경로(`/admin` 시작 여부)로 추론합니다.
  *
  * 쿠키 기반(refresh_token)를 사용하며,
  * credentials: "include"로 요청됩니다.
  *
  * ⚠️ 주의
- * - refresh API가 401을 반환해도 throw 하지 않습니다.
- * - 항상 true를 반환합니다.
+ * - 실패해도 throw 하지 않고 false를 반환합니다.
  * - redirect / logout 처리는 호출 측에서 판단해야 합니다.
  *
  * @returns {() => Promise<boolean>}
- * refresh 요청을 수행하는 비동기 함수
+ * refresh 성공 여부를 돌려주는 비동기 함수
  *
  * @example
  * const refreshToken = useRefreshToken();
  * await refreshToken();
  */
-export const useRefreshToken = () => {
-  const { pathname } = window.location;
+export const useRefreshToken = (authType?: AuthType) => {
+  const resolved: AuthType =
+    authType ??
+    (window.location.pathname.startsWith("/admin") ? "admin" : "user");
 
-  const refreshUrl = pathname.startsWith("/admin")
-    ? "api/auth/refresh_token_admin"
-    : "api/auth/refresh_token";
+  const refreshUrl =
+    resolved === "admin"
+      ? "api/auth/refresh_token_admin"
+      : "api/auth/refresh_token";
 
-  const refresh = async () => {
+  // useEffect deps에 그대로 넣을 수 있도록 identity를 고정한다.
+  const refresh = useCallback(async () => {
     const response = await fetch(`${baseURL}/${refreshUrl}`, {
       method: "POST",
       credentials: "include",
     });
 
-    if (response.status === 401) {
-      return false;
-    }
-
-    return true;
-  };
+    return response.ok;
+  }, [refreshUrl]);
 
   return refresh;
 };

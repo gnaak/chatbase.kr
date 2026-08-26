@@ -239,9 +239,9 @@ const KeyGuide = () => {
       </button>
 
       {open && (
-        <div className="px-5 pb-5 border-t border-line grid grid-cols-1 md:grid-cols-3 gap-5 pt-5">
+        <div className="border-t border-line grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-line">
           {GUIDE_STEPS.map(({ provider, steps }) => (
-            <div key={provider.id} className="flex flex-col gap-2.5">
+            <div key={provider.id} className="flex flex-col gap-2 px-5 py-4">
               <div className="flex items-center justify-between">
                 <span className="text-[13px] font-semibold text-text-main">
                   {provider.name}
@@ -258,8 +258,8 @@ const KeyGuide = () => {
               </div>
               <ol className="flex flex-col gap-1.5">
                 {steps.map((step, i) => (
-                  <li key={i} className="flex items-start gap-2 text-[12px] text-text-sub leading-relaxed">
-                    <span className="shrink-0 w-4 h-4 mt-0.5 rounded-full bg-bg-sub shadow-border text-[10px] font-semibold text-text-main flex items-center justify-center">
+                  <li key={i} className="flex items-start gap-1.5 text-[12px] text-text-sub leading-relaxed">
+                    <span className="shrink-0 w-2.5 text-[11px] font-medium text-text-sub/60 tabular-nums">
                       {i + 1}
                     </span>
                     {step}
@@ -414,9 +414,11 @@ const ProviderCard = ({ provider, state, onSave, onRemove }: ProviderCardProps) 
       )}
 
       {!editing && !isRegistered && (
-        <Button size="sm" pill onClick={() => setEditing(true)}>
-          키 등록
-        </Button>
+        <div className="flex justify-end">
+          <Button size="sm" pill onClick={() => setEditing(true)}>
+            키 등록
+          </Button>
+        </div>
       )}
 
       {editing && (
@@ -445,12 +447,18 @@ const ProviderCard = ({ provider, state, onSave, onRemove }: ProviderCardProps) 
           <p className="text-[11px] text-text-sub">
             키는 한 번만 입력하면 다시 표시되지 않습니다. 변경 시 새 키로 덮어씁니다.
           </p>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              size="sm"
+              type="button"
+              variant="ghost"
+              onClick={handleCancel}
+              className="hover:!bg-transparent"
+            >
+              취소
+            </Button>
             <Button size="sm" type="submit" pill disabled={!plain.trim()}>
               저장
-            </Button>
-            <Button size="sm" type="button" variant="ghost" onClick={handleCancel}>
-              취소
             </Button>
           </div>
         </form>

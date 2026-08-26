@@ -2,17 +2,23 @@ import { Check, CreditCard, Mail, Minus, Plus } from "lucide-react";
 import Topbar from "@/component/dashboard/layout/topbar";
 import Card from "@/component/dashboard/ui/card";
 import Button from "@/component/dashboard/ui/button";
+import { useGet } from "@/hooks/common/useAPI";
 import { ENTERPRISE, PLANS } from "@/types/plan";
-
-/**
- * TODO(백엔드): 구독 API가 붙으면 교체한다.
- * `GET /api/subscription` → { plan, nextBillingAt, card } 형태를 상정.
- */
-const currentPlanName = "Free";
+import { planToPlanName, type UsageSummary } from "@/types/usage";
 
 const Billing = () => {
-  const currentIdx = PLANS.findIndex((plan) => plan.name === currentPlanName);
+  const { data: usage } = useGet<UsageSummary>("api/usage/", ["usage"]);
+
+  // 플랜을 못 불러온 동안은 가장 보수적인 Free로 그린다(권한을 넓게 보여주지 않는다).
+  const currentPlanName = usage ? planToPlanName(usage.plan) : "Free";
+  const foundIdx = PLANS.findIndex((plan) => plan.name === currentPlanName);
+  const currentIdx = foundIdx >= 0 ? foundIdx : 0;
   const currentPlan = PLANS[currentIdx];
+
+  const limit = usage?.messages_limit ?? null;
+  const used = usage?.messages_used ?? 0;
+  const ratio =
+    limit && limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
 
   return (
     <>
@@ -51,6 +57,84 @@ const Billing = () => {
                 </a>
               )}
             </div>
+          </Card>
+
+          {/* 이번 달 사용량 */}
+          <Card variant="outline" className="p-6">
+            <div className="flex items-baseline justify-between gap-3 flex-wrap mb-4">
+              <h3 className="text-[14px] font-semibold tracking-tight text-text-main">
+                이번 달 대화
+                {usage && (
+                  <span className="ml-2 text-[12px] font-normal font-mono text-text-sub">
+                    {usage.year_month}
+                  </span>
+                )}
+              </h3>
+              <span className="text-[13px] text-text-main">
+                <span className="font-semibold tracking-display text-[18px]">
+                  {used.toLocaleString()}
+                </span>
+                <span className="text-text-sub">
+                  {limit === null ? " 건 · 제한 없음" : ` / ${limit.toLocaleString()}건`}
+                </span>
+              </span>
+            </div>
+
+            {limit !== null && (
+              <>
+                <div className="h-1.5 rounded-full bg-bg-sub overflow-hidden">
+                  <div
+                    className={[
+                      "h-full rounded-full transition-[width] duration-300",
+                      usage?.exceeded
+                        ? "bg-point-red"
+                        : usage?.warn
+                          ? "bg-warning"
+                          : "bg-text-main",
+                    ].join(" ")}
+                    style={{ width: `${ratio}%` }}
+                  />
+                </div>
+                {usage?.exceeded ? (
+                  <p className="mt-2.5 text-[12px] text-text-sub leading-relaxed">
+                    한도를 모두 사용했습니다.
+                    {usage.enforced
+                      ? " 플랜을 올리면 제한 없이 이용할 수 있습니다."
+                      : " 지금은 제한이 적용되지 않아 계속 응답합니다."}
+                  </p>
+                ) : usage?.warn ? (
+                  <p className="mt-2.5 text-[12px] text-text-sub leading-relaxed">
+                    한도의 80%를 넘었습니다. 유료 플랜은 대화 건수 제한이 없습니다.
+                  </p>
+                ) : null}
+              </>
+            )}
+
+            {usage && usage.per_bot.length > 0 && (
+              <div className="mt-5 pt-4 border-t border-line flex flex-col gap-2">
+                <span className="text-[11px] font-mono text-text-sub">
+                  챗봇별
+                </span>
+                {usage.per_bot.map((row) => (
+                  <div
+                    key={row.bot_id}
+                    className="flex items-center justify-between gap-3 text-[12px]"
+                  >
+                    <span className="text-text-sub truncate">
+                      {row.bot_name || `삭제된 챗봇 #${row.bot_id}`}
+                    </span>
+                    <span className="text-text-main shrink-0">
+                      {row.message_count.toLocaleString()}건
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <p className="mt-4 text-[11px] text-text-sub leading-relaxed">
+              방문자 질문 1건을 1건으로 셉니다. 대시보드 미리보기는 포함되지
+              않습니다.
+            </p>
           </Card>
 
           {/* 플랜 선택 */}

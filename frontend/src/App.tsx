@@ -26,11 +26,17 @@ import Keys from "./container/dashboard/keys";
 import Conversations from "./container/dashboard/conversations";
 import Settings from "./container/dashboard/settings";
 import Billing from "./container/dashboard/billing";
+import DashboardKakao from "./container/dashboard/kakao";
 import EmbedChat from "./container/embed";
 import Terms from "./container/legal/terms";
 import Privacy from "./container/legal/privacy";
 import Guide from "./container/guide";
-import { ProtectedRoute, PublicOnlyRoute } from "./hooks/auth/protectedRoute";
+import {
+  ProtectedRoute,
+  PublicOnlyRoute,
+  AdminProtectedRoute,
+  AdminPublicOnlyRoute,
+} from "./hooks/auth/protectedRoute";
 
 function App() {
   const queryClient = new QueryClient();
@@ -67,6 +73,7 @@ function App() {
                   <Route path="/dashboard/keys" element={<Keys />} />
                   <Route path="/dashboard/conversations" element={<Conversations />} />
                   <Route path="/dashboard/settings" element={<Settings />} />
+                  <Route path="/dashboard/kakao" element={<DashboardKakao />} />
                   <Route path="/dashboard/billing" element={<Billing />} />
                   <Route path="/dashboard/guide" element={<Guide />} />
                 </Route>
@@ -74,13 +81,20 @@ function App() {
 
               <Route path="/test" element={<Test />}></Route>
 
-              <Route path="/admin/login" element={<AdminLogin />} />
-              <Route element={<AdminLayout />}>
-                <Route path="/admin" element={<AdminMain />} />
-                <Route path="/admin/group" element={<AdminGroup />} />
-                <Route path="/admin/customers" element={<AdminCustomers />} />
-                <Route path="/admin/payments" element={<AdminPayments />} />
-                <Route path="/admin/models" element={<AdminModels />} />
+              {/* admin 비로그인 전용: 이미 로그인된 관리자는 /admin으로 */}
+              <Route element={<AdminPublicOnlyRoute />}>
+                <Route path="/admin/login" element={<AdminLogin />} />
+              </Route>
+
+              {/* admin 로그인 필수: 비로그인 시 /admin/login으로 */}
+              <Route element={<AdminProtectedRoute />}>
+                <Route element={<AdminLayout />}>
+                  <Route path="/admin" element={<AdminMain />} />
+                  <Route path="/admin/group" element={<AdminGroup />} />
+                  <Route path="/admin/customers" element={<AdminCustomers />} />
+                  <Route path="/admin/payments" element={<AdminPayments />} />
+                  <Route path="/admin/models" element={<AdminModels />} />
+                </Route>
               </Route>
               <Route path="*" element={<NotFoundPage />} />
             </Routes>

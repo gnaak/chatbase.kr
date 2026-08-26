@@ -1,6 +1,8 @@
 import httpx
 from bs4 import BeautifulSoup
 
+from app.core.config.settings import settings
+from app.core.utils.plan import limits_for
 from app.core.utils.response import fail, success
 from app.module.api_key.api_key import Provider
 from app.module.api_key.api_key_service import ApiKeyService
@@ -62,10 +64,19 @@ class BotService:
         bot_repo: BotRepository,
         api_key_service: ApiKeyService,
         vector_store_service: VectorStoreService,
+        user_repo=None,
     ):
         self.bot_repo = bot_repo
         self.api_key_service = api_key_service
         self.vector_store_service = vector_store_service
+        self.user_repo = user_repo
+
+    async def _plan_limits(self, user_id: int):
+        """사용자 플랜 한도. user_repo가 없으면(구 호출부) Free로 본다."""
+        if not self.user_repo:
+            return limits_for(None)
+        user = await self.user_repo.get_user_by_id(user_id)
+        return limits_for(getattr(user, "plan", None))
 
     async def _ensure_owner(self, slug: str, user_id: int) -> Bot:
         bot = await self.bot_repo.find_by_slug(slug)
@@ -152,6 +163,18 @@ class BotService:
 
         model = body.get("model") or "gpt-5.4-mini"
         _validate_model(model)
+
+        # 플랜별 챗봇 개수 제한. 결제가 붙기 전에는 플래그가 꺼져 있어 통과한다.
+        limits = await self._plan_limits(user_id)
+        if settings.enforce_plan_limits and limits.bots is not None:
+            owned = await self.bot_repo.find_by_user(user_id)
+            if len(owned) >= limits.bots:
+                fail(
+                    f"현재 플랜에서는 챗봇을 {limits.bots}개까지 만들 수 있습니다. "
+                    "플랜을 올리면 더 만들 수 있습니다.",
+                    "BOT_LIMIT_EXCEEDED",
+                    403,
+                )
 
         # API 키가 등록되지 않은 provider의 모델로는 챗봇을 만들 수 없음
         provider = resolve_provider(model)
@@ -246,6 +269,15 @@ class BotService:
         user_id = request.user_id
         slug = request.path_params.get("slug")
         bot = await self._ensure_owner(slug, user_id)
+
+        # 파일 학습은 유료 플랜 기능
+        limits = await self._plan_limits(user_id)
+        if settings.enforce_plan_limits and not limits.file_learning:
+            fail(
+                "파일 학습은 유료 플랜에서 이용할 수 있습니다.",
+                "PLAN_UPGRADE_REQUIRED",
+                403,
+            )
 
         # OpenAI 모델만 RAG 가능 (Phase 1: GPT 우선)
         if resolve_provider(bot.model) != Provider.OPENAI:

@@ -49,6 +49,8 @@ class LLMModel(Base):
     )
     value = Column(String(100), nullable=False)
     label = Column(String(120), nullable=False)
+    # 사용자 드롭다운에 라벨 아래 한 줄로 노출. refresh_catalog은 이 값을 덮지 않는다.
+    description = Column(String(200), nullable=True)
     provider = Column(
         Enum(
             ModelProvider,

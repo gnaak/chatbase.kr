@@ -10,6 +10,7 @@ from app.module.api_key import api_key_router
 from app.module.chat import chat_router
 from app.module.kakao_skill import kakao_skill_router
 from app.module.llm_model import llm_model_router
+from app.module.usage import usage_router
 
 # --- 모델 등록 (SQLAlchemy 관계 인식용) ---
 from app.module.admin.admin import Admin
@@ -20,6 +21,7 @@ from app.module.api_key.api_key import ApiKey
 from app.module.chat.chat_session import ChatSession
 from app.module.chat.chat_message import ChatMessage
 from app.module.llm_model.llm_model import LLMModel
+from app.module.usage.usage import UsageMonthly
 
 
 def setup_routers(app: FastAPI):
@@ -32,3 +34,4 @@ def setup_routers(app: FastAPI):
     app.include_router(chat_router.router, prefix="/api/chat")
     app.include_router(kakao_skill_router.router, prefix="/api/kakao")
     app.include_router(llm_model_router.router, prefix="/api/model")
+    app.include_router(usage_router.router, prefix="/api/usage")

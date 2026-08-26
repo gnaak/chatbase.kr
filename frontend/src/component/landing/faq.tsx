@@ -1,10 +1,21 @@
 import { useState, ReactNode } from "react";
-import { Plus } from "lucide-react";
+import { ExternalLink, Plus } from "lucide-react";
+import Button from "@/component/dashboard/ui/button";
 
 interface FaqItem {
   q: string;
   a: ReactNode;
 }
+
+/** 각 제공자 API 키 발급 페이지. 본문 인라인 링크는 눈에 안 띄어 버튼으로 노출한다. */
+const API_KEY_LINKS = [
+  { label: "OpenAI 키 발급", href: "https://platform.openai.com/api-keys" },
+  {
+    label: "Anthropic 키 발급",
+    href: "https://console.anthropic.com/settings/keys",
+  },
+  { label: "Google 키 발급", href: "https://aistudio.google.com/app/apikey" },
+];
 
 const ITEMS: FaqItem[] = [
   {
@@ -23,36 +34,23 @@ const ITEMS: FaqItem[] = [
     q: "API 키 등록이 어렵지 않나요?",
     a: (
       <>
-        OpenAI는{" "}
-        <a
-          href="https://platform.openai.com/api-keys"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-text-main hover:underline"
-        >
-          platform.openai.com
-        </a>
-        , Anthropic은{" "}
-        <a
-          href="https://console.anthropic.com/settings/keys"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-text-main hover:underline"
-        >
-          console.anthropic.com
-        </a>
-        , Google은{" "}
-        <a
-          href="https://aistudio.google.com/app/apikey"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-text-main hover:underline"
-        >
-          aistudio.google.com
-        </a>
-        에서 5분 안에 발급받을 수 있습니다. 발급받은 키를 대시보드 &gt; API 키
-        페이지에 한 번만 등록하면 됩니다. 세 곳 모두 등록하실 필요는 없고, 쓰실
-        모델의 키 하나만 있으면 됩니다.
+        각 제공자 사이트에서 5분 안에 발급받을 수 있습니다. 발급받은 키를
+        대시보드 &gt; API 키 페이지에 한 번만 등록하면 됩니다. 세 곳 모두
+        등록하실 필요는 없고, 쓰실 모델의 키 하나만 있으면 됩니다.
+        <div className="mt-4 flex flex-wrap gap-2">
+          {API_KEY_LINKS.map(({ label, href }) => (
+            <a key={href} href={href} target="_blank" rel="noopener noreferrer">
+              <Button
+                size="sm"
+                pill
+                variant="secondary"
+                rightIcon={<ExternalLink className="w-3.5 h-3.5" />}
+              >
+                {label}
+              </Button>
+            </a>
+          ))}
+        </div>
       </>
     ),
   },
@@ -138,7 +136,7 @@ const ITEMS: FaqItem[] = [
         Standard(월 19,000원)부터는 <strong>대화 건수 제한이 없고</strong>,
         카카오톡 채널까지 쓰시려면 Premium(월 49,000원)입니다. 부가세 별도이며,
         사내 전용 챗봇 구축은 Enterprise로 별도 협의합니다. 자세한 구성은{" "}
-        <a href="#pricing" className="text-text-main hover:underline">
+        <a href="#pricing" className="text-text-main underline underline-offset-2">
           가격
         </a>{" "}
         섹션에서 확인하실 수 있습니다.
@@ -226,7 +224,7 @@ const Faq = () => {
           답을 찾지 못하셨나요?{" "}
           <a
             href="mailto:hello@chatbase.kr"
-            className="text-text-main hover:underline"
+            className="text-text-main underline underline-offset-2"
           >
             hello@chatbase.kr
           </a>

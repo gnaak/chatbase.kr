@@ -104,6 +104,10 @@ class Subscription(Base):
     customer_key = Column(String(64), nullable=False, unique=True, index=True)
 
     plan = Column(String(10), nullable=True)  # 구독 중인 유료 플랜
+    #: 다음 결제일에 적용할 플랜(하향 예약).
+    #: 하향은 즉시 반영하지 않는다 — 이미 낸 기간만큼은 상위 플랜을 그대로 쓰게 두고,
+    #: 다음 청구부터 낮은 금액으로 받는다. 환불이 없어도 사용자가 손해를 보지 않는다.
+    scheduled_plan = Column(String(10), nullable=True)
     status = Column(
         Enum(SubscriptionStatus, name="subscription_status", native_enum=False, length=20),
         nullable=False,
@@ -117,6 +121,10 @@ class Subscription(Base):
         nullable=True,
         index=True,
     )
+
+    #: 이번 주기 청구 실패 횟수. 성공하면 0으로 되돌린다.
+    #: 일정 횟수를 넘기면 구독을 만료시켜 무한 재시도를 막는다.
+    retry_count = Column(Integer, nullable=False, default=0)
 
     started_at = Column(DateTime, nullable=True)
     #: 다음 청구 예정일. 해지 상태에서는 "이용 종료일"로 읽는다.

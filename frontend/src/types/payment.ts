@@ -40,6 +40,8 @@ export interface Subscription {
   status: SubscriptionStatus;
   /** 구독 중인 유료 플랜(소문자). 미구독이면 null. */
   plan: string | null;
+  /** 다음 결제일에 적용될 플랜(하향 예약). 없으면 null. */
+  scheduled_plan: string | null;
   /** 다음 청구에 쓸 카드. 등록된 카드가 없으면 null. */
   billing_method_id: number | null;
   started_at: string | null;
@@ -82,6 +84,11 @@ export interface RegisterMethodRequest {
 export type MethodSelection =
   | { kind: "saved"; id: number }
   | { kind: "new" };
+
+/** 하향 예약. plan을 null로 보내면 예약 취소. */
+export interface SchedulePlanRequest {
+  plan: string | null;
+}
 
 export interface SubscribeRequest {
   plan: string;

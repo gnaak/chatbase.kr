@@ -72,6 +72,13 @@ PLAN_PRICES: dict[Plan, int] = {
 #: 결제로 전환할 수 있는 플랜. FREE는 결제 대상이 아니다.
 PAID_PLANS: tuple[Plan, ...] = (Plan.STANDARD, Plan.PREMIUM)
 
+#: 낮은 등급 → 높은 등급 순. 상향/하향 판정에 쓴다.
+PLAN_ORDER: tuple[Plan, ...] = (Plan.FREE, Plan.STANDARD, Plan.PREMIUM)
+
+
+def tier_of(plan: Plan) -> int:
+    return PLAN_ORDER.index(plan)
+
 
 def price_for(plan: Plan) -> int:
     return PLAN_PRICES[plan]

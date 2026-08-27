@@ -1,7 +1,12 @@
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.module.payment.payment import BillingMethod, Payment, Subscription
+from app.module.payment.payment import (
+    BillingMethod,
+    Payment,
+    Subscription,
+    SubscriptionStatus,
+)
 
 
 class PaymentRepository:
@@ -14,6 +19,29 @@ class PaymentRepository:
             select(Subscription).where(Subscription.user_id == user_id)
         )
         return result.scalar_one_or_none()
+
+    async def find_due_subscriptions(self, now) -> list[Subscription]:
+        """청구일이 지난 구독. 해지 예정 건도 포함한다 — 그 날 만료시켜야 한다.
+
+        with_for_update: 크론이 겹쳐 실행돼도 같은 구독을 두 번 청구하지 않도록 잠근다.
+        """
+        result = await self.db.execute(
+            select(Subscription)
+            .where(
+                Subscription.status.in_(
+                    [
+                        SubscriptionStatus.ACTIVE,
+                        SubscriptionStatus.PAST_DUE,
+                        SubscriptionStatus.CANCELED,
+                    ]
+                ),
+                Subscription.next_billing_at.isnot(None),
+                Subscription.next_billing_at <= now,
+            )
+            .order_by(Subscription.id)
+            .with_for_update(skip_locked=True)
+        )
+        return list(result.scalars().all())
 
     async def add_subscription(self, subscription: Subscription) -> Subscription:
         self.db.add(subscription)

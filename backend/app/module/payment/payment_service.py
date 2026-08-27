@@ -15,11 +15,17 @@
 import calendar
 import logging
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.core.database.base import now_kst
 from app.core.utils.encryption import decrypt, encrypt
-from app.core.utils.plan import PAID_PLANS, Plan, price_for, resolve_plan
+from app.core.utils.plan import (
+    PAID_PLANS,
+    Plan,
+    price_for,
+    resolve_plan,
+    tier_of,
+)
 from app.core.utils.response import fail, success
 from app.module.infra.toss.toss_service import TossError, TossService
 from app.module.payment.payment import (
@@ -33,6 +39,9 @@ from app.module.payment.payment import (
 from app.module.payment.payment_repository import PaymentRepository
 
 logger = logging.getLogger(__name__)
+
+#: 정기 청구 실패를 몇 번까지 재시도할지. 넘기면 구독을 만료시킨다.
+MAX_CHARGE_RETRY = 3
 
 
 def _add_month(base: datetime) -> datetime:
@@ -100,6 +109,7 @@ def _sub_to_dict(sub: Subscription) -> dict:
         "customer_key": sub.customer_key,
         "status": sub.status.value if sub.status else SubscriptionStatus.NONE.value,
         "plan": sub.plan,
+        "scheduled_plan": sub.scheduled_plan,
         "billing_method_id": sub.billing_method_id,
         "started_at": sub.started_at.isoformat() if sub.started_at else None,
         "next_billing_at": (
@@ -374,6 +384,8 @@ class PaymentService:
         )
 
         sub.plan = plan.value
+        # 상향 결제는 즉시 반영이므로, 걸려 있던 하향 예약은 의미가 없어진다.
+        sub.scheduled_plan = None
         sub.status = SubscriptionStatus.ACTIVE
         sub.billing_method_id = method.id
         sub.started_at = sub.started_at or now
@@ -388,6 +400,53 @@ class PaymentService:
         return success(
             data={"subscription": _sub_to_dict(sub), "plan": plan.value},
             message="결제가 완료되었습니다.",
+        )
+
+    # ── 플랜 하향 예약 ──────────────────────────
+    async def schedule_plan_change(self, request):
+        """body: {"plan": "standard"} — 다음 결제일에 적용할 하향 예약.
+
+        하향은 즉시 결제하지 않는다. 지금 청구하면 이미 낸 상위 플랜 요금이
+        그대로 날아가기 때문이다. 남은 기간은 상위 플랜을 쓰고,
+        다음 청구부터 낮은 금액으로 받는다.
+
+        같은 플랜을 다시 보내면 예약을 취소한다.
+        """
+        user_id = request.user_id
+        body = await request.json()
+
+        sub = await self.payment_repo.find_subscription(user_id)
+        if not sub or sub.status != SubscriptionStatus.ACTIVE:
+            fail("이용 중인 구독이 없습니다.", "SUBSCRIPTION_NOT_FOUND", 404)
+
+        # plan을 비워 보내면 예약 취소.
+        raw_plan = body.get("plan")
+        if not raw_plan:
+            sub.scheduled_plan = None
+            await self.payment_repo.db.commit()
+            return success(data=_sub_to_dict(sub), message="플랜 변경 예약을 취소했습니다.")
+
+        target = self._parse_paid_plan(raw_plan)
+        current = resolve_plan(sub.plan)
+
+        if target == current:
+            sub.scheduled_plan = None
+            await self.payment_repo.db.commit()
+            return success(data=_sub_to_dict(sub), message="플랜 변경 예약을 취소했습니다.")
+
+        if tier_of(target) > tier_of(current):
+            # 상향은 지금 결제하고 바로 올려주는 게 맞다 — 기다릴 이유가 없다.
+            fail(
+                "상위 플랜으로는 바로 변경할 수 있습니다.",
+                "USE_SUBSCRIBE_FOR_UPGRADE",
+            )
+
+        sub.scheduled_plan = target.value
+        await self.payment_repo.db.commit()
+
+        return success(
+            data=_sub_to_dict(sub),
+            message="다음 결제일부터 변경된 플랜으로 청구됩니다.",
         )
 
     # ── 해지 ────────────────────────────────────
@@ -408,6 +467,151 @@ class PaymentService:
             message="구독이 해지되었습니다. 남은 기간은 그대로 이용하실 수 있습니다.",
         )
 
-    # ── 정기 청구(다음 단계 크론에서 사용) ──────
+    # ── 정기 청구 (cron에서 호출) ───────────────
     def billing_key_of(self, method: BillingMethod) -> str:
         return decrypt(method.encrypted_billing_key)
+
+    @staticmethod
+    def plan_to_charge(sub: Subscription) -> Plan:
+        """이번 청구에 적용할 플랜. 하향 예약이 있으면 그 플랜으로 청구한다."""
+        return resolve_plan(sub.scheduled_plan or sub.plan)
+
+    async def _expire(self, sub: Subscription, reason: str) -> None:
+        """구독을 끝낸다. 플랜은 Free로 내려간다."""
+        user = await self.user_repo.get_user_by_id(sub.user_id)
+        if user:
+            user.plan = Plan.FREE.value
+
+        sub.status = SubscriptionStatus.NONE
+        sub.plan = None
+        sub.scheduled_plan = None
+        sub.next_billing_at = None
+        sub.retry_count = 0
+        logger.info("subscription expired user_id=%s reason=%s", sub.user_id, reason)
+
+    async def _charge_one(self, sub: Subscription, now: datetime) -> str:
+        """구독 한 건을 처리하고 결과 라벨을 돌려준다.
+
+        해지 예정 건은 청구하지 않고 만료시킨다 — 이미 낸 기간이 끝난 시점이다.
+        """
+        if sub.status == SubscriptionStatus.CANCELED:
+            await self._expire(sub, "canceled")
+            return "expired"
+
+        plan = self.plan_to_charge(sub)
+        if plan not in PAID_PLANS:
+            await self._expire(sub, "no_paid_plan")
+            return "expired"
+
+        method = None
+        if sub.billing_method_id:
+            method = await self.payment_repo.find_method(
+                sub.user_id, sub.billing_method_id
+            )
+        method = method or await self.payment_repo.find_default_method(sub.user_id)
+
+        if not method:
+            # 카드가 없으면 재시도해도 소용없다. 바로 끝낸다.
+            await self._expire(sub, "no_billing_method")
+            return "expired"
+
+        user = await self.user_repo.get_user_by_id(sub.user_id)
+        amount = price_for(plan)
+        order_id = self._new_order_id(plan, sub.user_id)
+
+        try:
+            charged = await self.toss.charge(
+                billing_key=decrypt(method.encrypted_billing_key),
+                customer_key=sub.customer_key,
+                amount=amount,
+                order_id=order_id,
+                order_name=f"chatbase.kr {plan.value.upper()} 1개월",
+                customer_email=getattr(user, "email", None),
+            )
+        except TossError as exc:
+            await self.payment_repo.add_payment(
+                Payment(
+                    user_id=sub.user_id,
+                    order_id=order_id,
+                    plan=plan.value,
+                    amount=amount,
+                    status=PaymentStatus.FAILED,
+                    billing_method_id=method.id,
+                    failure_code=exc.code,
+                    failure_message=exc.message[:255],
+                )
+            )
+            sub.retry_count = (sub.retry_count or 0) + 1
+            logger.warning(
+                "recurring charge failed user_id=%s attempt=%s code=%s",
+                sub.user_id,
+                sub.retry_count,
+                exc.code,
+            )
+
+            if sub.retry_count >= MAX_CHARGE_RETRY:
+                await self._expire(sub, "retry_exhausted")
+                return "expired"
+
+            # 하루 뒤 다시 시도한다. 카드 한도·일시 오류는 하루면 풀리는 경우가 많다.
+            sub.status = SubscriptionStatus.PAST_DUE
+            sub.next_billing_at = now + timedelta(days=1)
+            return "retry"
+
+        await self.payment_repo.add_payment(
+            Payment(
+                user_id=sub.user_id,
+                order_id=order_id,
+                payment_key=charged.get("paymentKey"),
+                plan=plan.value,
+                amount=amount,
+                status=PaymentStatus.DONE,
+                billing_method_id=method.id,
+                method=charged.get("method"),
+                receipt_url=(charged.get("receipt") or {}).get("url"),
+                approved_at=now,
+            )
+        )
+
+        # 하향 예약이 있었다면 이번 청구부터 그 플랜이 실제 플랜이 된다.
+        sub.plan = plan.value
+        sub.scheduled_plan = None
+        sub.status = SubscriptionStatus.ACTIVE
+        sub.billing_method_id = method.id
+        sub.retry_count = 0
+        sub.next_billing_at = _add_month(now)
+        if user:
+            user.plan = plan.value
+
+        logger.info(
+            "recurring charge done user_id=%s plan=%s amount=%s",
+            sub.user_id,
+            plan.value,
+            amount,
+        )
+        return "charged"
+
+    async def charge_due_subscriptions(self) -> dict[str, int]:
+        """청구일이 된 구독을 모두 처리한다. cron이 매일 호출한다.
+
+        한 건이 실패해도 나머지는 계속 처리한다 — 카드 하나 때문에
+        그날 청구 전체가 멈추면 안 된다. 건마다 커밋해 부분 성공을 보존한다.
+        """
+        now = now_kst()
+        subs = await self.payment_repo.find_due_subscriptions(now)
+        summary = {"charged": 0, "retry": 0, "expired": 0, "error": 0}
+
+        for sub in subs:
+            try:
+                result = await self._charge_one(sub, now)
+                await self.payment_repo.db.commit()
+                summary[result] += 1
+            except Exception as exc:  # noqa: BLE001
+                await self.payment_repo.db.rollback()
+                summary["error"] += 1
+                logger.exception(
+                    "recurring charge crashed user_id=%s: %s", sub.user_id, exc
+                )
+
+        logger.info("billing cycle done %s", summary)
+        return summary

@@ -64,6 +64,14 @@ async def subscribe(p: ServiceProvider):
     return await p.payment_service.subscribe(p.request)
 
 
+@router.post("/subscription/schedule")
+@with_provider
+@with_login()
+async def schedule_plan_change(p: ServiceProvider):
+    """body: {"plan": "standard"} — 다음 결제일에 적용할 하향 예약. null이면 취소."""
+    return await p.payment_service.schedule_plan_change(p.request)
+
+
 @router.post("/subscription/cancel")
 @with_provider
 @with_login()

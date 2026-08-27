@@ -24,6 +24,7 @@ import {
   describeMethod,
   type BillingMethod,
   type MethodSelection,
+  type SchedulePlanRequest,
   type PaymentConfig,
   type PaymentHistory,
   type SubscribeRequest,
@@ -82,6 +83,7 @@ const Billing = () => {
   const [busy, setBusy] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<BillingMethod | null>(null);
+  const [downgradeTarget, setDowngradeTarget] = useState<Plan | null>(null);
 
   const subscribeMutation = usePost<
     SubscribeRequest,
@@ -95,6 +97,9 @@ const Billing = () => {
   );
   const cancelMutation = usePost<void, Subscription>(
     "api/payment/subscription/cancel",
+  );
+  const scheduleMutation = usePost<SchedulePlanRequest, Subscription>(
+    "api/payment/subscription/schedule",
   );
 
   const refresh = (...keys: string[]) =>
@@ -216,6 +221,40 @@ const Billing = () => {
     );
   };
 
+  /**
+   * 플랜 하향. 지금 결제하지 않고 다음 결제일에 반영되도록 예약한다.
+   * 즉시 처리하면 이미 낸 상위 플랜 요금이 그대로 날아간다.
+   */
+  const handleDowngrade = () => {
+    if (!downgradeTarget) return;
+    scheduleMutation.mutate(
+      { plan: downgradeTarget.name.toLowerCase() },
+      {
+        onSuccess: () => {
+          toast.success(
+            `다음 결제일부터 ${downgradeTarget.name} 플랜으로 청구됩니다.`,
+          );
+          refresh("subscription");
+          setDowngradeTarget(null);
+        },
+        onError: (err) => toast.error(err.message || "변경에 실패했습니다."),
+      },
+    );
+  };
+
+  const handleCancelSchedule = () => {
+    scheduleMutation.mutate(
+      { plan: null },
+      {
+        onSuccess: () => {
+          toast.success("플랜 변경 예약을 취소했습니다.");
+          refresh("subscription");
+        },
+        onError: (err) => toast.error(err.message || "취소에 실패했습니다."),
+      },
+    );
+  };
+
   const handleCancel = () => {
     cancelMutation.mutate(undefined, {
       onSuccess: () => {
@@ -293,6 +332,27 @@ const Billing = () => {
                       ? "무료 플랜을 이용 중입니다. 유료 플랜으로 올리시면 대화 건수 제한이 없어집니다."
                       : "매달 자동으로 결제됩니다. 언제든 해지하실 수 있습니다."}
                   </p>
+
+                  {/* 하향 예약 — 지금은 상위 플랜을 그대로 쓰고 있으므로
+                      "언제부터 무엇으로 바뀌는지"를 분명히 알려야 한다. */}
+                  {subscription?.scheduled_plan && (
+                    <div className="mt-2.5 flex items-center gap-2 flex-wrap">
+                      <span className="text-[12px] text-text-sub">
+                        {formatDate(subscription.next_billing_at)}부터{" "}
+                        <span className="text-text-main font-medium">
+                          {subscription.scheduled_plan.toUpperCase()}
+                        </span>
+                        로 변경됩니다
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleCancelSchedule}
+                        className="text-[12px] text-text-sub hover:text-text-main underline underline-offset-2 transition-colors"
+                      >
+                        예약 취소
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {currentIdx === 0 && (
@@ -404,6 +464,9 @@ const Billing = () => {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {PLANS.map((plan, idx) => {
                 const isCurrent = idx === currentIdx;
+                // 하향 예약이 걸린 플랜. 아직 적용 전이라 "이용 중"과 구분해야 한다.
+                const isScheduled =
+                  subscription?.scheduled_plan === plan.name.toLowerCase();
                 return (
                   <div
                     key={plan.name}
@@ -422,6 +485,11 @@ const Billing = () => {
                       {!usageLoading && isCurrent && (
                         <span className="inline-flex items-center px-2 h-5 rounded-full bg-info-bg text-info text-[10px] font-medium">
                           이용 중
+                        </span>
+                      )}
+                      {!usageLoading && !isCurrent && isScheduled && (
+                        <span className="inline-flex items-center px-2 h-5 rounded-full bg-bg-sub text-text-sub text-[10px] font-medium">
+                          변경 예정
                         </span>
                       )}
                     </div>
@@ -476,14 +544,22 @@ const Billing = () => {
                         pill
                         full
                         variant={idx > currentIdx ? "primary" : "secondary"}
-                        disabled={isCurrent || idx === 0}
-                        onClick={() => openPlanModal(plan)}
+                        disabled={isCurrent || idx === 0 || isScheduled}
+                        onClick={() =>
+                          // 상향은 지금 결제하고 바로 올린다.
+                          // 하향은 결제 없이 다음 결제일에 반영되도록 예약한다.
+                          idx > currentIdx
+                            ? openPlanModal(plan)
+                            : setDowngradeTarget(plan)
+                        }
                       >
                         {isCurrent
                           ? "이용 중"
-                          : idx > currentIdx
-                            ? "이 플랜으로 올리기"
-                            : "이 플랜으로 내리기"}
+                          : isScheduled
+                            ? "변경 예정"
+                            : idx > currentIdx
+                              ? "이 플랜으로 올리기"
+                              : "이 플랜으로 내리기"}
                       </Button>
                     )}
                   </div>
@@ -731,25 +807,65 @@ const Billing = () => {
       />
 
       <ConfirmModal
-        open={!!removeTarget}
-        title="이 카드를 삭제하시겠습니까?"
+        open={!!downgradeTarget}
+        icon={<Minus className="w-4 h-4" />}
+        title={`${downgradeTarget?.name ?? ""} 플랜으로 내릴까요?`}
         description={
-          removeTarget
-            ? `${describeMethod(removeTarget)} 이(가) 목록에서 제거됩니다.`
-            : undefined
+          <>
+            <span className="text-text-main">
+              {formatDate(subscription?.next_billing_at ?? null)}
+            </span>
+            까지는 {currentPlan.name} 플랜 그대로 이용하세요.
+            <br />
+            다음 결제일부터 {downgradeTarget?.name} 요금으로 청구되며, 환불은
+            없어요.
+          </>
+        }
+        confirmLabel="변경 예약"
+        cancelLabel="닫기"
+        onConfirm={handleDowngrade}
+        onCancel={() => setDowngradeTarget(null)}
+      />
+
+      <ConfirmModal
+        open={!!removeTarget}
+        icon={<Trash2 className="w-4 h-4" />}
+        title="이 카드를 삭제할까요?"
+        description={
+          removeTarget ? (
+            <>
+              <span className="font-mono tabular-nums text-text-main">
+                {removeTarget.masked_number ?? describeMethod(removeTarget)}
+              </span>
+              <br />
+              목록에서 제거되며 이 카드로는 더 이상 청구되지 않아요.
+            </>
+          ) : undefined
         }
         variant="danger"
         confirmLabel="삭제"
+        cancelLabel="닫기"
         onConfirm={handleRemove}
         onCancel={() => setRemoveTarget(null)}
       />
 
       <ConfirmModal
         open={cancelOpen}
-        title="구독을 해지하시겠습니까?"
-        description="다음 결제부터 청구되지 않습니다. 이미 결제한 기간은 그대로 이용하실 수 있습니다."
+        icon={<CreditCard className="w-4 h-4" />}
+        title="구독을 해지할까요?"
+        description={
+          <>
+            다음 결제부터 청구되지 않아요.
+            <br />
+            <span className="text-text-main">
+              {formatDate(subscription?.next_billing_at ?? null)}
+            </span>
+            까지는 지금 플랜 그대로 이용하실 수 있어요.
+          </>
+        }
         variant="danger"
         confirmLabel="해지하기"
+        cancelLabel="닫기"
         onConfirm={handleCancel}
         onCancel={() => setCancelOpen(false)}
       />

@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm";
 import Topbar from "@/component/dashboard/layout/topbar";
 import Input from "@/component/dashboard/ui/input";
 import Select, { SelectOption } from "@/component/dashboard/ui/select";
+import Skeleton from "@/component/dashboard/ui/skeleton";
 import { useGet } from "@/hooks/common/useAPI";
 
 interface BotDto {
@@ -66,16 +67,20 @@ const Conversations = () => {
     botFilter === "all"
       ? "api/chat/sessions"
       : `api/chat/sessions?bot_id=${botFilter}`;
-  const { data: sessions } = useGet<SessionDto[]>(sessionsUrl, [
-    "sessions",
-    botFilter,
-  ]);
+  const { data: sessions, isLoading: sessionsLoading } = useGet<SessionDto[]>(
+    sessionsUrl,
+    ["sessions", botFilter],
+  );
 
   const { data: detail } = useGet<SessionDetailDto>(
     `api/chat/sessions/${selectedId}`,
     ["session", String(selectedId ?? "")],
     !!selectedId,
   );
+
+  // 세션을 바꾸면 새 응답이 오기 전까지 이전 세션의 대화가 캐시에 남아 있다.
+  // 그대로 그리면 헤더는 새 방문자, 메시지는 이전 방문자인 화면이 한 번 보인다.
+  const detailReady = !!detail && detail.session.id === selectedId;
 
   const botFilterOptions: SelectOption[] = useMemo(() => {
     const opts: SelectOption[] = [{ value: "all", label: "모든 챗봇" }];
@@ -132,21 +137,26 @@ const Conversations = () => {
           </div>
 
           <div className="flex-1 overflow-y-auto scrollbar-hide">
-            <ul>
-              {filteredSessions.map((s) => (
-                <li key={s.id}>
-                  <SessionRow
-                    session={s}
-                    botName={botNameMap.get(s.bot_id) ?? "봇"}
-                    active={s.id === selectedId}
-                    onClick={() => setSelectedId(s.id)}
-                  />
-                </li>
-              ))}
-            </ul>
+            {sessionsLoading ? (
+              // 세션이 오기 전에 "결과 없음"을 띄우면 목록이 들어올 때 화면이 뒤집힌다.
+              <SessionListSkeleton />
+            ) : (
+              <ul>
+                {filteredSessions.map((s) => (
+                  <li key={s.id}>
+                    <SessionRow
+                      session={s}
+                      botName={botNameMap.get(s.bot_id) ?? "봇"}
+                      active={s.id === selectedId}
+                      onClick={() => setSelectedId(s.id)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
-          {filteredSessions.length === 0 && (
+          {!sessionsLoading && filteredSessions.length === 0 && (
             <EmptyPanel
               icon={Search}
               title="결과 없음"
@@ -157,7 +167,10 @@ const Conversations = () => {
 
         {/* 우측: 선택된 세션 디테일 */}
         <section className="relative flex flex-col min-h-0 bg-bg-sub/30">
-          {selected && detail ? (
+          {selectedId && !detailReady ? (
+            // 세션을 눌렀는데 "대화를 선택하세요"가 다시 보이면 클릭이 씹힌 것처럼 보인다.
+            <SessionDetailSkeleton />
+          ) : selected && detail ? (
             <SessionDetail
               detail={detail}
               botName={botNameMap.get(selected.bot_id) ?? "봇"}
@@ -348,6 +361,58 @@ const Markdown = ({ text }: { text: string }) => (
   >
     {text}
   </ReactMarkdown>
+);
+
+/** SessionRow와 같은 골격의 로딩 행. */
+const SessionListSkeleton = () => (
+  <div>
+    {[0, 1, 2, 3, 4].map((i) => (
+      <div
+        key={i}
+        className="px-4 py-3 flex flex-col gap-1.5 border-b border-line"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Skeleton className="w-6 h-6 rounded-full shrink-0" />
+            <Skeleton className="h-3 w-24" />
+          </div>
+          <Skeleton className="h-2.5 w-10" />
+        </div>
+        <div className="flex flex-col gap-1">
+          <Skeleton className="h-[17px] w-full" />
+          <Skeleton className="h-[17px] w-3/4" />
+        </div>
+        <Skeleton className="h-2.5 w-28" />
+      </div>
+    ))}
+  </div>
+);
+
+/** SessionDetail과 같은 골격(헤더 + 메시지 버블)의 로딩 화면. */
+const SessionDetailSkeleton = () => (
+  <>
+    <header className="shrink-0 flex items-center gap-3 px-6 py-3 border-b border-line bg-bg">
+      <Skeleton className="w-8 h-8 rounded-full shrink-0" />
+      <div className="flex flex-col gap-1.5">
+        <Skeleton className="h-3.5 w-40" />
+        <Skeleton className="h-2.5 w-28" />
+      </div>
+    </header>
+
+    <div className="flex-1 px-6 py-6 space-y-3">
+      <div className="flex items-start gap-2">
+        <Skeleton className="w-7 h-7 rounded-full shrink-0" />
+        <Skeleton className="h-14 w-1/2 rounded-comfy" />
+      </div>
+      <div className="flex justify-end">
+        <Skeleton className="h-10 w-2/5 rounded-comfy" />
+      </div>
+      <div className="flex items-start gap-2">
+        <Skeleton className="w-7 h-7 rounded-full shrink-0" />
+        <Skeleton className="h-20 w-3/5 rounded-comfy" />
+      </div>
+    </div>
+  </>
 );
 
 // 좌우 패널의 빈 상태를 같은 기준 박스(패널 전체) 중앙에 동일한 모양으로 배치한다

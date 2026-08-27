@@ -1,3 +1,4 @@
+import Skeleton from "@/component/admin/ui/skeleton";
 import type { Column } from "./table";
 
 /**
@@ -16,8 +17,12 @@ interface TableBodyProps {
   rowSizeClass: string;
   striped: boolean;
   rowCount?: number;
+  loading?: boolean;
   onRowClick?: (row: any) => void;
 }
+
+/** 로딩 중 표시할 기본 행 수. */
+const SKELETON_ROWS = 8;
 
 /**
  * TableBody 컴포넌트
@@ -44,10 +49,32 @@ const TableBody = ({
   rowSizeClass,
   striped,
   rowCount,
+  loading,
   onRowClick,
 }: TableBodyProps) => {
   const target = rowCount && rowCount > 0 ? rowCount : data.length;
   const emptyCount = Math.max(0, target - data.length);
+
+  // 데이터가 오기 전에 "데이터가 없습니다."를 띄우면 행이 들어올 때 화면이 뒤집힌다.
+  if (loading && data.length === 0) {
+    const rows = rowCount && rowCount > 0 ? rowCount : SKELETON_ROWS;
+    return (
+      <tbody>
+        {Array.from({ length: rows }).map((_, i) => (
+          <tr key={`skeleton-${i}`} className={rowSizeClass}>
+            {columns.map((col) => (
+              <td
+                key={col.key}
+                className="px-3 py-2.5 align-middle bg-bg-card border-b border-line"
+              >
+                <Skeleton className="h-3 w-full" />
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    );
+  }
 
   // 데이터가 없을 경우 테이블 바디 영역에 안내 메시지 출력
   if (data.length === 0) {

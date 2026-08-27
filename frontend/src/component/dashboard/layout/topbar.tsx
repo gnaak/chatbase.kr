@@ -3,8 +3,9 @@ import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 
 interface TopbarProps {
-  title: string;
-  description?: string;
+  /** 로딩 중에는 스켈레톤을 넣을 수 있도록 ReactNode를 받는다. */
+  title: ReactNode;
+  description?: ReactNode;
   actions?: ReactNode;
   backTo?: string;
 }

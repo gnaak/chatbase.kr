@@ -26,6 +26,7 @@ import Keys from "./container/dashboard/keys";
 import Conversations from "./container/dashboard/conversations";
 import Settings from "./container/dashboard/settings";
 import Billing from "./container/dashboard/billing";
+import BillingSuccess from "./container/dashboard/billingSuccess";
 // import DashboardKakao from "./container/dashboard/kakao";  // 카카오톡 연동 보류
 import EmbedChat from "./container/embed";
 import Terms from "./container/legal/terms";
@@ -38,9 +39,19 @@ import {
   AdminPublicOnlyRoute,
 } from "./hooks/auth/protectedRoute";
 
-function App() {
-  const queryClient = new QueryClient();
+// 컴포넌트 본문에서 만들면 App이 리렌더될 때마다 캐시가 새로 생겨
+// 이미 받아둔 데이터를 버리고 매번 로딩부터 다시 시작한다. 모듈 스코프에 한 번만 만든다.
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // staleTime(5분)이 지난 뒤에도 캐시는 남겨둔다 —
+      // 페이지를 다시 열면 이전 데이터를 즉시 그리고 갱신은 뒤에서 조용히 돈다.
+      gcTime: 1000 * 60 * 30,
+    },
+  },
+});
 
+function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
@@ -76,6 +87,10 @@ function App() {
                   {/* 카카오톡 연동 보류 — PROGRESS.md '(보류) 카카오톡 연동 온보딩' 참고 */}
                   {/* <Route path="/dashboard/kakao" element={<DashboardKakao />} /> */}
                   <Route path="/dashboard/billing" element={<Billing />} />
+                  <Route
+                    path="/dashboard/billing/success"
+                    element={<BillingSuccess />}
+                  />
                   <Route path="/dashboard/guide" element={<Guide />} />
                 </Route>
               </Route>

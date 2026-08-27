@@ -37,6 +37,13 @@ class RawEnv(BaseSettings):
     admin_anthropic_api_key: Optional[str] = None
     admin_gemini_api_key: Optional[str] = None
 
+    # TOSS PAYMENTS
+    # 클라이언트/시크릿은 반드시 같은 상점(MID) 쌍이어야 한다. 짝이 안 맞으면
+    # 결제창은 떠도 승인에서 NOT_FOUND_MERCHANT로 깨진다.
+    # 시크릿 키는 상점당 하나이며 일반결제(/v1/payments)와 자동결제(/v1/billing)가 같이 쓴다.
+    toss_api_client_key: Optional[str] = None
+    toss_api_secret_key: Optional[str] = None
+
     # KAKAO
     kakao_client_id: Optional[str] = None
     kakao_client_secret: Optional[str] = None
@@ -128,6 +135,15 @@ class Settings:
     def admin_gemini_api_key(self) -> Optional[str]:
         return self.raw.admin_gemini_api_key or self.raw.gemini_api_key
 
+
+    # TOSS PAYMENTS
+    @property
+    def toss_client_key(self) -> Optional[str]:
+        return self.raw.toss_api_client_key
+
+    @property
+    def toss_secret_key(self) -> Optional[str]:
+        return self.raw.toss_api_secret_key
 
     @property
     def kakao_client_id(self) -> Optional[str]:

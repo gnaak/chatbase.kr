@@ -11,6 +11,7 @@ import {
   BookOpen,
 } from "lucide-react";
 import { useGet, usePost } from "@/hooks/common/useAPI";
+import Skeleton from "@/component/dashboard/ui/skeleton";
 
 interface MeDto {
   id: number;
@@ -32,7 +33,7 @@ const navItems = [
 
 const Sidebar = () => {
   const queryClient = useQueryClient();
-  const { data: me } = useGet<MeDto>("api/user/me", ["me"]);
+  const { data: me, isLoading } = useGet<MeDto>("api/user/me", ["me"]);
   const logoutMutation = usePost<void, void>("api/auth/logout");
 
   const handleLogout = () => {
@@ -88,24 +89,38 @@ const Sidebar = () => {
 
       <div className="mt-auto px-3 py-3 border-t border-line">
         <div className="flex items-center gap-2 px-2 py-1.5">
-          <div className="w-7 h-7 rounded-full bg-bg-sub shadow-border flex items-center justify-center text-[11px] font-medium text-text-sub shrink-0 overflow-hidden">
-            {me?.profile_image ? (
-              <img
-                src={me.profile_image}
-                alt={me.name}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              initial
-            )}
-          </div>
+          {isLoading ? (
+            <Skeleton className="w-7 h-7 rounded-full shrink-0" />
+          ) : (
+            <div className="w-7 h-7 rounded-full bg-bg-sub shadow-border flex items-center justify-center text-[11px] font-medium text-text-sub shrink-0 overflow-hidden">
+              {me?.profile_image ? (
+                <img
+                  src={me.profile_image}
+                  alt={me.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                initial
+              )}
+            </div>
+          )}
           <div className="flex-1 min-w-0">
-            <div className="text-[13px] font-medium text-text-main truncate">
-              {me?.name || "사용자"}
-            </div>
-            <div className="text-[11px] text-text-sub truncate">
-              {me?.email || "로그인됨"}
-            </div>
+            {isLoading ? (
+              // "사용자 / 로그인됨" 을 먼저 보여주면 실제 이름으로 바뀔 때 깜빡인다.
+              <div className="flex flex-col gap-1 py-0.5">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-2.5 w-32" />
+              </div>
+            ) : (
+              <>
+                <div className="text-[13px] font-medium text-text-main truncate">
+                  {me?.name || "사용자"}
+                </div>
+                <div className="text-[11px] text-text-sub truncate">
+                  {me?.email || "로그인됨"}
+                </div>
+              </>
+            )}
           </div>
           <button
             type="button"

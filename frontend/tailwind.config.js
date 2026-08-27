@@ -56,10 +56,16 @@ export default {
           "0%, 50%": { opacity: "1" },
           "50.01%, 100%": { opacity: "0" },
         },
+        // 스켈레톤 위를 지나가는 광택. 부모의 overflow-hidden 안에서만 보인다.
+        shimmer: {
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(100%)" },
+        },
       },
       animation: {
         "fade-slide": "fade-slide 150ms ease-out",
         caret: "caret 1s steps(2, end) infinite",
+        shimmer: "shimmer 1.6s ease-in-out infinite",
       },
       colors: {
         // Admin 전용 고정 색상 (legacy — kept for existing admin pages)

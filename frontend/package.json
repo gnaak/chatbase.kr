@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.81.2",
+    "@tosspayments/tosspayments-sdk": "^2.8.1",
     "dompurify": "^3.2.6",
     "geist": "^1.0.0",
     "highlight.js": "^11.11.1",

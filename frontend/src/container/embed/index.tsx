@@ -46,7 +46,7 @@ const EmbedChat = () => {
   const visitorId = useRef(getVisitorId());
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const { data: bot } = useGet<BotPublicDto>(
+  const { data: bot, isLoading: botLoading } = useGet<BotPublicDto>(
     `api/bot/public/${botId}`,
     ["bot-public", botId ?? ""],
     !!botId,
@@ -154,13 +154,45 @@ const EmbedChat = () => {
     setError(null);
   };
 
+  const windowClass = [
+    "flex flex-col bg-bg-card overflow-hidden",
+    isWidgetMode
+      ? "w-full h-screen"
+      : "w-[360px] h-[560px] rounded-comfy shadow-[0_8px_32px_rgba(0,0,0,0.18)] animate-fade-slide",
+  ].join(" ");
+
+  /**
+   * 봇 설정이 오기 전의 채팅창.
+   *
+   * 설정 없이 그리면 "챗봇" → 실제 봇 이름, 인사말 없음 → 인사말,
+   * FAQ 버튼과 배지가 뒤늦게 붙는 식으로 방문자 눈앞에서 창이 몇 번 갈아치워진다.
+   */
+  const loadingWindow = (
+    <div className={windowClass}>
+      <header className="shrink-0 flex items-center gap-2.5 px-3.5 h-12 border-b border-line">
+        <Bar className="w-7 h-7 rounded-full shrink-0" />
+        <div className="flex flex-col gap-1.5">
+          <Bar className="h-3 w-28" />
+          <Bar className="h-2.5 w-16" />
+        </div>
+      </header>
+
+      <div className="flex-1 px-3.5 py-3.5 space-y-2.5 bg-bg-sub/40">
+        <div className="flex items-start gap-2">
+          <Bar className="w-7 h-7 rounded-full shrink-0" />
+          <Bar className="h-12 w-3/5 rounded-comfy" />
+        </div>
+      </div>
+
+      <div className="shrink-0 flex items-center gap-2 px-3 py-2.5 border-t border-line bg-bg-card">
+        <Bar className="h-9 flex-1 rounded-comfy" />
+        <Bar className="h-9 w-9 rounded-comfy shrink-0" />
+      </div>
+    </div>
+  );
+
   const chatWindow = (
-    <div className={[
-      "flex flex-col bg-bg-card overflow-hidden",
-      isWidgetMode
-        ? "w-full h-screen"
-        : "w-[360px] h-[560px] rounded-comfy shadow-[0_8px_32px_rgba(0,0,0,0.18)] animate-fade-slide",
-    ].join(" ")}>
+    <div className={windowClass}>
       <header className="shrink-0 flex items-center justify-between px-3.5 h-12 border-b border-line">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-7 h-7 rounded-full bg-bg-sub shadow-border flex items-center justify-center shrink-0 overflow-hidden">
@@ -268,12 +300,12 @@ const EmbedChat = () => {
   );
 
   // widget.js 사용 시: 채팅창만 (버블 버튼은 widget.js가 관리)
-  if (isWidgetMode) return chatWindow;
+  if (isWidgetMode) return botLoading ? loadingWindow : chatWindow;
 
   // standalone iframe 사용 시: 버블 버튼 + 채팅창
   return (
     <div className="fixed bottom-4 right-4 flex flex-col items-end gap-3 font-sans">
-      {isOpen && chatWindow}
+      {isOpen && (botLoading ? loadingWindow : chatWindow)}
       <button
         type="button"
         onClick={() => setIsOpen((v) => !v)}
@@ -291,6 +323,16 @@ const EmbedChat = () => {
     </div>
   );
 };
+
+/** 로딩 자리를 채우는 스켈레톤 블록. 크기는 className으로 지정한다. */
+const Bar = ({ className = "" }: { className?: string }) => (
+  <div
+    aria-hidden="true"
+    className={["relative overflow-hidden bg-skeleton-base rounded-DEFAULT", className].join(" ")}
+  >
+    <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-skeleton-shine to-transparent animate-shimmer motion-reduce:animate-none" />
+  </div>
+);
 
 const IconBtn = ({ children, onClick, label }: { children: React.ReactNode; onClick: () => void; label: string }) => (
   <button

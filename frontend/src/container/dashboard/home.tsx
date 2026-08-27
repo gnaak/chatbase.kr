@@ -5,6 +5,8 @@ import Topbar from "@/component/dashboard/layout/topbar";
 import Button from "@/component/dashboard/ui/button";
 import ConfirmModal from "@/component/dashboard/ui/confirmModal";
 import BotCard, { BotCardData } from "@/component/dashboard/bot/botCard";
+import Card from "@/component/dashboard/ui/card";
+import Skeleton from "@/component/dashboard/ui/skeleton";
 import { useGet } from "@/hooks/common/useAPI";
 import type { UsageSummary } from "@/types/usage";
 
@@ -55,6 +57,9 @@ const DashboardHome = () => {
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
 
+  // 봇 목록과 키 유무를 둘 다 알기 전에는 그리드/빈 상태 중 무엇을 그릴지 결정할 수 없다.
+  // 하나라도 안 왔으면 스켈레톤을 유지해야 "빈 그리드 → 카드", "빈 그리드 → 키 없음 안내" 전환이 안 생긴다.
+  const loading = isLoading || keysLoading;
   const bots = (data ?? []).map(mapBot);
   const isEmpty = !isLoading && bots.length === 0;
   const hasNoKeys = !keysLoading && apiKeys !== undefined && apiKeys.length === 0;
@@ -65,7 +70,7 @@ const DashboardHome = () => {
   const atBotLimit = botsLimit !== null && activeCount >= botsLimit;
   const currentPlanLabel = (usage?.plan ?? "free").toUpperCase();
   // 빈 상태(챗봇 없음 / API 키 없음)는 콘텐츠 영역 중앙에 배치한다
-  const isCentered = hasNoKeys || isEmpty;
+  const isCentered = !loading && (hasNoKeys || isEmpty);
 
   // API 키가 없으면 챗봇 생성 페이지로 보내지 않고 안내 모달을 띄운다
   const goNew = () => {
@@ -94,6 +99,8 @@ const DashboardHome = () => {
             pill
             leftIcon={<Plus className="w-4 h-4" />}
             onClick={goNew}
+            // 키 유무/개수 제한을 모르는 상태에서 누르면 잘못된 화면으로 보낸다.
+            disabled={loading}
           >
             새 챗봇
           </Button>
@@ -105,7 +112,9 @@ const DashboardHome = () => {
           isCentered ? " flex items-center justify-center" : ""
         }`}
       >
-        {hasNoKeys ? (
+        {loading ? (
+          <BotGridSkeleton />
+        ) : hasNoKeys ? (
           <NoApiKeyState onGoKeys={goKeys} />
         ) : isEmpty ? (
           <EmptyState onCreate={goNew} />
@@ -161,6 +170,35 @@ const BotGrid = ({
   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
     {bots.map((bot) => (
       <BotCard key={bot.id} bot={bot} onClick={onSelect} />
+    ))}
+  </div>
+);
+
+/** BotCard와 같은 구조·높이로 자리를 잡아 카드가 들어올 때 그리드가 튀지 않게 한다. */
+const BotCardSkeleton = () => (
+  <Card variant="outline" className="p-5 flex flex-col gap-4">
+    <div className="flex items-center gap-3">
+      <Skeleton className="w-9 h-9 rounded-DEFAULT shrink-0" />
+      <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+        <Skeleton className="h-3.5 w-1/2" />
+        <Skeleton className="h-2.5 w-1/3" />
+      </div>
+    </div>
+    <div className="flex flex-col gap-2">
+      <Skeleton className="h-[17px] w-full" />
+      <Skeleton className="h-[17px] w-4/5" />
+    </div>
+    <div className="flex items-center justify-between mt-auto pt-1">
+      <Skeleton className="h-5 w-14 rounded-full" />
+      <Skeleton className="h-3 w-16" />
+    </div>
+  </Card>
+);
+
+const BotGridSkeleton = () => (
+  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+    {[0, 1, 2].map((i) => (
+      <BotCardSkeleton key={i} />
     ))}
   </div>
 );

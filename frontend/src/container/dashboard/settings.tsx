@@ -7,6 +7,7 @@ import Card from "@/component/dashboard/ui/card";
 import ConfirmModal from "@/component/dashboard/ui/confirmModal";
 import Field from "@/component/dashboard/ui/field";
 import Input from "@/component/dashboard/ui/input";
+import Skeleton from "@/component/dashboard/ui/skeleton";
 import { useTheme } from "@/hooks/common/useTheme";
 import type { Theme } from "@/context/ThemeProvider";
 import { useGet, usePatch } from "@/hooks/common/useAPI";
@@ -48,7 +49,7 @@ const Settings = () => {
 const ProfileSection = () => {
   const queryClient = useQueryClient();
   const toast = useToast();
-  const { data: me } = useGet<MeDto>("api/user/me", ME_QUERY_KEY);
+  const { data: me, isLoading } = useGet<MeDto>("api/user/me", ME_QUERY_KEY);
   const updateMe = usePatch<MeDto, UpdateMePayload>("api/user/me");
 
   const [name, setName] = useState("");
@@ -90,19 +91,28 @@ const ProfileSection = () => {
   return (
     <Section title="프로필" description="계정 이름과 이메일을 관리합니다.">
       <Card variant="outline" className="p-5 flex flex-col gap-5">
+        {/* 빈 입력창을 먼저 그리면 값이 도착할 때 글자가 튀어들어오는 깜빡임이 된다. */}
         <Field label="이름" htmlFor="profile-name">
-          <Input
-            id="profile-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
+          {isLoading ? (
+            <Skeleton className="h-9 w-full rounded-comfy" />
+          ) : (
+            <Input
+              id="profile-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          )}
         </Field>
 
         <Field
           label="이메일"
           description="이메일 변경은 고객센터를 통해서만 가능합니다."
         >
-          <Input value={me?.email ?? ""} disabled />
+          {isLoading ? (
+            <Skeleton className="h-9 w-full rounded-comfy" />
+          ) : (
+            <Input value={me?.email ?? ""} disabled />
+          )}
         </Field>
 
         {me?.has_password && (
@@ -184,7 +194,8 @@ const ProfileSection = () => {
             pill
             leftIcon={<Save className="w-3.5 h-3.5" />}
             onClick={handleSaveProfile}
-            disabled={updateMe.isPending}
+            // 로딩 중에는 name이 빈 문자열이라 그대로 저장되면 이름이 지워진다.
+            disabled={isLoading || updateMe.isPending}
           >
             {updateMe.isPending ? "저장 중..." : "프로필 저장"}
           </Button>

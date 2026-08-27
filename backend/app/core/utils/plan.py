@@ -61,6 +61,22 @@ PLAN_LIMITS: dict[Plan, PlanLimits] = {
 }
 
 
+#: 플랜별 월 결제 금액(원). `frontend/src/types/plan.ts`의 가격표와 일치해야 한다.
+#: 표기는 "VAT 별도"지만 청구 금액은 이 값 그대로 나간다.
+PLAN_PRICES: dict[Plan, int] = {
+    Plan.FREE: 0,
+    Plan.STANDARD: 19_000,
+    Plan.PREMIUM: 49_000,
+}
+
+#: 결제로 전환할 수 있는 플랜. FREE는 결제 대상이 아니다.
+PAID_PLANS: tuple[Plan, ...] = (Plan.STANDARD, Plan.PREMIUM)
+
+
+def price_for(plan: Plan) -> int:
+    return PLAN_PRICES[plan]
+
+
 def resolve_plan(raw: str | None) -> Plan:
     """DB에 담긴 문자열을 Plan으로. 알 수 없는 값은 FREE로 떨어뜨린다.
 

@@ -25,7 +25,17 @@ interface ToastContextValue {
 
 export const ToastContext = createContext<ToastContextValue | undefined>(undefined);
 
-const DURATION_MS = 3000;
+/**
+ * 종류별 표시 시간.
+ * 에러는 사용자가 읽고 판단해야 하는 정보라 훨씬 길게 둔다 —
+ * 성공 토스트와 같은 3초면 문장을 다 읽기도 전에 사라진다.
+ */
+const DURATION_MS: Record<ToastType, number> = {
+  success: 3000,
+  info: 3000,
+  warning: 6000,
+  error: 10000,
+};
 
 export const ToastProvider = ({ children }: { children: ReactNode }) => {
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -91,26 +101,35 @@ const ToastItem = ({
   toast: Toast;
   onDismiss: (id: number) => void;
 }) => {
+  // 마우스를 올려두면 타이머가 멈춘다 — 긴 에러를 읽는 도중 사라지지 않게.
+  const [paused, setPaused] = useState(false);
+
   useEffect(() => {
-    const t = window.setTimeout(() => onDismiss(toast.id), DURATION_MS);
+    if (paused) return;
+    const t = window.setTimeout(
+      () => onDismiss(toast.id),
+      DURATION_MS[toast.type],
+    );
     return () => window.clearTimeout(t);
-  }, [toast.id, onDismiss]);
+  }, [toast.id, toast.type, paused, onDismiss]);
 
   const Icon = ICONS[toast.type];
   const color = COLORS[toast.type];
 
   return (
     <div
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
       className="
         pointer-events-auto
-        flex items-start gap-2.5 min-w-[280px] max-w-md
+        flex items-center gap-2.5 min-w-[280px] max-w-[min(90vw,42rem)]
         px-3.5 py-3 rounded-comfy
         bg-bg-card shadow-card dark:shadow-card-dark
         animate-fade-slide
       "
     >
-      <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${color}`} />
-      <p className="flex-1 text-[13px] leading-relaxed text-text-main">
+      <Icon className={`w-4 h-4 shrink-0 ${color}`} />
+      <p className="flex-1 min-w-0 text-[13px] leading-relaxed text-text-main break-keep">
         {toast.message}
       </p>
       <button

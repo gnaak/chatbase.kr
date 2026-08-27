@@ -1,4 +1,5 @@
 import { Users, Cpu, MessagesSquare, KeyRound } from "lucide-react";
+import Skeleton from "@/component/admin/ui/skeleton";
 import { useGet } from "@/hooks/common/useAPI";
 
 interface UserDto {
@@ -14,10 +15,14 @@ interface ModelDto {
 }
 
 const AdminMain = () => {
-  const { data: users } = useGet<UserDto[]>("api/admin/users", ["admin-users"]);
-  const { data: models } = useGet<ModelDto[]>("api/admin/models", [
-    "admin-models",
-  ]);
+  const { data: users, isLoading: usersLoading } = useGet<UserDto[]>(
+    "api/admin/users",
+    ["admin-users"],
+  );
+  const { data: models, isLoading: modelsLoading } = useGet<ModelDto[]>(
+    "api/admin/models",
+    ["admin-models"],
+  );
 
   const stats = {
     users: users?.length ?? 0,
@@ -39,26 +44,31 @@ const AdminMain = () => {
         </p>
       </div>
 
+      {/* 값이 오기 전에 0을 먼저 그리면 실제 수치로 바뀔 때 숫자가 튀는 깜빡임이 된다. */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard
           icon={<Users className="w-4 h-4" />}
           label="가입 사용자"
           value={stats.users}
+          loading={usersLoading}
         />
         <StatCard
           icon={<Cpu className="w-4 h-4" />}
           label="활성 모델"
           value={`${stats.activeModels} / ${stats.totalModels}`}
+          loading={modelsLoading}
         />
         <StatCard
           icon={<MessagesSquare className="w-4 h-4" />}
           label="누적 세션"
           value={stats.sessions.toLocaleString()}
+          loading={usersLoading}
         />
         <StatCard
           icon={<KeyRound className="w-4 h-4" />}
           label="등록된 키"
           value={stats.keys}
+          loading={usersLoading}
         />
       </div>
 
@@ -67,6 +77,7 @@ const AdminMain = () => {
           icon={<Cpu className="w-4 h-4" />}
           label="총 챗봇"
           value={stats.bots.toLocaleString()}
+          loading={usersLoading}
           large
         />
       </div>
@@ -78,11 +89,13 @@ const StatCard = ({
   icon,
   label,
   value,
+  loading,
   large,
 }: {
   icon: React.ReactNode;
   label: string;
   value: React.ReactNode;
+  loading?: boolean;
   large?: boolean;
 }) => (
   <div className="rounded-comfy bg-bg-card shadow-border px-4 py-3.5 flex flex-col gap-1.5">
@@ -98,7 +111,11 @@ const StatCard = ({
         large ? "text-[24px]" : "text-[18px]",
       ].join(" ")}
     >
-      {value}
+      {loading ? (
+        <Skeleton className={large ? "h-[29px] w-24" : "h-[22px] w-16"} />
+      ) : (
+        value
+      )}
     </div>
   </div>
 );

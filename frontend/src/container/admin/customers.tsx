@@ -18,7 +18,7 @@ const formatDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString("ko-KR", { hour12: false }) : "—";
 
 const AdminCustomers = () => {
-  const { data: users } = useGet<UserDto[]>("api/admin/users", [
+  const { data: users, isLoading } = useGet<UserDto[]>("api/admin/users", [
     "admin-users",
   ]);
 
@@ -140,7 +140,12 @@ const AdminCustomers = () => {
         )}
       </div>
 
-      <Table columns={columns} data={users ?? []} size="sm" />
+      <Table
+        columns={columns}
+        data={users ?? []}
+        size="sm"
+        loading={isLoading}
+      />
     </div>
   );
 };

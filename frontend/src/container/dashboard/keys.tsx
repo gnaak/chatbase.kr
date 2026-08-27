@@ -5,6 +5,7 @@ import Topbar from "@/component/dashboard/layout/topbar";
 import Button from "@/component/dashboard/ui/button";
 import Card from "@/component/dashboard/ui/card";
 import Input from "@/component/dashboard/ui/input";
+import Skeleton from "@/component/dashboard/ui/skeleton";
 import { useGet, usePost } from "@/hooks/common/useAPI";
 import { useToast } from "@/hooks/common/useToast";
 import ConfirmModal from "@/component/dashboard/ui/confirmModal";
@@ -84,8 +85,11 @@ const KEYS_QUERY_KEY = ["api-keys"];
 const Keys = () => {
   const queryClient = useQueryClient();
   const toast = useToast();
-  const { data: keysList } = useGet<ApiKeyDto[]>("api/api-key/", KEYS_QUERY_KEY);
-  const { data: chatModels } = useGet<ModelDto[]>(
+  const { data: keysList, isLoading: keysLoading } = useGet<ApiKeyDto[]>(
+    "api/api-key/",
+    KEYS_QUERY_KEY,
+  );
+  const { data: chatModels, isLoading: modelsLoading } = useGet<ModelDto[]>(
     "api/model/?type=chat",
     ["models", "chat"],
   );
@@ -177,6 +181,8 @@ const Keys = () => {
               key={provider.id}
               provider={provider}
               state={keys[provider.id]}
+              keyLoading={keysLoading}
+              modelsLoading={modelsLoading}
               onSave={(plain) => handleSave(provider.id, plain)}
               onRemove={() => handleRemove(provider.id)}
             />
@@ -187,32 +193,37 @@ const Keys = () => {
   );
 };
 
-const GUIDE_STEPS: { provider: ProviderMeta; steps: string[] }[] = [
+interface GuideStep {
+  /** 이 단계에서 실제로 하는 일. 굵은 첫 줄. */
+  action: string;
+  /** 어디서 하는지 · 무엇을 주의할지. 옅은 둘째 줄. */
+  detail: string;
+}
+
+/** 마지막 "등록" 단계는 provider마다 문구가 같아서 렌더링 시점에 붙인다. */
+const GUIDE_STEPS: { provider: ProviderMeta; steps: GuideStep[] }[] = [
   {
     provider: PROVIDER_META[0],
     steps: [
-      "platform.openai.com 에 로그인",
-      "우측 상단 프로필 → API keys 메뉴 진입",
-      "Create new secret key 클릭 → 키 복사",
-      "아래 OpenAI 카드에서 키 등록",
+      { action: "로그인", detail: "platform.openai.com" },
+      { action: "API keys 열기", detail: "우측 상단 프로필 메뉴" },
+      { action: "Create new secret key", detail: "생성 직후 한 번만 보이니 바로 복사" },
     ],
   },
   {
     provider: PROVIDER_META[1],
     steps: [
-      "console.anthropic.com 에 로그인",
-      "좌측 메뉴 → API Keys 진입",
-      "Create Key 클릭 → 키 복사",
-      "아래 Anthropic 카드에서 키 등록",
+      { action: "로그인", detail: "console.anthropic.com" },
+      { action: "API Keys 열기", detail: "좌측 사이드바 메뉴" },
+      { action: "Create Key", detail: "생성 직후 한 번만 보이니 바로 복사" },
     ],
   },
   {
     provider: PROVIDER_META[2],
     steps: [
-      "aistudio.google.com 에 로그인",
-      "좌측 메뉴 → Get API key 클릭",
-      "Create API key 클릭 → 키 복사",
-      "아래 Google 카드에서 키 등록",
+      { action: "로그인", detail: "aistudio.google.com" },
+      { action: "Get API key 열기", detail: "좌측 사이드바 메뉴" },
+      { action: "Create API key", detail: "프로젝트를 고르면 바로 발급된다" },
     ],
   },
 ];
@@ -241,7 +252,7 @@ const KeyGuide = () => {
       {open && (
         <div className="border-t border-line grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-line">
           {GUIDE_STEPS.map(({ provider, steps }) => (
-            <div key={provider.id} className="flex flex-col gap-2 px-5 py-4">
+            <div key={provider.id} className="flex flex-col gap-3 px-5 py-4">
               <div className="flex items-center justify-between">
                 <span className="text-[13px] font-semibold text-text-main">
                   {provider.name}
@@ -256,13 +267,26 @@ const KeyGuide = () => {
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
-              <ol className="flex flex-col gap-1.5">
-                {steps.map((step, i) => (
-                  <li key={i} className="flex items-start gap-1.5 text-[12px] text-text-sub leading-relaxed">
-                    <span className="shrink-0 w-2.5 text-[11px] font-medium text-text-sub/60 tabular-nums">
-                      {i + 1}
+              <ol className="flex flex-col gap-2.5">
+                {[
+                  ...steps,
+                  {
+                    action: "아래 카드에 등록",
+                    detail: `${provider.prefix} 로 시작하는 값`,
+                  },
+                ].map((step, i) => (
+                  <li key={step.action} className="flex items-start gap-2.5">
+                    <span className="shrink-0 mt-px font-mono text-[10px] tabular-nums text-text-sub/50">
+                      {String(i + 1).padStart(2, "0")}
                     </span>
-                    {step}
+                    <div className="min-w-0 flex flex-col gap-0.5">
+                      <span className="text-[12px] font-medium leading-snug text-text-main">
+                        {step.action}
+                      </span>
+                      <span className="text-[11px] leading-relaxed text-text-sub">
+                        {step.detail}
+                      </span>
+                    </div>
                   </li>
                 ))}
               </ol>
@@ -290,11 +314,22 @@ const Notice = () => (
 interface ProviderCardProps {
   provider: ProviderInfo;
   state: KeyState;
+  /** 키 등록 여부를 아직 모르는 상태. 등록/미등록 UI 대신 스켈레톤을 그린다. */
+  keyLoading: boolean;
+  /** 모델 카탈로그 로딩 중. 모델 칩 자리를 미리 잡아둔다. */
+  modelsLoading: boolean;
   onSave: (plain: string) => void;
   onRemove: () => void;
 }
 
-const ProviderCard = ({ provider, state, onSave, onRemove }: ProviderCardProps) => {
+const ProviderCard = ({
+  provider,
+  state,
+  keyLoading,
+  modelsLoading,
+  onSave,
+  onRemove,
+}: ProviderCardProps) => {
   const [editing, setEditing] = useState(false);
   const [plain, setPlain] = useState("");
   const [showKey, setShowKey] = useState(false);
@@ -334,27 +369,38 @@ const ProviderCard = ({ provider, state, onSave, onRemove }: ProviderCardProps) 
             <h3 className="text-[15px] font-semibold tracking-tight text-text-main">
               {provider.name}
             </h3>
-            {isRegistered && (
-              <span className="inline-flex items-center gap-1 px-2 h-5 rounded-full bg-success-bg text-success text-[11px] font-medium">
-                <Check className="w-3 h-3" />
-                등록됨
-              </span>
+            {keyLoading ? (
+              <Skeleton className="h-5 w-16 rounded-full" />
+            ) : (
+              isRegistered && (
+                <span className="inline-flex items-center gap-1 px-2 h-5 rounded-full bg-success-bg text-success text-[11px] font-medium">
+                  <Check className="w-3 h-3" />
+                  등록됨
+                </span>
+              )
             )}
           </div>
           <p className="text-[12px] text-text-sub leading-relaxed mb-2">
             {provider.description}
           </p>
-          {provider.models.length > 0 && (
+          {modelsLoading ? (
             <div className="flex flex-wrap gap-1.5">
-              {provider.models.map((model) => (
-                <span
-                  key={model.value}
-                  className="font-mono text-[11px] text-text-sub bg-bg-sub shadow-border px-1.5 h-5 inline-flex items-center rounded-DEFAULT"
-                >
-                  {model.label}
-                </span>
-              ))}
+              <Skeleton className="h-5 w-24" />
+              <Skeleton className="h-5 w-20" />
             </div>
+          ) : (
+            provider.models.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {provider.models.map((model) => (
+                  <span
+                    key={model.value}
+                    className="font-mono text-[11px] text-text-sub bg-bg-sub shadow-border px-1.5 h-5 inline-flex items-center rounded-DEFAULT"
+                  >
+                    {model.label}
+                  </span>
+                ))}
+              </div>
+            )
           )}
         </div>
         <a
@@ -371,7 +417,13 @@ const ProviderCard = ({ provider, state, onSave, onRemove }: ProviderCardProps) 
         </a>
       </div>
 
-      {!editing && isRegistered && (
+      {/* 등록 여부를 모르는 동안 "키 등록" 버튼을 먼저 그리면 등록된 키가 있는 사용자에게
+          버튼 → 마스킹된 키로 뒤집히는 깜빡임이 보인다. 그래서 같은 높이의 스켈레톤으로 대신한다. */}
+      {!editing && keyLoading && (
+        <Skeleton className="h-10 w-full rounded-DEFAULT" />
+      )}
+
+      {!editing && !keyLoading && isRegistered && (
         <div className="flex items-center justify-between gap-3 px-3 h-10 rounded-DEFAULT bg-bg-sub shadow-border">
           <div className="flex items-center gap-2 min-w-0 font-mono text-[12px] text-text-main">
             <span>{provider.prefix}</span>
@@ -413,7 +465,7 @@ const ProviderCard = ({ provider, state, onSave, onRemove }: ProviderCardProps) 
         </div>
       )}
 
-      {!editing && !isRegistered && (
+      {!editing && !keyLoading && !isRegistered && (
         <div className="flex justify-end">
           <Button size="sm" pill onClick={() => setEditing(true)}>
             키 등록

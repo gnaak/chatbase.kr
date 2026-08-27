@@ -27,6 +27,9 @@ class ServiceProvider:
         self._kakao_skill_service = None
         self._llm_service = None
         self._vector_store_service = None
+        self._payment_repo = None
+        self._payment_service = None
+        self._toss_service = None
         self._llm_model_repo = None
         self._llm_model_service = None
         self._openai_model_service = None
@@ -212,6 +215,31 @@ class ServiceProvider:
                 usage_service=self.usage_service,
             )
         return self._kakao_skill_service
+
+    @property
+    def toss_service(self):
+        if not self._toss_service:
+            from app.module.infra.toss.toss_service import TossService
+            self._toss_service = TossService()
+        return self._toss_service
+
+    @property
+    def payment_repo(self):
+        if not self._payment_repo:
+            from app.module.payment.payment_repository import PaymentRepository
+            self._payment_repo = PaymentRepository(self.db)
+        return self._payment_repo
+
+    @property
+    def payment_service(self):
+        if not self._payment_service:
+            from app.module.payment.payment_service import PaymentService
+            self._payment_service = PaymentService(
+                payment_repo=self.payment_repo,
+                user_repo=self.user_repo,
+                toss_service=self.toss_service,
+            )
+        return self._payment_service
 
     @property
     def llm_service(self):

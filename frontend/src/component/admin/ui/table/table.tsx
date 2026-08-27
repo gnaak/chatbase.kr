@@ -40,6 +40,7 @@ export interface Column {
  * @property className  외부 wrapper 커스텀 클래스
  * @property onRowClick 행 클릭 시 호출되는 콜백(row 전달)
  * @property rowCount 행 개수
+ * @property loading   데이터 로딩 중이면 빈 상태 대신 스켈레톤 행을 표시
  */
 interface TableProps {
   columns: Column[];
@@ -49,6 +50,7 @@ interface TableProps {
   className?: string;
   onRowClick?: (row: any) => void;
   rowCount?: number;
+  loading?: boolean;
   icon?: React.ReactNode;
 }
 
@@ -98,6 +100,7 @@ const Table = ({
   className = "",
   onRowClick,
   rowCount,
+  loading,
 }: TableProps) => {
   const rowSizeClass = sizeStyles[size];
   return (
@@ -116,6 +119,7 @@ const Table = ({
           rowSizeClass={rowSizeClass}
           striped={striped}
           rowCount={rowCount}
+          loading={loading}
           onRowClick={onRowClick}
         />
       </table>

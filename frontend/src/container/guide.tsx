@@ -14,7 +14,7 @@ const Guide = () => {
     <>
       <Topbar
         title="가이드"
-        description="API 키 등록 → 챗봇 만들기 → 사이트 임베드, 3분이면 끝납니다."
+        description="챗봇을 만들고 사이트에 붙이기까지 순서대로 안내합니다."
       />
 
       <div className="flex-1 overflow-y-auto px-8 md:px-12 py-8">
@@ -141,11 +141,13 @@ const Guide = () => {
               >
                 대화 내역
               </Link>{" "}
-              메뉴에서 모두 확인할 수 있습니다. 봇 응답이 어색하면 시스템
-              프롬프트 보강 → 학습 텍스트 추가 → 모델 변경 순서로 손보면 빠르게
-              개선됩니다.
+              메뉴에서 모두 확인할 수 있습니다.
             </p>
-            <div className="flex flex-wrap items-center gap-2 pt-1">
+            <p className="text-[13px] text-text-sub leading-relaxed">
+              봇 응답이 어색하면 시스템 프롬프트 보강 → 학습 텍스트 추가 → 모델
+              변경 순서로 손보면 빠르게 개선됩니다.
+            </p>
+            <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
               <Link
                 to="/dashboard/keys"
                 className="
@@ -174,9 +176,9 @@ interface StepProps {
 }
 
 const Step = ({ n, icon, title, tagline, children }: StepProps) => (
-  <section className="relative pl-14">
+  <section className="relative pl-12">
     {/* number badge */}
-    <div className="absolute left-0 top-0 w-9 h-9 rounded-full bg-text-main text-text-inverse flex items-center justify-center text-[13px] font-semibold ring-4 ring-bg">
+    <div className="absolute left-0 top-0.5 w-7 h-7 rounded-full bg-text-main text-text-inverse flex items-center justify-center text-[12px] font-semibold ring-4 ring-bg">
       {n}
     </div>
 

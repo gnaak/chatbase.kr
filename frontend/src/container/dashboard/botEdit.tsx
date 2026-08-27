@@ -19,6 +19,7 @@ import Field from "@/component/dashboard/ui/field";
 import Input from "@/component/dashboard/ui/input";
 import Textarea from "@/component/dashboard/ui/textarea";
 import Select, { SelectOption } from "@/component/dashboard/ui/select";
+import Skeleton from "@/component/dashboard/ui/skeleton";
 import LogoUpload from "@/component/dashboard/ui/logoUpload";
 import CodeBlock from "@/component/dashboard/ui/codeBlock";
 import ChatPreview from "@/component/dashboard/bot/chatPreview";
@@ -192,7 +193,7 @@ const BotEdit = () => {
   const [confirmKind, setConfirmKind] = useState<"toggle" | "delete" | null>(null);
   const [crawlUrl, setCrawlUrl] = useState("");
 
-  const { data: botDto } = useGet<BotDto>(
+  const { data: botDto, isLoading: botLoading } = useGet<BotDto>(
     `api/bot/${slug}`,
     ["bot", slug ?? "new"],
     !isNew,
@@ -303,6 +304,9 @@ const BotEdit = () => {
     try {
       if (isNew) {
         const created = await createMutation.mutateAsync(payload);
+        // 생성 응답을 그대로 캐시에 넣어둔다. 안 넣으면 상세로 넘어갈 때 이 봇을
+        // 처음부터 다시 받아오면서, 방금 채운 폼이 로딩 스켈레톤으로 한 번 사라진다.
+        queryClient.setQueryData(["bot", created.id], created);
         if (isOpenAIModel && form.trainingType === "file") {
           await uploadPendingFiles(created.id);
         }
@@ -358,6 +362,10 @@ const BotEdit = () => {
   };
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
+
+  // 기존 봇을 여는 경우, 값이 오기 전에 폼을 그리면 빈 입력창 → 채워진 입력창으로
+  // 화면 전체가 한 번 갈아치워진다. 값을 받은 뒤에 폼을 그린다.
+  if (!isNew && botLoading) return <BotEditSkeleton />;
 
   return (
     <>
@@ -751,6 +759,72 @@ A. 서울 본사 매장은 영업시간 내 방문 픽업이 가능합니다.`}
     </>
   );
 };
+
+/** 폼 한 줄(라벨 + 입력창 + 설명) 자리. Field 컴포넌트와 같은 간격을 쓴다. */
+const FieldSkeleton = ({ input = "h-9" }: { input?: string }) => (
+  <div className="flex flex-col gap-2">
+    <Skeleton className="h-[17px] w-28" />
+    <Skeleton className={`w-full rounded-comfy ${input}`} />
+    <Skeleton className="h-[15px] w-2/3" />
+  </div>
+);
+
+const SectionSkeleton = ({ children }: { children: React.ReactNode }) => (
+  <section className="flex flex-col gap-4">
+    <Skeleton className="h-[17px] w-24" />
+    <div className="flex flex-col gap-5">{children}</div>
+  </section>
+);
+
+/**
+ * 봇 편집 화면의 로딩 자리. 실제 폼과 같은 골격으로 그려서
+ * 데이터가 들어올 때 스크롤 위치나 섹션 위치가 튀지 않게 한다.
+ */
+const BotEditSkeleton = () => (
+  <>
+    <Topbar
+      title={<Skeleton className="h-[19px] w-40" />}
+      description={<Skeleton className="h-[15px] w-64 mt-1" />}
+      backTo="/dashboard"
+      actions={<Skeleton className="h-8 w-20 rounded-full" />}
+    />
+
+    <div className="flex-1 relative min-h-0">
+      <div className="h-full overflow-y-auto px-8 md:px-12 py-8">
+        <div className="flex flex-col gap-6 max-w-4xl mx-auto w-full">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {[0, 1, 2].map((i) => (
+              <Card
+                key={i}
+                variant="outline"
+                className="px-4 py-3.5 flex flex-col gap-1.5"
+              >
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-[22px] w-16" />
+              </Card>
+            ))}
+          </div>
+
+          <SectionSkeleton>
+            <FieldSkeleton input="h-16" />
+            <FieldSkeleton />
+            <FieldSkeleton />
+          </SectionSkeleton>
+
+          <SectionSkeleton>
+            <FieldSkeleton />
+            <FieldSkeleton input="h-[116px]" />
+          </SectionSkeleton>
+        </div>
+      </div>
+
+      {/* 미리보기 패널도 자리를 잡아둔다 — 나중에 튀어나오면 그게 또 깜빡임이다. */}
+      <div className="hidden lg:block absolute bottom-6 right-6 w-[480px] h-[760px] z-40 pointer-events-none">
+        <Skeleton className="w-full h-full rounded-comfy" />
+      </div>
+    </div>
+  </>
+);
 
 const Section = ({
   title,

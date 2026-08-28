@@ -1,4 +1,4 @@
-import { RefreshCw, AlertTriangle, Check } from "lucide-react";
+import { RefreshCw, AlertTriangle, Check, ExternalLink } from "lucide-react";
 import Button from "@/component/dashboard/ui/button";
 import Card from "@/component/dashboard/ui/card";
 import CodeBlock from "@/component/dashboard/ui/codeBlock";
@@ -11,18 +11,27 @@ interface KakaoConnectionDto {
   last_message_at: string | null;
 }
 
-const STEPS: { title: string; body: string }[] = [
+interface Step {
+  title: string;
+  body: string;
+  /** 해당 단계를 진행할 카카오 사이트. 있으면 바로가기 버튼을 붙인다. */
+  link?: { label: string; href: string };
+}
+
+const STEPS: Step[] = [
   {
     title: "카카오톡 채널 만들기",
-    body: "channel.kakao.com 에서 채널을 개설합니다. 본인인증이 필요해 대신 만들어 드릴 수 없습니다. 사업자등록증은 없어도 되고, 없으면 일반 채널로 개설됩니다.",
+    body: "카카오비즈니스 파트너센터에서 채널을 개설합니다. 본인인증이 필요해 대신 만들어 드릴 수 없습니다. 사업자등록증은 없어도 되며, 없으면 일반 채널로 개설됩니다.",
+    link: { label: "파트너센터 열기", href: "https://business.kakao.com" },
   },
   {
     title: "채널 홈 공개 켜기",
-    body: "채널 관리자센터의 채널 설정에서 '채널 홈 공개'를 켭니다. 꺼져 있으면 다음 단계의 오픈빌더에서 채널을 연결할 수 없습니다.",
+    body: "파트너센터의 채널 설정에서 '채널 홈 공개'를 켭니다. 꺼져 있으면 다음 단계의 오픈빌더에서 채널을 연결할 수 없습니다.",
   },
   {
     title: "카카오 i 오픈빌더에서 봇 생성",
-    body: "chatbot.kakao.com 에 로그인해 새 봇을 만듭니다.",
+    body: "챗봇 관리자센터에 로그인해 새 봇을 만듭니다.",
+    link: { label: "오픈빌더 열기", href: "https://chatbot.kakao.com" },
   },
   {
     title: "스킬 등록",
@@ -111,6 +120,23 @@ const KakaoConnect = ({ botId }: { botId: string }) => {
               <p className="text-[12px] text-text-sub mt-0.5 leading-relaxed">
                 {step.body}
               </p>
+              {step.link && (
+                <a
+                  href={step.link.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block mt-2"
+                >
+                  <Button
+                    size="sm"
+                    pill
+                    variant="secondary"
+                    rightIcon={<ExternalLink className="w-3 h-3" />}
+                  >
+                    {step.link.label}
+                  </Button>
+                </a>
+              )}
             </div>
           </li>
         ))}
@@ -131,8 +157,7 @@ const KakaoConnect = ({ botId }: { botId: string }) => {
           시크릿이 URL에 포함돼 있습니다. 외부에 공유하지 마세요. 카카오에서 온
           대화는 대화 로그에서 방문자 ID가{" "}
           <span className="font-mono text-text-main">kakao:</span> 로 시작합니다.
-          오픈빌더는 첫 이용 시 별도 신청·심사가 필요할 수 있고, 메뉴 이름도 버전에
-          따라 조금씩 다릅니다.
+          카카오 화면 구성과 메뉴 이름은 개편에 따라 조금씩 달라질 수 있습니다.
         </p>
       </div>
     </div>

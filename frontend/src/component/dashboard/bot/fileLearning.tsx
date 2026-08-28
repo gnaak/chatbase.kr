@@ -223,12 +223,14 @@ const FileItem = ({
       <ConfirmModal
         open={confirming}
         variant="danger"
+        icon={<Trash2 className="w-4 h-4" />}
         title="이 파일을 삭제할까요?"
         description={
           <>
-            <strong>{file.filename}</strong> 을(를) 학습 자료에서 제거합니다.
-            챗봇은 더 이상 이 문서의 내용으로 답하지 않습니다. 되돌릴 수 없으며,
-            다시 쓰려면 파일을 새로 올려야 합니다.
+            {/* break-all: 공백 없는 긴 파일명이 좁은 카드 밖으로 삐져나가지 않게. */}
+            <span className="text-text-main break-all">{file.filename}</span>
+            <br />
+            챗봇이 더 이상 이 문서로 답하지 않아요. 되돌릴 수 없어요.
           </>
         }
         confirmLabel="삭제"

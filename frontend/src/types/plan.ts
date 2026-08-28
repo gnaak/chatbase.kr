@@ -25,12 +25,28 @@ export interface PlanFeature {
   note?: string;
 }
 
+/**
+ * 하향 시 무엇을 잃는지 계산하기 위한 구조화된 한도.
+ * `features`는 화면 표시용 문장이라 비교에 쓸 수 없다.
+ *
+ * 백엔드 `app/core/utils/plan.py`의 `PlanLimits`와 값이 일치해야 한다.
+ * null = 무제한.
+ */
+export interface PlanLimits {
+  bots: number;
+  monthlyMessages: number | null;
+  fileLearning: boolean;
+  kakaoChannel: boolean;
+  historyDays: number | null;
+}
+
 export interface Plan {
   name: string;
   price: string;
   unit?: string;
   tagline: string;
   features: PlanFeature[];
+  limits: PlanLimits;
   cta: string;
   href: string;
   featured?: boolean;
@@ -49,6 +65,13 @@ export const PLANS: Plan[] = [
       { label: "대화 기록 7일" },
       { label: "파일 학습", off: true },
     ],
+    limits: {
+      bots: 1,
+      monthlyMessages: FREE_MONTHLY_MESSAGES,
+      fileLearning: false,
+      kakaoChannel: false,
+      historyDays: 7,
+    },
     cta: "무료로 시작",
     href: "/dashboard",
   },
@@ -64,6 +87,13 @@ export const PLANS: Plan[] = [
       { label: "대화 기록 90일" },
       { label: "Powered by 배지 제거" },
     ],
+    limits: {
+      bots: 3,
+      monthlyMessages: null,
+      fileLearning: true,
+      kakaoChannel: false,
+      historyDays: 90,
+    },
     cta: "시작하기",
     href: "/dashboard",
   },
@@ -79,11 +109,46 @@ export const PLANS: Plan[] = [
       { label: "대화 기록 무제한" },
       { label: "우선 지원" },
     ],
+    limits: {
+      bots: 10,
+      monthlyMessages: null,
+      fileLearning: true,
+      kakaoChannel: true,
+      historyDays: null,
+    },
     cta: "시작하기",
     href: "/dashboard",
     featured: true,
   },
 ];
+
+/**
+ * 상위 → 하위 플랜으로 갈 때 잃는 것들. 하향 확인창에서 미리 알려주는 데 쓴다.
+ *
+ * 특히 카카오톡은 이미 오픈빌더에 스킬 URL을 등록해둔 상태라, 알려주지 않으면
+ * 어느 날 갑자기 채널이 조용히 멈추고 주인은 방문자가 항의할 때까지 모른다.
+ */
+export const planLosses = (from: PlanLimits, to: PlanLimits): string[] => {
+  const losses: string[] = [];
+
+  if (from.kakaoChannel && !to.kakaoChannel) {
+    losses.push("카카오톡 채널 연동이 중단됩니다 (오픈빌더에 등록한 챗봇이 응답을 멈춥니다)");
+  }
+  if (from.fileLearning && !to.fileLearning) {
+    losses.push("파일 학습을 쓸 수 없습니다 (기존 업로드 파일도 답변에 사용되지 않습니다)");
+  }
+  if (to.bots < from.bots) {
+    losses.push(`챗봇을 ${to.bots}개까지만 만들 수 있습니다 (현재 한도 ${from.bots}개)`);
+  }
+  if (to.monthlyMessages !== null && from.monthlyMessages === null) {
+    losses.push(`월 대화가 ${to.monthlyMessages.toLocaleString()}건으로 제한됩니다`);
+  }
+  if (to.historyDays !== null && (from.historyDays === null || to.historyDays < from.historyDays)) {
+    losses.push(`대화 기록 보관이 ${to.historyDays}일로 줄어듭니다`);
+  }
+
+  return losses;
+};
 
 /** 구축(SI) 상품 — 플랜 카드가 아니라 하단 별도 블록으로 노출한다. */
 export const ENTERPRISE = {

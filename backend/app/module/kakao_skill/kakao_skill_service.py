@@ -52,6 +52,10 @@ CALLBACK_TIMEOUT_SECONDS = 60.0
 # 카카오가 동작을 되돌리거나 콘솔 값이 비어 있을 때를 대비해 그대로 보낸다.
 # 사용자에게 실제로 보이는 문구를 바꾸려면 오픈빌더 콘솔에서 수정해야 한다.
 WAITING_MESSAGE = "답변을 준비하고 있어요. 잠시만 기다려 주세요 🙂"
+# quickReplies 개수 상한. 카카오 제한이 10개다.
+MAX_QUICK_REPLIES = 10
+# 버튼 라벨 길이. 넘으면 카카오 UI에서 잘려서 무슨 질문인지 알 수 없다.
+MAX_QUICK_REPLY_LABEL = 14
 # simpleText 길이 상한 (카카오 제한에 여유를 둔 값)
 MAX_TEXT_LENGTH = 1000
 # 같은 카카오 사용자의 발화를 하나의 세션으로 묶는 시간
@@ -134,7 +138,60 @@ def to_kakao_text(markdown: str) -> str:
     return text or "죄송해요, 답변을 만들지 못했어요."
 
 
-def skill_response(text: str) -> JSONResponse:
+def quick_replies_for(bot) -> list[dict]:
+    """봇의 FAQ를 카카오 quickReplies(말풍선 아래 선택지 버튼)로 변환.
+
+    위젯은 인사말 아래 FAQ 버튼을 이미 쓰고 있다. 카카오도 같은 자료를 쓰게 해서
+    운영자가 FAQ를 한 번만 관리하면 두 채널에 다 반영되게 한다.
+
+    action "message"는 label을 누르면 messageText를 사용자 발화로 보낸다.
+    즉 다시 이 스킬로 들어오므로, 아래 FAQ 즉답 처리와 짝을 이룬다.
+    """
+    faqs = getattr(bot, "faqs", None) or []
+    replies = []
+    for faq in faqs[:MAX_QUICK_REPLIES]:
+        question = (faq.get("q") or "").strip()
+        if not question:
+            continue
+        replies.append(
+            {
+                "action": "message",
+                # 라벨이 길면 카카오 UI에서 잘린다. 발화로는 원문을 그대로 보낸다.
+                "label": question[:MAX_QUICK_REPLY_LABEL],
+                "messageText": question,
+            }
+        )
+    return replies
+
+
+def _match_faq(bot, utterance: str) -> str | None:
+    """발화가 FAQ 질문과 일치하면 준비된 답을 돌려준다.
+
+    선택지 버튼을 누르면 카카오가 그 질문을 사용자 발화로 다시 보내므로,
+    여기서 잡아 LLM 없이 즉답한다. 사용자가 직접 같은 문장을 타이핑한 경우도
+    같은 답이 나가는 게 맞다.
+    """
+    target = utterance.strip()
+    if not target:
+        return None
+    for faq in getattr(bot, "faqs", None) or []:
+        if (faq.get("q") or "").strip() == target:
+            answer = (faq.get("a") or "").strip()
+            if answer:
+                return answer
+    return None
+
+
+def _template(text: str, quick_replies: list[dict] | None = None) -> dict:
+    template: dict = {"outputs": [{"simpleText": {"text": text}}]}
+    if quick_replies:
+        template["quickReplies"] = quick_replies
+    return template
+
+
+def skill_response(
+    text: str, quick_replies: list[dict] | None = None
+) -> JSONResponse:
     """오픈빌더 SkillResponse.
 
     실패해도 200 + simpleText로 돌려준다. 4xx/5xx를 주면 오픈빌더가 원인을 감추고
@@ -142,10 +199,7 @@ def skill_response(text: str) -> JSONResponse:
     """
     return JSONResponse(
         status_code=200,
-        content={
-            "version": "2.0",
-            "template": {"outputs": [{"simpleText": {"text": text}}]},
-        },
+        content={"version": "2.0", "template": _template(text, quick_replies)},
     )
 
 
@@ -180,6 +234,7 @@ async def _answer_via_callback(bot_id: int, session_id: int, callback_url: str) 
     from app.module.user.user_repository import UserRepository
 
     text = "답변을 만들지 못했어요. 잠시 후 다시 물어봐 주세요."
+    quick_replies: list[dict] = []
     try:
         async with SessionLocal() as db:
             chat_repo = ChatRepository(db)
@@ -213,6 +268,8 @@ async def _answer_via_callback(bot_id: int, session_id: int, callback_url: str) 
                 await usage_service.record_message(bot)
                 await db.commit()
                 text = to_kakao_text(answer)
+                # 세션이 닫히기 전에 뽑아둔다. 아래 POST는 with 블록 밖이다.
+                quick_replies = quick_replies_for(bot)
     except Exception:
         logger.exception("kakao callback: 답변 생성 실패 bot=%s", bot_id)
 
@@ -220,10 +277,7 @@ async def _answer_via_callback(bot_id: int, session_id: int, callback_url: str) 
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.post(
                 callback_url,
-                json={
-                    "version": "2.0",
-                    "template": {"outputs": [{"simpleText": {"text": text}}]},
-                },
+                json={"version": "2.0", "template": _template(text, quick_replies)},
             )
         logger.info("kakao callback: 전송 완료 bot=%s status=%s", bot_id, resp.status_code)
     except Exception:
@@ -314,6 +368,7 @@ class KakaoSkillService:
                 )
                 return skill_response(visitor_unavailable_message(bot))
 
+        quick_replies = quick_replies_for(bot)
         session = await self._ensure_session(bot.id, _visitor_id(kakao_user_id))
 
         user_msg = ChatMessage(
@@ -322,6 +377,25 @@ class KakaoSkillService:
             content=utterance,
         )
         await self.chat_repo.add_message(user_msg)
+
+        # 선택지 버튼을 누른 경우 — 발화가 FAQ 질문과 정확히 일치한다.
+        # LLM을 부르지 않고 준비된 답을 바로 준다. 위젯의 FAQ 버튼과 동작을 맞추고,
+        # 5초 제한도 사용자 API 비용도 걸리지 않는다.
+        faq_answer = _match_faq(bot, utterance)
+        if faq_answer:
+            await self.chat_repo.add_message(
+                ChatMessage(
+                    session_id=session.id,
+                    role=MessageRole.BOT,
+                    content=faq_answer,
+                )
+            )
+            session.last_message_at = now_kst()
+            if self.usage_service:
+                await self.usage_service.record_message(bot)
+            await self.chat_repo.db.commit()
+            logger.info("kakao FAQ 즉답 bot=%s", bot.slug)
+            return skill_response(to_kakao_text(faq_answer), quick_replies)
 
         # 블록에서 Callback API를 켜두면 1회용 콜백 URL이 함께 온다.
         # 이때는 5초 제한을 안 받으므로, 즉시 대기 문구만 주고 답은 백그라운드에서 만든다.
@@ -351,7 +425,7 @@ class KakaoSkillService:
             await self.usage_service.record_message(bot)
         await self.chat_repo.db.commit()
 
-        return skill_response(to_kakao_text(answer))
+        return skill_response(to_kakao_text(answer), quick_replies)
 
     async def _ensure_session(self, bot_id: int, visitor_id: str) -> ChatSession:
         """TTL 안이면 직전 세션에 이어붙이고, 아니면 새로 만든다."""

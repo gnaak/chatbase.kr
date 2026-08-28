@@ -18,7 +18,7 @@ import UpgradeModal from "@/component/dashboard/billing/upgradeModal";
 import Skeleton from "@/component/dashboard/ui/skeleton";
 import { useGet, usePost } from "@/hooks/common/useAPI";
 import { useToast } from "@/hooks/common/useToast";
-import { ENTERPRISE, PLANS, type Plan } from "@/types/plan";
+import { ENTERPRISE, PLANS, planLosses, type Plan } from "@/types/plan";
 import { planToPlanName, type UsageSummary } from "@/types/usage";
 import {
   describeMethod,
@@ -291,6 +291,11 @@ const Billing = () => {
   const foundIdx = PLANS.findIndex((plan) => plan.name === currentPlanName);
   const currentIdx = foundIdx >= 0 ? foundIdx : 0;
   const currentPlan = PLANS[currentIdx];
+
+  // 하향 확인창에서 "무엇이 빠지는지" 미리 보여주기 위한 목록.
+  const downgradeLosses = downgradeTarget
+    ? planLosses(currentPlan.limits, downgradeTarget.limits)
+    : [];
 
   const limit = usage?.messages_limit ?? null;
   const used = usage?.messages_used ?? 0;
@@ -819,6 +824,22 @@ const Billing = () => {
             <br />
             다음 결제일부터 {downgradeTarget?.name} 요금으로 청구되며, 환불은
             없어요.
+            {/* 요금만 알려주면, 오픈빌더에 등록해둔 카카오톡 채널이 어느 날
+                조용히 멈추는 걸 주인이 모른 채로 하향하게 된다. */}
+            {downgradeLosses.length > 0 && (
+              <span className="block mt-3 pt-3 border-t border-line text-left">
+                <span className="block text-[12px] font-medium text-text-main mb-1.5">
+                  이때부터 아래 기능이 빠집니다
+                </span>
+                <span className="block text-[12px] text-text-sub leading-relaxed">
+                  {downgradeLosses.map((loss) => (
+                    <span key={loss} className="block">
+                      · {loss}
+                    </span>
+                  ))}
+                </span>
+              </span>
+            )}
           </>
         }
         confirmLabel="변경 예약"

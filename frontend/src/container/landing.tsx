@@ -12,7 +12,7 @@ const Landing = () => {
   useEffect(() => {
     const script = document.createElement("script");
     script.src = "https://chatbase.kr/widget.js";
-    script.setAttribute("data-bot-id", "keF3kZxTvTmHe9nl");
+    script.setAttribute("data-bot-id", "7Wno-wWPVQ-a02Sm");
     script.defer = true;
     document.body.appendChild(script);
     return () => {

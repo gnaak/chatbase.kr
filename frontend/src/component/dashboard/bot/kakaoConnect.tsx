@@ -14,7 +14,11 @@ interface KakaoConnectionDto {
 const STEPS: { title: string; body: string }[] = [
   {
     title: "카카오톡 채널 만들기",
-    body: "channel.kakao.com 에서 채널을 개설합니다. 사업자 정보와 본인인증이 필요해 대신 만들어 드릴 수 없습니다.",
+    body: "channel.kakao.com 에서 채널을 개설합니다. 본인인증이 필요해 대신 만들어 드릴 수 없습니다. 사업자등록증은 없어도 되고, 없으면 일반 채널로 개설됩니다.",
+  },
+  {
+    title: "채널 홈 공개 켜기",
+    body: "채널 관리자센터의 채널 설정에서 '채널 홈 공개'를 켭니다. 꺼져 있으면 다음 단계의 오픈빌더에서 채널을 연결할 수 없습니다.",
   },
   {
     title: "카카오 i 오픈빌더에서 봇 생성",
@@ -56,9 +60,6 @@ const KakaoConnect = ({ botId }: { botId: string }) => {
     );
   }
 
-  // 오픈빌더는 공인 https 주소만 스킬 URL로 받는다. 로컬/http면 등록 자체가 막힌다.
-  const isPublicUrl = data.skill_url.startsWith("https://");
-
   return (
     <div className="flex flex-col gap-4">
       <Card variant="outline" className="p-4 flex items-center justify-between gap-4">
@@ -97,19 +98,7 @@ const KakaoConnect = ({ botId }: { botId: string }) => {
         </Button>
       </Card>
 
-      <div className="flex flex-col gap-2">
-        <CodeBlock code={data.skill_url} language="skill url" />
-        {!isPublicUrl && (
-          <div className="flex items-start gap-2 px-3 py-2.5 rounded-comfy bg-warning-bg">
-            <AlertTriangle className="w-3.5 h-3.5 text-warning shrink-0 mt-0.5" />
-            <p className="text-[12px] text-text-main leading-relaxed">
-              오픈빌더는 공인 <span className="font-mono">https</span> 주소만 받습니다.
-              지금 주소는 등록할 수 없으니 배포 도메인이나 ngrok 같은 터널 주소가
-              필요합니다.
-            </p>
-          </div>
-        )}
-      </div>
+      <CodeBlock code={data.skill_url} language="skill url" />
 
       <ol className="flex flex-col gap-3">
         {STEPS.map((step, i) => (
@@ -127,13 +116,23 @@ const KakaoConnect = ({ botId }: { botId: string }) => {
         ))}
       </ol>
 
+      <div className="flex items-start gap-2 px-3 py-2.5 rounded-comfy bg-warning-bg">
+        <AlertTriangle className="w-3.5 h-3.5 text-warning shrink-0 mt-0.5" />
+        <p className="text-[12px] text-text-main leading-relaxed">
+          카카오는 스킬 응답을 <span className="font-mono">5초</span> 안에 받아야
+          합니다. 학습 자료가 많거나 답이 길면 시간을 넘겨 "다시 여쭤봐 주세요"로
+          안내될 수 있습니다. 자주 발생하면 더 빠른 모델로 바꿔보세요.
+        </p>
+      </div>
+
       <div className="flex items-start gap-2 px-3 py-2.5 rounded-comfy bg-bg-sub shadow-border">
         <Check className="w-3.5 h-3.5 text-text-sub shrink-0 mt-0.5" />
         <p className="text-[12px] text-text-sub leading-relaxed">
           시크릿이 URL에 포함돼 있습니다. 외부에 공유하지 마세요. 카카오에서 온
           대화는 대화 로그에서 방문자 ID가{" "}
           <span className="font-mono text-text-main">kakao:</span> 로 시작합니다.
-          오픈빌더 메뉴 이름은 버전에 따라 조금씩 다를 수 있습니다.
+          오픈빌더는 첫 이용 시 별도 신청·심사가 필요할 수 있고, 메뉴 이름도 버전에
+          따라 조금씩 다릅니다.
         </p>
       </div>
     </div>

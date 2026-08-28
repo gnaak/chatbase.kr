@@ -134,13 +134,19 @@ def skill_response(text: str) -> JSONResponse:
 
 
 def _base_url(request) -> str:
-    proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+    """대시보드에 표시할 스킬 URL의 절대 주소.
+
+    스킴은 https로 고정한다. 카카오는 http URL을 스킬로 등록조차 받아주지 않는데,
+    프록시가 넘기는 값은 믿을 수 없다 — nginx↔gunicorn은 평문이고, Cloudflare SSL이
+    Flexible이면 X-Forwarded-Proto마저 http로 온다. 이 URL이 쓰이는 곳은 공개
+    도메인뿐이므로 https 외의 값은 어차피 오답이다.
+    """
     host = (
         request.headers.get("x-forwarded-host")
         or request.headers.get("host")
         or request.url.netloc
-    )
-    return f"{proto}://{host}".rstrip("/")
+    ).split(",")[0].strip()
+    return f"https://{host}".rstrip("/")
 
 
 class KakaoSkillService:

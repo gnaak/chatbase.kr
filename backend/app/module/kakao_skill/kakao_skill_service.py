@@ -32,7 +32,7 @@ from app.module.chat.chat_session import ChatSession
 from app.module.infra.llm.llm_service import resolve_provider
 
 # 프롬프트 합성 규칙은 위젯과 반드시 같아야 하므로 chat_service를 SOT로 재사용한다.
-from app.module.usage.usage_service import PLAN_FEATURE_MESSAGE, QUOTA_MESSAGE
+from app.module.usage.usage_service import visitor_unavailable_message
 from app.module.chat.chat_service import (
     _build_system_prompt,
     _format_llm_error,
@@ -298,11 +298,21 @@ class KakaoSkillService:
             return skill_response("⚠️ 연결된 챗봇을 찾을 수 없거나 비활성 상태입니다.")
 
         # 오픈빌더에는 4xx를 주면 원인이 감춰지므로 200 + 안내 문구로 돌려준다.
+        # 여기서 답을 받는 상대는 봇 주인이 아니라 그 사람의 고객이므로
+        # 플랜/과금 문구를 그대로 내보내지 않는다. (아래 로그로 주인 쪽에 남긴다)
         if self.usage_service:
             if await self.usage_service.is_feature_blocked(bot, "kakao_channel"):
-                return skill_response(PLAN_FEATURE_MESSAGE)
+                logger.info(
+                    "kakao 차단(플랜에 카카오 채널 미포함) bot=%s user=%s",
+                    bot.slug, bot.user_id,
+                )
+                return skill_response(visitor_unavailable_message(bot))
             if await self.usage_service.is_blocked(bot):
-                return skill_response(QUOTA_MESSAGE)
+                logger.info(
+                    "kakao 차단(월 대화 한도 초과) bot=%s user=%s",
+                    bot.slug, bot.user_id,
+                )
+                return skill_response(visitor_unavailable_message(bot))
 
         session = await self._ensure_session(bot.id, _visitor_id(kakao_user_id))
 

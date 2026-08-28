@@ -20,6 +20,7 @@ interface SessionDto {
   visitor_id: string;
   started_at: string | null;
   last_message_at: string | null;
+  /** 세션의 마지막 메시지 */
   preview: string | null;
 }
 

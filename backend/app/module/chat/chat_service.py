@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from typing import AsyncGenerator
 
 from app.core.database.base import SessionLocal, now_kst
+from app.core.logging import get_logger
 from app.core.utils.response import fail, success
 from app.module.api_key.api_key import Provider
 from app.module.api_key.api_key_repository import ApiKeyRepository
@@ -16,7 +17,12 @@ from app.module.infra.llm.llm_service import (
     resolve_provider,
     strip_citations,
 )
-from app.module.usage.usage_service import QUOTA_MESSAGE, usage_service_for
+from app.module.usage.usage_service import (
+    usage_service_for,
+    visitor_unavailable_message,
+)
+
+logger = get_logger(__name__)
 
 
 def _resolve_effective_model(bot_model: str, override: str | None) -> str:
@@ -301,8 +307,14 @@ class ChatService:
                     return
 
                 # 스트림 시작 후엔 예외를 못 던지므로 SSE error로 알린다.
+                # 위젯 상대는 봇 주인이 아니라 그 사람의 고객이라, 우리 과금 문구를
+                # 그대로 내보내지 않는다. 주인 쪽에는 로그로 남긴다.
                 if await usage_service.is_blocked(bot):
-                    yield _sse("error", {"message": QUOTA_MESSAGE})
+                    logger.info(
+                        "위젯 차단(월 대화 한도 초과) bot=%s user=%s",
+                        bot.slug, bot.user_id,
+                    )
+                    yield _sse("error", {"message": visitor_unavailable_message(bot)})
                     return
 
                 if session_id:
@@ -647,14 +659,21 @@ class ChatService:
             )
             bot_id_to_slug = {b.id: b.slug for b in user_bots}
 
-        # preview = 첫 사용자 메시지
+        # preview = 마지막 "사용자" 질문.
+        # - 첫 질문이 아니라 마지막이어야 한다. 목록이 last_message_at 내림차순인데
+        #   첫 메시지를 보여주면 정렬 기준과 어긋나고, 대화가 길어져도 preview가
+        #   첫 질문에 멈춰 있다.
+        # - 봇 답변이 아니라 사용자 질문이어야 한다. 답변은 길어서 2줄 클램프에
+        #   잘리고 형식적인 문장이라 목록에서 세션 구분이 안 된다. 이 화면을 보는
+        #   목적도 "고객이 무엇을 묻는가"다.
+        last_messages = await self.chat_repo.find_last_messages(
+            [s.id for s in sessions], role=MessageRole.USER
+        )
+
         result = []
         for s in sessions:
-            msgs = await self.chat_repo.find_messages(s.id)
-            preview = next(
-                (m.content for m in msgs if m.role == MessageRole.USER), None
-            )
-            d = _session_to_dict(s, preview)
+            last = last_messages.get(s.id)
+            d = _session_to_dict(s, last.content if last else None)
             d["bot_id"] = bot_id_to_slug.get(s.bot_id)  # 외부엔 slug로 노출
             result.append(d)
         return success(data=result)

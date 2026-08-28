@@ -31,7 +31,13 @@ def setup_exceptions(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def unhandled_handler(request: Request, exc: Exception):
-        logger.error(f"Unhandled exception: {exc}")
+        # exc_info=True가 없으면 str(exc)만 남아 원인을 못 찾는다.
+        # 예외 메시지가 빈 경우 "Unhandled exception: " 한 줄로 끝난다.
+        logger.error(
+            f"Unhandled exception: {type(exc).__name__}: {exc} "
+            f"({request.method} {request.url.path})",
+            exc_info=True,
+        )
         body = BaseResponse(
             success=False,
             message="Internal Server Error",

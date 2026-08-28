@@ -10,5 +10,7 @@ __pycache__/
 migrations/
 
 alembic/README
-!alembic/versions/
-alembic/versions/*.py
+
+# alembic/versions/*.py는 추적한다.
+# 마이그레이션은 산출물이 아니라 소스코드다. 무시하면 서버에 파일이 안 가고
+# `alembic upgrade head`가 아무것도 안 해서 스키마가 조용히 뒤처진다.

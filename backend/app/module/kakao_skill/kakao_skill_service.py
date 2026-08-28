@@ -16,7 +16,12 @@ import re
 import time
 from datetime import timedelta
 
+import httpx
 from fastapi.responses import JSONResponse
+
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 from app.core.config.settings import settings
 from app.core.database.base import KST, now_kst
@@ -35,7 +40,13 @@ from app.module.chat.chat_service import (
 )
 
 # 오픈빌더 스킬 서버는 5초 안에 응답해야 한다. 네트워크 왕복분을 빼고 끊는다.
+# 블록에 Callback API를 켜두면 이 제한을 받지 않는다(아래 CALLBACK_TIMEOUT_SECONDS).
 SKILL_TIMEOUT_SECONDS = 4.3
+# 콜백 모드의 LLM 상한. 콜백 URL이 1분 유효하므로 전송 여유를 두고 끊는다.
+# 없으면 LLM이 멈췄을 때 사용자는 대기 문구 이후로 아무 답도 못 받는다.
+CALLBACK_TIMEOUT_SECONDS = 40.0
+# 콜백 모드에서 먼저 나가는 문구. 오픈빌더 콘솔의 "기본 응답 메시지"보다 이쪽이 우선한다.
+WAITING_MESSAGE = "답변을 준비하고 있어요. 잠시만 기다려 주세요 🙂"
 # simpleText 길이 상한 (카카오 제한에 여유를 둔 값)
 MAX_TEXT_LENGTH = 1000
 # 같은 카카오 사용자의 발화를 하나의 세션으로 묶는 시간
@@ -133,6 +144,87 @@ def skill_response(text: str) -> JSONResponse:
     )
 
 
+def callback_ack(text: str) -> JSONResponse:
+    """콜백 모드의 즉시 응답.
+
+    `useCallback: true`가 핵심이고, template을 같이 넣으면 무시된다.
+    data.text가 대기 중 사용자에게 보일 문구다.
+    """
+    return JSONResponse(
+        status_code=200,
+        content={"version": "2.0", "useCallback": True, "data": {"text": text}},
+    )
+
+
+async def _answer_via_callback(bot_id: int, session_id: int, callback_url: str) -> None:
+    """백그라운드에서 답을 만들어 콜백 URL로 밀어넣는다.
+
+    요청은 이미 응답을 끝냈으므로 그 DB 세션은 쓸 수 없다. 여기서 새로 연다.
+    콜백 URL은 1회용이라 어떤 경로로 끝나든 반드시 한 번은 POST해야 한다.
+    아무것도 안 보내면 사용자는 대기 문구만 본 채로 대화가 끊긴다.
+    """
+    # 순환 import 방지 — 모듈 로드 시점이 아니라 호출 시점에 가져온다.
+    from app.core.database.base import SessionLocal
+    from app.module.api_key.api_key_repository import ApiKeyRepository
+    from app.module.api_key.api_key_service import ApiKeyService
+    from app.module.bot.bot_repository import BotRepository
+    from app.module.chat.chat_repository import ChatRepository
+    from app.module.infra.llm.llm_service import LLMService
+    from app.module.usage.usage_repository import UsageRepository
+    from app.module.usage.usage_service import UsageService
+    from app.module.user.user_repository import UserRepository
+
+    text = "답변을 만들지 못했어요. 잠시 후 다시 물어봐 주세요."
+    try:
+        async with SessionLocal() as db:
+            chat_repo = ChatRepository(db)
+            bot_repo = BotRepository(db)
+            usage_service = UsageService(UsageRepository(db), UserRepository(db))
+
+            service = KakaoSkillService(
+                chat_repo=chat_repo,
+                bot_repo=bot_repo,
+                api_key_service=ApiKeyService(ApiKeyRepository(db)),
+                llm_service=LLMService(),
+                usage_service=usage_service,
+            )
+
+            bot = await bot_repo.find_by_id(bot_id)
+            session = await chat_repo.find_session(session_id)
+            if not bot or not session:
+                logger.error("kakao callback: bot=%s session=%s 없음", bot_id, session_id)
+            else:
+                answer = await service._generate(
+                    bot, session, timeout=CALLBACK_TIMEOUT_SECONDS
+                )
+                await chat_repo.add_message(
+                    ChatMessage(
+                        session_id=session.id,
+                        role=MessageRole.BOT,
+                        content=answer,
+                    )
+                )
+                session.last_message_at = now_kst()
+                await usage_service.record_message(bot)
+                await db.commit()
+                text = to_kakao_text(answer)
+    except Exception:
+        logger.exception("kakao callback: 답변 생성 실패 bot=%s", bot_id)
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                callback_url,
+                json={
+                    "version": "2.0",
+                    "template": {"outputs": [{"simpleText": {"text": text}}]},
+                },
+            )
+        logger.info("kakao callback: 전송 완료 bot=%s status=%s", bot_id, resp.status_code)
+    except Exception:
+        logger.exception("kakao callback: 전송 실패 bot=%s", bot_id)
+
+
 def _base_url(request) -> str:
     """대시보드에 표시할 스킬 URL의 절대 주소.
 
@@ -174,7 +266,7 @@ class KakaoSkillService:
             or ""
         ).strip()
         if not hmac.compare_digest(provided, issue_secret(bot_slug)):
-            print(f"[kakao] secret mismatch bot={bot_slug}")
+            logger.warning("kakao secret mismatch bot=%s", bot_slug)
             return skill_response(
                 "⚠️ 연결 시크릿이 올바르지 않습니다.\n"
                 "대시보드에서 스킬 URL을 다시 복사해 오픈빌더에 등록해 주세요."
@@ -216,6 +308,20 @@ class KakaoSkillService:
         )
         await self.chat_repo.add_message(user_msg)
 
+        # 블록에서 Callback API를 켜두면 1회용 콜백 URL이 함께 온다.
+        # 이때는 5초 제한을 안 받으므로, 즉시 대기 문구만 주고 답은 백그라운드에서 만든다.
+        callback_url = (user_request.get("callbackUrl") or "").strip()
+        if callback_url:
+            # 백그라운드는 별도 DB 세션을 쓴다. 방금 넣은 사용자 발화가 히스토리에
+            # 보이려면 여기서 먼저 확정해야 한다.
+            session.last_message_at = now_kst()
+            await self.chat_repo.db.commit()
+
+            asyncio.create_task(
+                _answer_via_callback(bot.id, session.id, callback_url)
+            )
+            return callback_ack(WAITING_MESSAGE)
+
         answer = await self._generate(bot, session)
 
         await self.chat_repo.add_message(
@@ -252,7 +358,9 @@ class KakaoSkillService:
             last = KST.localize(last)
         return (now_kst() - last) > timedelta(hours=SESSION_TTL_HOURS)
 
-    async def _generate(self, bot, session: ChatSession) -> str:
+    async def _generate(
+        self, bot, session: ChatSession, timeout: float = SKILL_TIMEOUT_SECONDS
+    ) -> str:
         provider = resolve_provider(bot.model)
         api_key = await self.api_key_service.get_decrypted_key(bot.user_id, provider) or ""
 
@@ -279,23 +387,26 @@ class KakaoSkillService:
                     vector_store_id=vec_id,
                     enable_web_search=_should_enable_web_search(bot),
                 ),
-                timeout=SKILL_TIMEOUT_SECONDS,
+                timeout=timeout,
             )
         except asyncio.TimeoutError:
             elapsed = time.perf_counter() - started
-            print(
-                f"[kakao] TIMEOUT bot={bot.slug} model={bot.model} elapsed={elapsed:.2f}s"
+            logger.warning(
+                "kakao TIMEOUT bot=%s model=%s elapsed=%.2fs limit=%.1fs",
+                bot.slug, bot.model, elapsed, timeout,
             )
             return (
                 "답변을 만드는 데 시간이 조금 더 필요해요.\n"
                 "한 번만 더 여쭤봐 주시겠어요?"
             )
         except Exception as exc:
-            print(f"[kakao] LLM call failed bot={bot.slug}: {exc}")
+            logger.exception("kakao LLM 호출 실패 bot=%s", bot.slug)
             return _format_llm_error(provider.value, exc)
 
         elapsed = time.perf_counter() - started
-        print(f"[kakao] ok bot={bot.slug} model={bot.model} elapsed={elapsed:.2f}s")
+        logger.info(
+            "kakao ok bot=%s model=%s elapsed=%.2fs", bot.slug, bot.model, elapsed
+        )
 
         if not answer.strip():
             return bot.fallback or "죄송해요, 질문을 이해하지 못했어요. 다시 한번 말씀해 주시겠어요?"

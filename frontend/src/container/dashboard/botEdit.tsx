@@ -289,14 +289,29 @@ const BotEdit = () => {
     if (!pendingFiles.length) return;
     const fd = new FormData();
     pendingFiles.forEach((f) => fd.append("files", f));
-    const res = await fetch(`${baseURL}/api/bot/${targetSlug}/files`, {
-      method: "POST",
-      credentials: "include",
-      body: fd,
-    });
-    if (!res.ok) throw new Error(`파일 업로드 실패 (status: ${res.status})`);
-    queryClient.invalidateQueries({ queryKey: ["bot-files", targetSlug] });
-    setPendingFiles([]);
+
+    try {
+      const res = await fetch(`${baseURL}/api/bot/${targetSlug}/files`, {
+        method: "POST",
+        credentials: "include",
+        body: fd,
+      });
+      if (!res.ok) {
+        // 서버는 "유료 플랜 전용", "OpenAI 모델만 가능" 같은 구체적인 이유를 준다.
+        // status만 보여주면 사용자가 원인을 알 방법이 없다.
+        const reason = await res
+          .json()
+          .then((body) => body?.message)
+          .catch(() => null);
+        throw new Error(reason || `파일 업로드 실패 (status: ${res.status})`);
+      }
+      setPendingFiles([]);
+    } finally {
+      // 성공/실패와 무관하게 서버 상태를 다시 읽는다.
+      // 업로드가 오래 걸려 클라이언트만 끊긴 경우, 서버에는 파일이 정상 저장돼
+      // 있는데 목록이 그대로라 아무 일도 없었던 것처럼 보인다.
+      queryClient.invalidateQueries({ queryKey: ["bot-files", targetSlug] });
+    }
   };
 
   const handleSave = async () => {
@@ -459,10 +474,11 @@ const BotEdit = () => {
               count={form.greeting.length}
               max={500}
             >
-              <Input
+              <Textarea
+                rows={3}
                 value={form.greeting}
                 onChange={(e) => update("greeting", e.target.value)}
-                placeholder="안녕하세요! ABC상사 고객지원 봇입니다. 영업시간·환불·배송 등 무엇이든 물어보세요."
+                placeholder={`안녕하세요! ABC상사 고객지원 봇입니다 👋\n영업시간·환불·배송 등 무엇이든 물어보세요.`}
                 maxLength={500}
               />
             </Field>

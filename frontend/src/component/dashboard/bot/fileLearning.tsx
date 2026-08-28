@@ -1,6 +1,7 @@
 import { ChangeEvent, DragEvent, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Upload, FileText, Trash2, X } from "lucide-react";
+import ConfirmModal from "@/component/dashboard/ui/confirmModal";
 import { useDelete, useGet } from "@/hooks/common/useAPI";
 import { useToast } from "@/hooks/common/useToast";
 
@@ -178,12 +179,15 @@ const FileItem = ({
   onDeleted: () => void;
 }) => {
   const toast = useToast();
+  const [confirming, setConfirming] = useState(false);
   const deleteMutation = useDelete<void>(`api/bot/${slug}/files/${file.id}`);
 
   const handleRemove = async () => {
+    setConfirming(false);
     try {
       await deleteMutation.mutateAsync();
       onDeleted();
+      toast.success(`${file.filename} 삭제됨`);
     } catch (err) {
       const e = err as { message?: string; status?: number };
       console.error("file delete failed", e);
@@ -192,28 +196,46 @@ const FileItem = ({
   };
 
   return (
-    <li className="flex items-center gap-3 px-3 py-2 rounded-DEFAULT shadow-border bg-bg-card">
-      <FileText className="w-4 h-4 text-text-sub shrink-0" />
-      <div className="flex-1 min-w-0">
-        <div className="text-[13px] font-medium text-text-main truncate">
-          {file.filename}
+    <>
+      <li className="flex items-center gap-3 px-3 py-2 rounded-DEFAULT shadow-border bg-bg-card">
+        <FileText className="w-4 h-4 text-text-sub shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="text-[13px] font-medium text-text-main truncate">
+            {file.filename}
+          </div>
+          <div className="text-[11px] text-text-sub">{formatBytes(file.size)}</div>
         </div>
-        <div className="text-[11px] text-text-sub">{formatBytes(file.size)}</div>
-      </div>
-      <button
-        type="button"
-        onClick={handleRemove}
-        aria-label="파일 삭제"
-        disabled={deleteMutation.isPending}
-        className="
-          inline-flex items-center justify-center w-7 h-7 rounded-full
-          text-text-sub hover:text-point-red hover:bg-bg-hover
-          transition-colors disabled:opacity-50
-        "
-      >
-        <Trash2 className="w-3.5 h-3.5" />
-      </button>
-    </li>
+        <button
+          type="button"
+          onClick={() => setConfirming(true)}
+          aria-label="파일 삭제"
+          disabled={deleteMutation.isPending}
+          className="
+            inline-flex items-center justify-center w-7 h-7 rounded-full
+            text-text-sub hover:text-point-red hover:bg-bg-hover
+            transition-colors disabled:opacity-50
+          "
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </li>
+
+      <ConfirmModal
+        open={confirming}
+        variant="danger"
+        title="이 파일을 삭제할까요?"
+        description={
+          <>
+            <strong>{file.filename}</strong> 을(를) 학습 자료에서 제거합니다.
+            챗봇은 더 이상 이 문서의 내용으로 답하지 않습니다. 되돌릴 수 없으며,
+            다시 쓰려면 파일을 새로 올려야 합니다.
+          </>
+        }
+        confirmLabel="삭제"
+        onConfirm={handleRemove}
+        onCancel={() => setConfirming(false)}
+      />
+    </>
   );
 };
 

@@ -190,6 +190,8 @@ const BotEdit = () => {
   const [form, setForm] = useState<BotForm>(DEFAULT_FORM);
   const [active, setActive] = useState(true);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  /** 파일 업로드 + OpenAI 인덱싱 대기 구간. 저장 버튼을 계속 잡아둔다. */
+  const [uploading, setUploading] = useState(false);
   const [confirmKind, setConfirmKind] = useState<"toggle" | "delete" | null>(null);
   const [crawlUrl, setCrawlUrl] = useState("");
 
@@ -287,6 +289,10 @@ const BotEdit = () => {
 
   const uploadPendingFiles = async (targetSlug: string) => {
     if (!pendingFiles.length) return;
+    // 업로드는 createMutation/updateMutation이 끝난 뒤에 돈다. 그 mutation의
+    // isPending만 보면 이 구간에서 버튼이 "저장"으로 돌아가 다 끝난 것처럼 보이고,
+    // 사용자가 새로고침해 업로드를 중단시킨다. OpenAI 인덱싱 대기라 40초도 걸린다.
+    setUploading(true);
     const fd = new FormData();
     pendingFiles.forEach((f) => fd.append("files", f));
 
@@ -307,6 +313,7 @@ const BotEdit = () => {
       }
       setPendingFiles([]);
     } finally {
+      setUploading(false);
       // 성공/실패와 무관하게 서버 상태를 다시 읽는다.
       // 업로드가 오래 걸려 클라이언트만 끊긴 경우, 서버에는 파일이 정상 저장돼
       // 있는데 목록이 그대로라 아무 일도 없었던 것처럼 보인다.
@@ -376,7 +383,10 @@ const BotEdit = () => {
     }
   };
 
-  const isSaving = createMutation.isPending || updateMutation.isPending;
+  // 파일 업로드까지 끝나야 진짜 저장 완료다. uploading을 빼면 OpenAI 인덱싱
+  // 대기 구간에서 버튼이 되살아나 사용자가 끝난 줄 알고 페이지를 떠난다.
+  const isSaving =
+    createMutation.isPending || updateMutation.isPending || uploading;
 
   // 기존 봇을 여는 경우, 값이 오기 전에 폼을 그리면 빈 입력창 → 채워진 입력창으로
   // 화면 전체가 한 번 갈아치워진다. 값을 받은 뒤에 폼을 그린다.
@@ -400,7 +410,11 @@ const BotEdit = () => {
             onClick={handleSave}
             disabled={!form.name.trim() || !form.model || isSaving}
           >
-            {isSaving ? "저장 중..." : "저장"}
+            {uploading
+              ? "파일 학습 중..."
+              : isSaving
+                ? "저장 중..."
+                : "저장"}
           </Button>
         }
       />

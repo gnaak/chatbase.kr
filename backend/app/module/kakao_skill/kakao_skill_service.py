@@ -42,9 +42,10 @@ from app.module.chat.chat_service import (
 # 오픈빌더 스킬 서버는 5초 안에 응답해야 한다. 네트워크 왕복분을 빼고 끊는다.
 # 블록에 Callback API를 켜두면 이 제한을 받지 않는다(아래 CALLBACK_TIMEOUT_SECONDS).
 SKILL_TIMEOUT_SECONDS = 4.3
-# 콜백 모드의 LLM 상한. 콜백 URL이 1분 유효하므로 전송 여유를 두고 끊는다.
-# 없으면 LLM이 멈췄을 때 사용자는 대기 문구 이후로 아무 답도 못 받는다.
-CALLBACK_TIMEOUT_SECONDS = 40.0
+# 콜백 모드의 LLM 상한. 오픈빌더 콜백 설정 화면 기준 callbackUrl은 최대 5분 유효하다.
+# 5분을 다 쓰지 않는 이유는 사용자 인내심 쪽이 먼저 바닥나기 때문이고,
+# 상한 자체가 필요한 이유는 LLM이 멈췄을 때 대기 문구 이후로 아무 답도 못 받게 되기 때문이다.
+CALLBACK_TIMEOUT_SECONDS = 60.0
 # 콜백 모드에서 먼저 나가는 문구. 오픈빌더 콘솔의 "기본 응답 메시지"보다 이쪽이 우선한다.
 WAITING_MESSAGE = "답변을 준비하고 있어요. 잠시만 기다려 주세요 🙂"
 # simpleText 길이 상한 (카카오 제한에 여유를 둔 값)

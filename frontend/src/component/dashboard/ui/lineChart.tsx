@@ -24,10 +24,19 @@ interface LineChartProps {
   className?: string;
 }
 
-// viewBox 좌표계. 실제 크기는 CSS가 정하고 이 안에서 비율로 그린다.
-const W = 600;
-const H = 200;
-const PAD = { top: 24, right: 12, bottom: 28, left: 36 };
+/*
+ * viewBox 폭을 실제 렌더 폭(통계 카드 내부 ≈ 856px)에 맞춰둔다.
+ *
+ * 이 값이 실제보다 작으면 SVG 전체가 확대되면서 **글씨와 점도 같이 커진다.**
+ * 예전에 600으로 두었을 때 1.43배가 되어 `9px` 라벨이 화면에서 13px로 찍혔고,
+ * 본문 글씨와 같은 크기가 되어 축 라벨이 튀어 보였다.
+ *
+ * 이제 아래 px 값들은 (전체 폭에서) 화면 픽셀과 거의 일치한다 — 조정할 때
+ * 눈에 보이는 크기로 생각하면 된다. 좁은 화면에서는 비율대로 함께 작아진다.
+ */
+const W = 860;
+const H = 210;
+const PAD = { top: 22, right: 12, bottom: 26, left: 38 };
 const PLOT_W = W - PAD.left - PAD.right;
 const PLOT_H = H - PAD.top - PAD.bottom;
 
@@ -35,6 +44,18 @@ const PLOT_H = H - PAD.top - PAD.bottom;
 const MAX_X_LABELS = 8;
 /** 점 위에 숫자를 상시 표시하는 최대 개수. 넘으면 겹쳐서 못 읽는다. */
 const MAX_VALUE_LABELS = 12;
+
+const DOT_R = 2.5;
+/** 점이 많으면 선이 점으로 뒤덮인다. */
+const DOT_R_DENSE = 1.5;
+const DENSE_THRESHOLD = 20;
+/** hover 표시는 점을 키우지 않고 링을 씌운다 — 크기가 튀지 않아 덜 산만하다. */
+const RING_R = 5;
+
+/** 축·값 라벨 크기. 본문(12~13px)보다 확실히 작아야 보조 정보로 읽힌다. */
+const FONT_AXIS = 9.5;
+const FONT_VALUE = 9.5;
+const FONT_TIP = 10.5;
 
 /** 눈금이 3, 7 같은 어정쩡한 값이 되지 않게 위로 올림. */
 const niceMax = (max: number): number => {
@@ -73,8 +94,14 @@ const LineChart = ({ points, unit = "건", className }: LineChartProps) => {
   const showValues = n <= MAX_VALUE_LABELS;
   const active = hover !== null ? coords[hover] : null;
 
-  // 툴팁이 좌우로 잘리지 않게 x를 안쪽으로 당긴다.
-  const TIP_W = 96;
+  const tipText = active
+    ? `${active.title ?? active.label} · ${active.value}${unit}`
+    : "";
+  // 내용에 맞춰 폭을 잡는다. 고정 폭으로 두면 "2026년 8월 · 123건" 같은
+  // 긴 라벨이 상자 밖으로 넘친다. 한글은 폭이 넓어 넉넉하게 계산한다.
+  const TIP_W = Math.max(72, tipText.length * 7 + 18);
+  const TIP_H = 20;
+  // 좌우로 잘리지 않게 x를 안쪽으로 당긴다.
   const tipX = active
     ? Math.min(Math.max(active.x - TIP_W / 2, 2), W - TIP_W - 2)
     : 0;
@@ -107,7 +134,8 @@ const LineChart = ({ points, unit = "건", className }: LineChartProps) => {
                 x={PAD.left - 8}
                 y={y + 3}
                 textAnchor="end"
-                className="fill-text-sub font-mono text-[9px]"
+                className="fill-text-sub font-mono"
+                style={{ fontSize: FONT_AXIS }}
               >
                 {Math.round(top * ratio)}
               </text>
@@ -150,15 +178,28 @@ const LineChart = ({ points, unit = "건", className }: LineChartProps) => {
                 x={c.x}
                 y={c.y - 8}
                 textAnchor="middle"
-                className="fill-text-main text-[9px] font-semibold"
+                className="fill-text-main font-semibold"
+                style={{ fontSize: FONT_VALUE }}
               >
                 {c.value}
               </text>
             )}
+            {hover === i && (
+              <circle
+                cx={c.x}
+                cy={c.y}
+                r={RING_R}
+                fill="none"
+                stroke="currentColor"
+                strokeOpacity={0.35}
+                strokeWidth={1.5}
+                vectorEffect="non-scaling-stroke"
+              />
+            )}
             <circle
               cx={c.x}
               cy={c.y}
-              r={hover === i ? 4 : n > 30 ? 1.5 : 2.5}
+              r={n > DENSE_THRESHOLD ? DOT_R_DENSE : DOT_R}
               fill="currentColor"
             />
 
@@ -168,7 +209,8 @@ const LineChart = ({ points, unit = "건", className }: LineChartProps) => {
                 x={c.x}
                 y={H - 9}
                 textAnchor={i === 0 ? "start" : i === n - 1 ? "end" : "middle"}
-                className="fill-text-sub font-mono text-[9px]"
+                className="fill-text-sub font-mono"
+                style={{ fontSize: FONT_AXIS }}
               >
                 {c.label}
               </text>
@@ -201,10 +243,10 @@ const LineChart = ({ points, unit = "건", className }: LineChartProps) => {
           <g pointerEvents="none">
             <rect
               x={tipX}
-              y={2}
+              y={0}
               width={TIP_W}
-              height={18}
-              rx={4}
+              height={TIP_H}
+              rx={5}
               className="fill-bg-card"
               stroke="currentColor"
               strokeOpacity={0.15}
@@ -213,11 +255,13 @@ const LineChart = ({ points, unit = "건", className }: LineChartProps) => {
             />
             <text
               x={tipX + TIP_W / 2}
-              y={14}
+              y={TIP_H / 2}
+              dominantBaseline="central"
               textAnchor="middle"
-              className="fill-text-main text-[10px]"
+              className="fill-text-main"
+              style={{ fontSize: FONT_TIP }}
             >
-              {`${active.title ?? active.label} · ${active.value}${unit}`}
+              {tipText}
             </text>
           </g>
         )}

@@ -4,12 +4,39 @@ chat_service에서 보는 통합 진입점이며, 모델 prefix로 provider를 �
 infra/openai, infra/anthropic, infra/gemini로 라우팅한다.
 """
 
+import re
 from typing import AsyncGenerator
 
 from app.module.api_key.api_key import Provider
 from app.module.infra.anthropic.chat_service import AnthropicChatService
 from app.module.infra.gemini.chat_service import GeminiChatService
 from app.module.infra.openai.chat_service import OpenAIChatService
+
+# ── 출처 마커 제거 ────────────────────────────
+# 벡터 스토어(file_search)를 붙이면 OpenAI가 답변 본문에 출처 토큰을 심어 보낸다.
+# 걸러내지 않으면 "...포함됩니다 fileciteturn0file1turn0file3" 처럼 그대로 노출된다.
+# 구분자가 사설 사용 영역(U+E000~U+F8FF) 문자라 화면에서는 안 보이고 텍스트만 남는다.
+_PUA = r"[-]"
+_CITATION_PATTERNS = [
+    # fileciteturn0file1 및 구분자가 빠진 변형
+    re.compile(rf"{_PUA}*(?:file)?cite{_PUA}*(?:turn\d+\w*{_PUA}*)+"),
+    # 구형 annotation 표기: 【4:0†source】
+    re.compile(r"【\d+(?::\d+)?†[^】]*】"),
+    # 위에서 못 걷어낸 잔여 사설 영역 문자
+    re.compile(_PUA),
+]
+
+
+def strip_citations(text: str) -> str:
+    """LLM 답변에서 출처 마커를 제거한다."""
+    if not text:
+        return text
+    for pattern in _CITATION_PATTERNS:
+        text = pattern.sub("", text)
+    # 마커가 있던 자리에 생긴 이중 공백 정리. 줄바꿈은 건드리지 않는다.
+    text = re.sub(r"[ \t]{2,}", " ", text)
+    return re.sub(r"[ \t]+(?=[.,!?]|\n|$)", "", text)
+
 
 MODEL_PROVIDER_MAP = {
     "gpt-": Provider.OPENAI,
@@ -114,4 +141,5 @@ class LLMService:
             enable_web_search,
         ):
             chunks.append(chunk)
-        return "".join(chunks)
+        # 델타 경계에 마커가 걸릴 수 있으므로 조립이 끝난 뒤에 한 번만 지운다.
+        return strip_citations("".join(chunks))

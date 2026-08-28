@@ -11,7 +11,11 @@ from app.module.bot.bot_repository import BotRepository
 from app.module.chat.chat_message import ChatMessage, MessageRole
 from app.module.chat.chat_repository import ChatRepository
 from app.module.chat.chat_session import ChatSession
-from app.module.infra.llm.llm_service import LLMService, resolve_provider
+from app.module.infra.llm.llm_service import (
+    LLMService,
+    resolve_provider,
+    strip_citations,
+)
 from app.module.usage.usage_service import QUOTA_MESSAGE, usage_service_for
 
 
@@ -384,6 +388,10 @@ class ChatService:
                     full_text = bot.fallback or "죄송합니다. 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
                     yield _sse("chunk", {"text": full_text})
 
+                # 스트림에는 출처 마커가 섞여 나간다. 저장본까지 그대로 두면
+                # 대화 로그에 남고, 다음 턴에 히스토리로 LLM에 되먹여진다.
+                full_text = strip_citations(full_text)
+
                 bot_msg = ChatMessage(
                     session_id=session.id,
                     role=MessageRole.BOT,
@@ -525,6 +533,8 @@ class ChatService:
                 if not full_text.strip():
                     full_text = (preview_bot.fallback or "").strip() or "죄송합니다. 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
                     yield _sse("chunk", {"text": full_text})
+
+                full_text = strip_citations(full_text)
 
                 bot_msg = ChatMessage(
                     session_id=session.id,

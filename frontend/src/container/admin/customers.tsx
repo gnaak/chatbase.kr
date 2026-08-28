@@ -7,6 +7,8 @@ interface UserDto {
   email: string;
   name: string;
   active: boolean;
+  /** 게이팅이 보는 실제 권한. 구독 상태와의 대조는 결제 관리 화면에서 한다. */
+  plan: string;
   created_at: string | null;
   last_login_at: string | null;
   bot_count: number;
@@ -14,8 +16,14 @@ interface UserDto {
   session_count: number;
 }
 
+/** 유료 플랜만 색을 준다. FREE가 대다수라 전부 칠하면 표가 시끄러워진다. */
+const PLAN_CLASS: Record<string, string> = {
+  premium: "bg-info-bg text-point-blue",
+  standard: "bg-success-bg text-point-green",
+};
+
 const formatDate = (iso: string | null) =>
-  iso ? new Date(iso).toLocaleString("ko-KR", { hour12: false }) : "—";
+  iso ? new Date(iso).toLocaleString("ko-KR", { hour12: false }) : "-";
 
 const AdminCustomers = () => {
   const { data: users, isLoading } = useGet<UserDto[]>("api/admin/users", [
@@ -41,6 +49,22 @@ const AdminCustomers = () => {
         ),
       },
       {
+        key: "plan",
+        header: "플랜",
+        width: "100px",
+        align: "center",
+        render: (r: UserDto) => (
+          <span
+            className={[
+              "inline-flex items-center px-1.5 h-5 rounded text-[11px] font-medium",
+              PLAN_CLASS[r.plan] ?? "bg-bg-sub text-text-sub",
+            ].join(" ")}
+          >
+            {(r.plan ?? "free").toUpperCase()}
+          </span>
+        ),
+      },
+      {
         key: "key_providers",
         header: "등록 키",
         width: "180px",
@@ -58,7 +82,7 @@ const AdminCustomers = () => {
               ))}
             </div>
           ) : (
-            <span className="text-text-disabled text-[11px]">—</span>
+            <span className="text-text-disabled text-[11px]">-</span>
           ),
       },
       {
@@ -130,7 +154,7 @@ const AdminCustomers = () => {
             고객 관리
           </h1>
           <p className="text-[13px] text-text-sub mt-1">
-            전체 사용자 · 봇 수 · 등록 키 provider · 누적 세션 수
+            전체 사용자 · 플랜 · 봇 수 · 등록 키 provider · 누적 세션 수
           </p>
         </div>
         {users && (

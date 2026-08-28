@@ -121,9 +121,18 @@ class UsageService:
         rows = await self.usage_repo.by_bot_for_user(user.id, year_month)
         limit = limits.monthly_messages
 
+        # 플랜에 카카오가 없는데 과거 유입 이력이 있으면 = 쓰다가 끊긴 사람.
+        # 플랜에 포함돼 있으면 물어볼 필요가 없어 쿼리를 아낀다.
+        kakao_in_use = (
+            False
+            if limits.kakao_channel
+            else await self.usage_repo.kakao_in_use(user.id)
+        )
+
         return success(
             data={
                 "plan": plan.value,
+                "kakao_in_use": kakao_in_use,
                 "year_month": year_month,
                 "messages_used": used,
                 "messages_limit": limit,

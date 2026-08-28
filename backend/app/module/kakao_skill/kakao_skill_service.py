@@ -35,7 +35,7 @@ from app.module.infra.llm.llm_service import resolve_provider
 from app.module.usage.usage_service import visitor_unavailable_message
 from app.module.chat.chat_service import (
     _build_system_prompt,
-    _format_llm_error,
+    VISITOR_LLM_ERROR_MESSAGE,
     _should_enable_web_search,
 )
 
@@ -340,13 +340,6 @@ class KakaoSkillService:
         utterance = (user_request.get("utterance") or "").strip()
         kakao_user_id = ((user_request.get("user") or {}).get("id") or "").strip()
 
-        if not utterance:
-            return skill_response("무엇을 도와드릴까요?")
-        if not kakao_user_id:
-            return skill_response(
-                "⚠️ 카카오 사용자 정보를 받지 못했습니다. 실제 카카오톡 채널에서 다시 시도해 주세요."
-            )
-
         bot = await self.bot_repo.find_by_slug(bot_slug)
         if not bot or not bot.active:
             return skill_response("⚠️ 연결된 챗봇을 찾을 수 없거나 비활성 상태입니다.")
@@ -369,6 +362,20 @@ class KakaoSkillService:
                 return skill_response(visitor_unavailable_message(bot))
 
         quick_replies = quick_replies_for(bot)
+
+        # 발화가 없는 요청 — 오픈빌더 웰컴 블록에 스킬을 붙인 경우가 여기로 온다.
+        # 인사 메시지는 위젯에서 클라이언트가 꽂는 값이라 카카오로 안 간다.
+        # 여기서 같은 문구를 내보내야 채널에서도 첫 화면에 인사말과 선택지가 뜬다.
+        # 세션/사용량은 건드리지 않는다. 아직 대화가 시작된 게 아니다.
+        if not utterance:
+            greeting = (bot.greeting or "").strip() or "무엇을 도와드릴까요?"
+            return skill_response(to_kakao_text(greeting), quick_replies)
+
+        if not kakao_user_id:
+            return skill_response(
+                "⚠️ 카카오 사용자 정보를 받지 못했습니다. 실제 카카오톡 채널에서 다시 시도해 주세요."
+            )
+
         session = await self._ensure_session(bot.id, _visitor_id(kakao_user_id))
 
         user_msg = ChatMessage(
@@ -488,9 +495,14 @@ class KakaoSkillService:
                 "답변을 만드는 데 시간이 조금 더 필요해요.\n"
                 "한 번만 더 여쭤봐 주시겠어요?"
             )
-        except Exception as exc:
-            logger.exception("kakao LLM 호출 실패 bot=%s", bot.slug)
-            return _format_llm_error(provider.value, exc)
+        except Exception:
+            # 방문자에게는 중립 문구만. 원문(키 오류·크레딧 부족·제공자 과부하)은
+            # 카카오톡 상대가 손쓸 수 없는 정보이고 봇 주인의 사정을 노출한다.
+            logger.exception(
+                "kakao LLM 호출 실패 bot=%s user=%s provider=%s",
+                bot.slug, bot.user_id, provider.value,
+            )
+            return VISITOR_LLM_ERROR_MESSAGE
 
         elapsed = time.perf_counter() - started
         logger.info(

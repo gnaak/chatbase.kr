@@ -86,8 +86,20 @@ def _should_enable_web_search(bot) -> bool:
     return not (bot.fallback or "").strip()
 
 
+#: 방문자에게 보일 LLM 오류 문구.
+#:
+#: `_format_llm_error`의 결과를 방문자에게 내보내면 안 된다. 상대는 봇 주인이 아니라
+#: 그 사람의 고객이다. "The server is overloaded", "invalid api key" 같은 영문 원문은
+#: 고객이 손쓸 수 없는 정보이고, 우리(또는 봇 주인)의 사정을 노출한다.
+#: 원문은 로그에만 남기고, 주인에게는 대시보드에서 따로 알린다.
+VISITOR_LLM_ERROR_MESSAGE = "일시적인 오류가 발생했어요. 잠시 후 다시 물어봐 주세요."
+
+
 def _format_llm_error(provider_value: str, exc: Exception) -> str:
-    """LLM SDK 에러 메시지를 사용자 친화적으로 가공."""
+    """LLM SDK 에러를 **봇 주인이 보는 화면용**으로 가공. 원문을 그대로 포함한다.
+
+    대시보드 미리보기에서만 쓴다. 방문자 경로는 VISITOR_LLM_ERROR_MESSAGE.
+    """
     raw = str(exc)
     low = raw.lower()
     if (
@@ -238,10 +250,13 @@ class ChatService:
                 vector_store_id=vec_id,
                 enable_web_search=_should_enable_web_search(bot),
             )
-        except Exception as exc:
-            # 키 누락/잘못된 키/모델 오류 등 모든 SDK 에러를 그대로 답변으로 노출
-            print(f"[chat] LLM call failed: {exc}")
-            answer = _format_llm_error(provider.value, exc)
+        except Exception:
+            # 방문자에게는 중립 문구만. 원문은 로그로.
+            logger.exception(
+                "위젯 LLM 호출 실패 bot=%s user=%s provider=%s",
+                bot.slug, bot.user_id, provider.value,
+            )
+            answer = VISITOR_LLM_ERROR_MESSAGE
 
         if not answer.strip():
             answer = bot.fallback or "죄송해요, 질문을 이해하지 못했어요. 다시 한번 말씀해 주시겠어요?"
@@ -390,9 +405,13 @@ class ChatService:
                             print("[stream] first LLM chunk received")
                         full_text += chunk
                         yield _sse("chunk", {"text": chunk})
-                except Exception as exc:
-                    print(f"[chat] LLM stream failed: {exc}")
-                    err_msg = _format_llm_error(provider.value, exc)
+                except Exception:
+                    logger.exception(
+                        "위젯 스트리밍 LLM 실패 bot=%s user=%s provider=%s chars=%d",
+                        bot.slug, bot.user_id, provider.value, len(full_text),
+                    )
+                    # 이미 일부가 나갔으면 이어서 붙이고, 아직이면 이 문구만 나간다.
+                    err_msg = VISITOR_LLM_ERROR_MESSAGE
                     full_text = (full_text or "") + err_msg
                     yield _sse("chunk", {"text": err_msg})
 

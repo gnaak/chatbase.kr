@@ -28,6 +28,7 @@ import Settings from "./container/dashboard/settings";
 import Billing from "./container/dashboard/billing";
 import BillingSuccess from "./container/dashboard/billingSuccess";
 import DashboardKakao from "./container/dashboard/kakao";
+import Stats from "./container/dashboard/stats";
 import EmbedChat from "./container/embed";
 import Terms from "./container/legal/terms";
 import Privacy from "./container/legal/privacy";
@@ -84,6 +85,7 @@ function App() {
                   <Route path="/dashboard/keys" element={<Keys />} />
                   <Route path="/dashboard/conversations" element={<Conversations />} />
                   <Route path="/dashboard/settings" element={<Settings />} />
+                  <Route path="/dashboard/stats" element={<Stats />} />
                   <Route path="/dashboard/kakao" element={<DashboardKakao />} />
                   <Route path="/dashboard/billing" element={<Billing />} />
                   <Route

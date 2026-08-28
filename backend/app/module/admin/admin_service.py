@@ -1,6 +1,10 @@
+from datetime import datetime, timedelta
+
 from sqlalchemy import func, select
 
 from app.core.config.settings import settings
+from app.core.database.base import now_kst
+from app.core.utils.plan import PLAN_ORDER, price_for, resolve_plan
 from app.core.utils.response import fail, success
 from app.module.admin.admin import Admin
 from app.module.admin.admin_repository import AdminRepository
@@ -12,6 +16,13 @@ from app.module.infra.gemini.model_service import GeminiModelService
 from app.module.infra.llm import pricing as pricing_module
 from app.module.infra.openai.model_service import OpenAIModelService
 from app.module.llm_model.llm_model import LLMModel, ModelProvider, ModelType
+from app.module.payment.payment import (
+    BillingMethod,
+    Payment,
+    PaymentStatus,
+    Subscription,
+    SubscriptionStatus,
+)
 from app.module.user.user import User
 
 PROVIDER_LABEL = {
@@ -25,6 +36,45 @@ PROVIDER_ORDER = [
     ModelProvider.ANTHROPIC,
     ModelProvider.GEMINI,
 ]
+
+#: 구독 목록 정렬 우선순위. 조치가 필요한 것(청구 실패)을 맨 위로 올린다.
+SUBSCRIPTION_STATUS_ORDER = {
+    SubscriptionStatus.PAST_DUE: 0,
+    SubscriptionStatus.ACTIVE: 1,
+    SubscriptionStatus.CANCELED: 2,
+    SubscriptionStatus.NONE: 3,
+}
+
+#: 결제 내역 조회 기본/최대 건수. 전체를 통째로 내리면 운영이 커질수록 응답이 무거워진다.
+PAYMENT_PAGE_DEFAULT = 200
+PAYMENT_PAGE_MAX = 1000
+
+
+def _enum_value(raw) -> str | None:
+    return raw.value if hasattr(raw, "value") else raw
+
+
+def _iso(dt: datetime | None) -> str | None:
+    return dt.isoformat() if dt else None
+
+
+def _method_summary(method: BillingMethod | None) -> dict | None:
+    """카드 표시용 정보. 프론트 `describeMethod`가 그대로 쓸 수 있는 형태로 맞춘다.
+
+    billingKey는 절대 내려보내지 않는다 — 관리자 화면에서도 필요 없고,
+    응답에 실리는 순간 암호화 저장이 무의미해진다.
+    """
+    if not method:
+        return None
+    return {
+        "id": method.id,
+        "method_type": _enum_value(method.method_type) or "card",
+        "issuer": method.issuer,
+        "masked_number": method.masked_number,
+        "card_type": method.card_type,
+        "is_default": bool(method.is_default),
+        "created_at": _iso(method.created_at),
+    }
 
 
 def _model_to_dict(m: LLMModel, usage: dict | None = None) -> dict:
@@ -104,6 +154,8 @@ class AdminService:
                 "email": u.email,
                 "name": u.name,
                 "active": u.active,
+                # 게이팅의 단일 소스. 구독 상태와 어긋나면 결제 관리 화면에서 잡힌다.
+                "plan": u.plan,
                 "workspace_name": u.workspace_name,
                 "created_at": u.created_at.isoformat() if u.created_at else None,
                 "last_login_at": (
@@ -117,13 +169,226 @@ class AdminService:
         ]
         return success(data=data)
 
+    # ── 결제 관리 (조회 전용) ──────────────────────
+    async def _paid_totals_by_user(self) -> dict[int, dict]:
+        """사용자별 누적 성공 결제액·건수."""
+        rows = (
+            await self.admin_repo.db.execute(
+                select(
+                    Payment.user_id,
+                    func.coalesce(func.sum(Payment.amount), 0),
+                    func.count(Payment.id),
+                )
+                .where(Payment.status == PaymentStatus.DONE)
+                .group_by(Payment.user_id)
+            )
+        ).all()
+        return {
+            uid: {"paid_total": int(total or 0), "paid_count": int(count or 0)}
+            for uid, total, count in rows
+        }
+
+    async def billing_summary(self, request):
+        """결제 지표. 화면 상단 카드용.
+
+        MRR은 ACTIVE 구독만 센다 — 해지 예정(CANCELED)은 다음 달에 청구되지 않으므로
+        여기에 넣으면 이미 빠져나간 매출을 계속 잡고 있게 된다.
+        """
+        db = self.admin_repo.db
+        # DATETIME 컬럼은 naive로 돌아오므로 비교 기준도 naive KST로 맞춘다.
+        now = now_kst().replace(tzinfo=None)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        subs = (await db.execute(select(Subscription))).scalars().all()
+
+        status_counts = {s.value: 0 for s in SubscriptionStatus}
+        mrr = 0
+        for sub in subs:
+            status = sub.status or SubscriptionStatus.NONE
+            key = _enum_value(status)
+            status_counts[key] = status_counts.get(key, 0) + 1
+            if status == SubscriptionStatus.ACTIVE:
+                # 하향 예약이 걸려 있으면 다음 청구부터 그 금액이라, 그게 실제 MRR이다.
+                mrr += price_for(resolve_plan(sub.scheduled_plan or sub.plan))
+
+        plan_rows = (
+            await db.execute(select(User.plan, func.count(User.id)).group_by(User.plan))
+        ).all()
+        plan_counts = {p.value: 0 for p in PLAN_ORDER}
+        for raw, count in plan_rows:
+            plan = resolve_plan(raw).value
+            plan_counts[plan] = plan_counts.get(plan, 0) + int(count or 0)
+
+        async def _revenue(*conditions) -> int:
+            value = (
+                await db.execute(
+                    select(func.coalesce(func.sum(Payment.amount), 0)).where(
+                        Payment.status == PaymentStatus.DONE, *conditions
+                    )
+                )
+            ).scalar()
+            return int(value or 0)
+
+        failed_30d = (
+            await db.execute(
+                select(func.count(Payment.id)).where(
+                    Payment.status == PaymentStatus.FAILED,
+                    Payment.created_at >= now - timedelta(days=30),
+                )
+            )
+        ).scalar()
+
+        return success(
+            data={
+                "mrr": mrr,
+                "active_count": status_counts.get(SubscriptionStatus.ACTIVE.value, 0),
+                "canceled_count": status_counts.get(
+                    SubscriptionStatus.CANCELED.value, 0
+                ),
+                "past_due_count": status_counts.get(
+                    SubscriptionStatus.PAST_DUE.value, 0
+                ),
+                "none_count": status_counts.get(SubscriptionStatus.NONE.value, 0),
+                "plan_counts": plan_counts,
+                "revenue_this_month": await _revenue(
+                    Payment.approved_at >= month_start
+                ),
+                "revenue_total": await _revenue(),
+                "failed_30d": int(failed_30d or 0),
+            }
+        )
+
+    async def list_subscriptions(self, request):
+        """구독 목록. 결제 프로필만 만들어진(NONE) 행도 함께 내린다 —
+        카드까지 등록하고 결제를 멈춘 사용자가 이탈 지점이라 걸러내면 안 보인다."""
+        db = self.admin_repo.db
+
+        rows = (
+            await db.execute(
+                select(Subscription, User).join(User, User.id == Subscription.user_id)
+            )
+        ).all()
+
+        methods = (await db.execute(select(BillingMethod))).scalars().all()
+        method_by_id = {m.id: m for m in methods}
+        method_counts: dict[int, int] = {}
+        for m in methods:
+            method_counts[m.user_id] = method_counts.get(m.user_id, 0) + 1
+
+        totals = await self._paid_totals_by_user()
+
+        def _sort_key(pair):
+            sub = pair[0]
+            status = sub.status or SubscriptionStatus.NONE
+            return (
+                SUBSCRIPTION_STATUS_ORDER.get(status, 9),
+                sub.next_billing_at or datetime.max,
+                -sub.id,
+            )
+
+        data = []
+        for sub, user in sorted(rows, key=_sort_key):
+            status = sub.status or SubscriptionStatus.NONE
+            paid = totals.get(user.id, {})
+
+            # 게이팅은 user.plan만 보므로, 구독 상태와 어긋나면 돈과 권한이 따로 논다.
+            # 수동 부여·청구 실패 뒤처리 누락이 여기서 드러난다.
+            expected = (
+                sub.plan
+                if status
+                in (
+                    SubscriptionStatus.ACTIVE,
+                    SubscriptionStatus.CANCELED,
+                    SubscriptionStatus.PAST_DUE,
+                )
+                else None
+            )
+
+            data.append(
+                {
+                    "user_id": user.id,
+                    "email": user.email,
+                    "name": user.name,
+                    "user_plan": user.plan,
+                    "status": _enum_value(status),
+                    "plan": sub.plan,
+                    "scheduled_plan": sub.scheduled_plan,
+                    "plan_mismatch": resolve_plan(user.plan) != resolve_plan(expected),
+                    "method": _method_summary(method_by_id.get(sub.billing_method_id)),
+                    "method_count": method_counts.get(user.id, 0),
+                    "retry_count": sub.retry_count or 0,
+                    "paid_total": paid.get("paid_total", 0),
+                    "paid_count": paid.get("paid_count", 0),
+                    "started_at": _iso(sub.started_at),
+                    "next_billing_at": _iso(sub.next_billing_at),
+                    "canceled_at": _iso(sub.canceled_at),
+                    "created_at": _iso(sub.created_at),
+                }
+            )
+
+        return success(data=data)
+
+    async def list_payments(self, request):
+        """전체 결제 내역. 실패 건도 포함한다 — 실패 사유가 CS의 시작점이다."""
+        db = self.admin_repo.db
+
+        raw_limit = request.query_params.get("limit")
+        try:
+            limit = int(raw_limit) if raw_limit else PAYMENT_PAGE_DEFAULT
+        except ValueError:
+            limit = PAYMENT_PAGE_DEFAULT
+        limit = max(1, min(limit, PAYMENT_PAGE_MAX))
+
+        total = (await db.execute(select(func.count(Payment.id)))).scalar()
+
+        rows = (
+            await db.execute(
+                select(Payment, User)
+                .join(User, User.id == Payment.user_id)
+                .order_by(Payment.created_at.desc(), Payment.id.desc())
+                .limit(limit)
+            )
+        ).all()
+
+        items = [
+            {
+                "id": p.id,
+                "user_id": user.id,
+                "email": user.email,
+                "name": user.name,
+                "order_id": p.order_id,
+                # 토스 콘솔에서 같은 건을 찾을 때 쓰는 키.
+                "payment_key": p.payment_key,
+                "plan": p.plan,
+                "amount": p.amount,
+                "status": _enum_value(p.status),
+                "method": p.method,
+                "receipt_url": p.receipt_url,
+                "failure_code": p.failure_code,
+                "failure_message": p.failure_message,
+                "approved_at": _iso(p.approved_at),
+                "created_at": _iso(p.created_at),
+            }
+            for p, user in rows
+        ]
+
+        return success(
+            data={"items": items, "total": int(total or 0), "limit": limit}
+        )
+
     # ── 모델 카탈로그 ─────────────────────────────
     async def list_catalog(self, request):
-        """provider별로 chat/image 그룹핑된 카탈로그 반환. 모델별 사용 중인 봇/유저 수 포함."""
+        """provider별 카탈로그 반환. 모델별 사용 중인 봇/유저 수 포함.
+
+        챗 모델만 내린다 — 이미지 모델은 제품에서 쓰는 곳이 없어서
+        목록에 섞이면 관리자가 훑을 줄만 늘어난다.
+        """
         db = self.admin_repo.db
         rows = (
             await db.execute(
-                select(LLMModel).order_by(LLMModel.sort_order, LLMModel.id)
+                select(LLMModel)
+                .where(LLMModel.type == ModelType.CHAT)
+                .order_by(LLMModel.sort_order, LLMModel.id)
             )
         ).scalars().all()
 
@@ -167,12 +432,13 @@ class AdminService:
                 "users": users[:5],
             }
 
+        # image 키는 빈 배열로 유지한다 — 프론트가 그대로 읽고 있어서
+        # 키를 지우면 화면이 깨진다. 챗만 채워진다.
         grouped: dict[ModelProvider, dict[str, list]] = {
             p: {"chat": [], "image": []} for p in PROVIDER_ORDER
         }
         for m in rows:
-            kind = "chat" if m.type == ModelType.CHAT else "image"
-            grouped[m.provider][kind].append(
+            grouped[m.provider]["chat"].append(
                 _model_to_dict(m, usage_for_model.get(m.value))
             )
 
@@ -214,60 +480,45 @@ class AdminService:
             except Exception as exc:
                 errors.append(f"{provider.value}: {exc}")
                 return
-            for kind, items in (
-                (ModelType.CHAT, discovered.get("chat", [])),
-                (ModelType.IMAGE, discovered.get("image", [])),
-            ):
-                for item in items:
-                    mid = item["value"]
-                    pricing = item.get("pricing") or {}
-                    if mid in existing:
-                        m = existing[mid]
-                        changed = False
-                        if m.provider != provider:
-                            m.provider = provider
-                            changed = True
-                        if m.type != kind:
-                            m.type = kind
-                            changed = True
-                        # 가격은 매번 갱신 (LiteLLM 데이터가 SOT)
-                        if kind == ModelType.CHAT:
-                            new_in = pricing.get("input")
-                            new_out = pricing.get("output")
-                            if m.pricing_input != new_in:
-                                m.pricing_input = new_in
-                                changed = True
-                            if m.pricing_output != new_out:
-                                m.pricing_output = new_out
-                                changed = True
-                        else:
-                            new_per = pricing.get("per_image")
-                            if m.pricing_per_image != new_per:
-                                m.pricing_per_image = new_per
-                                changed = True
-                        if changed:
-                            updated += 1
-                    else:
-                        m = LLMModel(
-                            type=kind,
-                            value=mid,
-                            label=mid,
-                            provider=provider,
-                            is_active=False,
-                            sort_order=999,
-                            pricing_input=pricing.get("input")
-                            if kind == ModelType.CHAT
-                            else None,
-                            pricing_output=pricing.get("output")
-                            if kind == ModelType.CHAT
-                            else None,
-                            pricing_per_image=pricing.get("per_image")
-                            if kind == ModelType.IMAGE
-                            else None,
-                        )
-                        db.add(m)
-                        existing[mid] = m
-                        added += 1
+            # 챗 모델만 등록한다. 이미지 모델은 쓰는 기능이 없어서 받아두면
+            # 카탈로그만 불어나고 가격 갱신 대상으로 계속 따라다닌다.
+            for item in discovered.get("chat", []):
+                mid = item["value"]
+                pricing = item.get("pricing") or {}
+                if mid in existing:
+                    m = existing[mid]
+                    changed = False
+                    if m.provider != provider:
+                        m.provider = provider
+                        changed = True
+                    if m.type != ModelType.CHAT:
+                        m.type = ModelType.CHAT
+                        changed = True
+                    # 가격은 매번 갱신 (LiteLLM 데이터가 SOT)
+                    new_in = pricing.get("input")
+                    new_out = pricing.get("output")
+                    if m.pricing_input != new_in:
+                        m.pricing_input = new_in
+                        changed = True
+                    if m.pricing_output != new_out:
+                        m.pricing_output = new_out
+                        changed = True
+                    if changed:
+                        updated += 1
+                else:
+                    m = LLMModel(
+                        type=ModelType.CHAT,
+                        value=mid,
+                        label=mid,
+                        provider=provider,
+                        is_active=False,
+                        sort_order=999,
+                        pricing_input=pricing.get("input"),
+                        pricing_output=pricing.get("output"),
+                    )
+                    db.add(m)
+                    existing[mid] = m
+                    added += 1
 
         await _process(
             ModelProvider.OPENAI,

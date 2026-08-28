@@ -64,3 +64,27 @@ async def models_set_active(p: ServiceProvider):
 @with_login("admin")
 async def list_users(p: ServiceProvider):
     return await p.admin_service.list_users(p.request)
+
+
+# ── 결제 관리 (조회 전용) ──────────────────────
+@router.get("/billing/summary")
+@with_provider
+@with_login("admin")
+async def billing_summary(p: ServiceProvider):
+    """MRR · 구독 상태별 건수 · 플랜별 사용자 수 · 매출."""
+    return await p.admin_service.billing_summary(p.request)
+
+
+@router.get("/subscriptions")
+@with_provider
+@with_login("admin")
+async def list_subscriptions(p: ServiceProvider):
+    return await p.admin_service.list_subscriptions(p.request)
+
+
+@router.get("/payments")
+@with_provider
+@with_login("admin")
+async def list_payments(p: ServiceProvider):
+    """?limit=200 (최대 1000). 실패 건도 함께 내려온다."""
+    return await p.admin_service.list_payments(p.request)

@@ -12,6 +12,7 @@ from app.module.kakao_skill import kakao_skill_router
 from app.module.llm_model import llm_model_router
 from app.module.usage import usage_router
 from app.module.payment import payment_router
+from app.module.stats import stats_router
 
 # --- 모델 등록 (SQLAlchemy 관계 인식용) ---
 from app.module.admin.admin import Admin
@@ -38,3 +39,5 @@ def setup_routers(app: FastAPI):
     app.include_router(llm_model_router.router, prefix="/api/model")
     app.include_router(usage_router.router, prefix="/api/usage")
     app.include_router(payment_router.router, prefix="/api/payment")
+    # stats는 모델이 없다(집계 전용). 새 테이블이 없으므로 모델 등록도 없다.
+    app.include_router(stats_router.router, prefix="/api/stats")

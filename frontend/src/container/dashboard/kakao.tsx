@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, MessageCircle, Sparkles } from "lucide-react";
+import { AlertTriangle, ChevronDown, MessageCircle, Sparkles } from "lucide-react";
 import Topbar from "@/component/dashboard/layout/topbar";
 import Card from "@/component/dashboard/ui/card";
 import Button from "@/component/dashboard/ui/button";
@@ -28,6 +28,9 @@ const Kakao = () => {
   // 플랜을 못 불러온 동안은 보수적으로 미포함 취급.
   const included = usage?.plan === "premium";
   const blocked = !included;
+  // 처음부터 안 쓴 사람과 쓰다가 끊긴 사람은 안내가 달라야 한다.
+  // 후자는 이미 오픈빌더에 URL을 등록해둬서, 지금 채널이 죽어 있는 상태다.
+  const interrupted = blocked && !!usage?.kakao_in_use;
 
   return (
     <>
@@ -41,24 +44,45 @@ const Kakao = () => {
           {!included && (
             <Card
               variant="outline"
-              className="p-5 flex items-start justify-between gap-4 flex-wrap"
+              className={[
+                "p-5 flex items-start justify-between gap-4 flex-wrap",
+                // 쓰다가 끊긴 경우는 지금 문제가 생긴 상태라 경고색으로 구분한다.
+                interrupted ? "bg-warning-bg" : "",
+              ].join(" ")}
             >
               <div className="flex items-start gap-3 min-w-0">
                 <div className="w-8 h-8 rounded-DEFAULT bg-bg-sub shadow-border flex items-center justify-center shrink-0">
-                  <Sparkles className="w-4 h-4 text-text-sub" />
+                  {interrupted ? (
+                    <AlertTriangle className="w-4 h-4 text-warning" />
+                  ) : (
+                    <Sparkles className="w-4 h-4 text-text-sub" />
+                  )}
                 </div>
                 <div className="min-w-0">
                   <div className="text-[13px] font-medium text-text-main">
-                    카카오톡 채널 연동은 PREMIUM 플랜 기능입니다
+                    {interrupted
+                      ? "카카오톡 채널 연동이 중단되었습니다"
+                      : "카카오톡 채널 연동은 PREMIUM 플랜 기능입니다"}
                   </div>
                   <p className="text-[12px] text-text-sub mt-0.5 leading-relaxed">
-                    플랜을 올리면 카카오톡 채널에서도 같은 챗봇이 답합니다.
+                    {interrupted ? (
+                      <>
+                        현재 플랜에 카카오톡이 포함되지 않아,{" "}
+                        <strong className="text-text-main">
+                          오픈빌더에 등록해두신 챗봇이 응답하지 않습니다.
+                        </strong>{" "}
+                        방문자에게는 대신 fallback 메시지가 나갑니다. PREMIUM으로
+                        올리면 재설정 없이 바로 다시 동작합니다.
+                      </>
+                    ) : (
+                      "플랜을 올리면 카카오톡 채널에서도 같은 챗봇이 답합니다."
+                    )}
                   </p>
                 </div>
               </div>
               <Link to="/dashboard/billing" className="shrink-0">
                 <Button size="sm" pill variant="primary">
-                  플랜 보기
+                  {interrupted ? "PREMIUM으로 올리기" : "플랜 보기"}
                 </Button>
               </Link>
             </Card>

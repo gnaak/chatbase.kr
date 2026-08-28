@@ -184,19 +184,17 @@ const AdminModels = () => {
     });
   };
 
+  // 카탈로그는 챗 모델만 내려온다(이미지 모델은 쓰는 기능이 없어 수집하지 않는다).
+  // 응답의 image 배열은 형태 유지용으로 남아 있어 비어 있다.
   const totals = useMemo(() => {
-    if (!data) return { chat: 0, image: 0, registered: 0 };
+    if (!data) return { chat: 0, registered: 0 };
     let chat = 0;
-    let image = 0;
     let registered = 0;
     for (const p of data) {
       chat += p.chat.length;
-      image += p.image.length;
-      registered +=
-        p.chat.filter((m) => m.registered).length +
-        p.image.filter((m) => m.registered).length;
+      registered += p.chat.filter((m) => m.registered).length;
     }
-    return { chat, image, registered };
+    return { chat, registered };
   }, [data]);
 
   const isRefreshing = refreshMutation.isPending;
@@ -216,8 +214,7 @@ const AdminModels = () => {
         <div className="flex items-center gap-3">
           {data && (
             <span className="text-[11px] text-text-sub">
-              chat {totals.chat} · image {totals.image} · 사용 중{" "}
-              {totals.registered}
+              모델 {totals.chat} · 사용 중 {totals.registered}
             </span>
           )}
           <button

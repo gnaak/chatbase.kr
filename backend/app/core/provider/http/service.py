@@ -37,6 +37,8 @@ class ServiceProvider:
         self._gemini_model_service = None
         self._usage_repo = None
         self._usage_service = None
+        self._stats_repo = None
+        self._stats_service = None
 
     # ── 기존 도메인 ─────────────────────────
     @property
@@ -202,6 +204,24 @@ class ServiceProvider:
                 usage_service=self.usage_service,
             )
         return self._chat_service
+
+    @property
+    def stats_repo(self):
+        if not self._stats_repo:
+            from app.module.stats.stats_repository import StatsRepository
+            self._stats_repo = StatsRepository(self.db)
+        return self._stats_repo
+
+    @property
+    def stats_service(self):
+        if not self._stats_service:
+            from app.module.stats.stats_service import StatsService
+            self._stats_service = StatsService(
+                stats_repo=self.stats_repo,
+                api_key_service=self.api_key_service,
+                llm_service=self.llm_service,
+            )
+        return self._stats_service
 
     @property
     def kakao_skill_service(self):

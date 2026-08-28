@@ -1,6 +1,7 @@
 import { Link, NavLink } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  BarChart3,
   Bot,
   KeyRound,
   CreditCard,
@@ -23,6 +24,7 @@ interface MeDto {
 const navItems = [
   { to: "/dashboard", label: "챗봇", icon: Bot, end: true },
   { to: "/dashboard/conversations", label: "대화 로그", icon: MessagesSquare },
+  { to: "/dashboard/stats", label: "통계", icon: BarChart3 },
   { to: "/dashboard/keys", label: "API 키", icon: KeyRound },
   // 플랜 게이팅은 kakao.tsx 안에서 처리한다. 사이드바에는 항상 노출해
   // 무료 사용자도 기능 존재를 인지하고 업그레이드 동선을 타게 한다.

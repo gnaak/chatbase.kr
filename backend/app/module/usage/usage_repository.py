@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database.base import now_kst
 from app.module.bot.bot import Bot
+from app.module.chat.chat_session import ChatSession
 from app.module.usage.usage import UsageMonthly
 
 
@@ -44,6 +45,27 @@ class UsageRepository:
             )
         )
         return int(result.scalar() or 0)
+
+    async def kakao_in_use(self, user_id: int) -> bool:
+        """이 사용자의 봇에 카카오톡 유입 대화가 한 건이라도 있었는가.
+
+        플랜을 내렸을 때 "처음부터 안 쓴 사람"과 "쓰다가 끊긴 사람"을 구분하는 데 쓴다.
+        후자는 이미 오픈빌더에 스킬 URL을 등록해둔 상태라, 챗봇이 조용히 응답을
+        멈춘 것을 알려줘야 한다.
+
+        카카오 세션의 visitor_id는 `kakao:` 접두사로 저장된다
+        (`kakao_skill_service.VISITOR_PREFIX`).
+        """
+        result = await self.db.execute(
+            select(ChatSession.id)
+            .join(Bot, Bot.id == ChatSession.bot_id)
+            .where(
+                Bot.user_id == user_id,
+                ChatSession.visitor_id.like("kakao:%"),
+            )
+            .limit(1)
+        )
+        return result.first() is not None
 
     async def by_bot_for_user(
         self, user_id: int, year_month: str

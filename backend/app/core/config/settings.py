@@ -44,9 +44,14 @@ class RawEnv(BaseSettings):
     toss_api_client_key: Optional[str] = None
     toss_api_secret_key: Optional[str] = None
 
-    # DEEPL — FAQ 사전 번역용. 없으면 번역을 조용히 건너뛴다(봇 저장은 정상).
+    # DEEPL — FAQ 사전 번역용. 없으면 번역을 건너뛴다(봇 저장은 정상).
     # 무료 키는 ':fx' 로 끝나고 엔드포인트가 다르다. 분기는 deepl_service 가 한다.
+    #
+    # 이름을 둘 다 받는다. pydantic 은 필드명과 env 키를 정확히 맞춰야 해서
+    # `DEEP_L_API_KEY`(밑줄 하나 더)로 적어두면 조용히 안 읽힌다 — 그리고 그 실패는
+    # "번역이 안 도네"로만 보여서 원인을 찾는 데 한참 걸린다. 실제로 한 번 겪었다.
     deepl_api_key: Optional[str] = None
+    deep_l_api_key: Optional[str] = None
 
     # KAKAO
     kakao_client_id: Optional[str] = None
@@ -132,7 +137,8 @@ class Settings:
 
     @property
     def deepl_api_key(self):
-        return self.raw.deepl_api_key
+        """`DEEPL_API_KEY` 우선, 없으면 `DEEP_L_API_KEY`."""
+        return self.raw.deepl_api_key or self.raw.deep_l_api_key
 
     @property
     def hash_key(self) -> str:

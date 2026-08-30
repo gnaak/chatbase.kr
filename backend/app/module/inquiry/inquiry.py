@@ -79,7 +79,12 @@ class Inquiry(Base):
     )
 
     name = Column(String(50), nullable=False)
-    email = Column(String(100), nullable=False, index=True)
+    #: 답변받을 곳. 전화번호만 남기는 경우가 있어 nullable이다.
+    #: 이메일과 전화 중 **최소 하나**는 있어야 한다(서비스에서 검증).
+    email = Column(String(100), nullable=True, index=True)
+    #: 운영자가 직접 문자를 보내려고 받는 연락처. 자동 발송은 하지 않는다 —
+    #: SMS 인프라가 없고, 붙일 계획도 아직 없다.
+    phone = Column(String(20), nullable=True)
 
     category = Column(
         Enum(

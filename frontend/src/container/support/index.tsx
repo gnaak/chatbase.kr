@@ -21,12 +21,14 @@ import {
 
 const NAME_MAX = 50;
 const EMAIL_MAX = 100;
+const PHONE_MAX = 32;
 const SUBJECT_MAX = 200;
 const CONTENT_MAX = 5000;
 
 interface CreateBody {
   name?: string;
   email?: string;
+  phone?: string;
   category: InquiryCategory;
   subject: string;
   content: string;
@@ -37,6 +39,12 @@ const looksLikeEmail = (value: string) => {
   if (!value.includes("@") || value.includes(" ")) return false;
   const [local, domain] = value.split("@");
   return !!local && !!domain && domain.includes(".") && !domain.startsWith(".");
+};
+
+/** 서버와 같은 기준. 국번 체계를 따지지 않고 "번호가 아닌 것"만 거른다. */
+const looksLikePhone = (value: string) => {
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 9 && digits.length <= 15;
 };
 
 const isCategory = (value: string | null): value is InquiryCategory =>
@@ -56,6 +64,7 @@ const SupportForm = () => {
   );
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [subject, setSubject] = useState("");
   const [content, setContent] = useState("");
   const [touched, setTouched] = useState(false);
@@ -65,13 +74,24 @@ const SupportForm = () => {
   );
 
   // 로그인 상태면 서버가 쿠키를 보고 이름·메일을 채운다. 다시 물을 이유가 없다.
-  const emailInvalid = !user && touched && !looksLikeEmail(email.trim());
   const nameInvalid = !user && touched && !name.trim();
+  // 이메일과 전화는 **둘 중 하나만** 있으면 된다. 입력한 쪽만 형식을 본다.
+  const emailFilled = !!email.trim();
+  const phoneFilled = !!phone.trim();
+  const emailInvalid =
+    !user && touched && emailFilled && !looksLikeEmail(email.trim());
+  const phoneInvalid =
+    !user && touched && phoneFilled && !looksLikePhone(phone.trim());
+  const contactMissing = !user && touched && !emailFilled && !phoneFilled;
+
+  const contactOk =
+    (emailFilled && looksLikeEmail(email.trim())) ||
+    (phoneFilled && looksLikePhone(phone.trim()));
 
   const canSubmit =
     !!subject.trim() &&
     !!content.trim() &&
-    (!!user || (!!name.trim() && looksLikeEmail(email.trim()))) &&
+    (!!user || (!!name.trim() && contactOk)) &&
     !create.isPending;
 
   const handleSubmit = () => {
@@ -85,7 +105,8 @@ const SupportForm = () => {
     };
     if (!user) {
       body.name = name.trim();
-      body.email = email.trim();
+      if (emailFilled) body.email = email.trim();
+      if (phoneFilled) body.phone = phone.trim();
     }
 
     create.mutate(body, {
@@ -120,13 +141,20 @@ const SupportForm = () => {
       <Card className="flex flex-col gap-5 p-6">
         {user ? (
           <p className="text-[13px] text-text-sub bg-bg-sub rounded-comfy px-3.5 py-2.5">
-            <span className="text-text-main font-medium">{user.user_nickname}</span>
+            <span className="text-text-main font-medium">
+              {user.user_nickname}
+            </span>
             님으로 문의합니다. 답변은 대시보드의 문의 내역과 가입하신 이메일로
             함께 보내드립니다.
           </p>
         ) : (
-          <div className="grid gap-5 sm:grid-cols-2">
-            <Field label="이름" htmlFor="support-name" required error={nameInvalid ? "이름을 입력해 주세요." : undefined}>
+          <div className="flex flex-col gap-5">
+            <Field
+              label="이름"
+              htmlFor="support-name"
+              required
+              error={nameInvalid ? "이름을 입력해 주세요." : undefined}
+            >
               <Input
                 id="support-name"
                 value={name}
@@ -135,21 +163,62 @@ const SupportForm = () => {
                 invalid={nameInvalid}
               />
             </Field>
-            <Field
-              label="답변받을 이메일"
-              htmlFor="support-email"
-              required
-              error={emailInvalid ? "이메일 주소를 정확히 입력해 주세요." : undefined}
-            >
-              <Input
-                id="support-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value.slice(0, EMAIL_MAX))}
-                placeholder="you@example.com"
-                invalid={emailInvalid}
-              />
-            </Field>
+
+            <div className="flex flex-col gap-2">
+              <p className="text-[12px] text-text-sub">
+                답변받을 곳을{" "}
+                <span className="text-text-main font-medium">
+                  이메일과 연락처 중 하나만
+                </span>{" "}
+                남겨주셔도 됩니다.
+              </p>
+              <div className="grid gap-5 sm:grid-cols-2">
+                <Field
+                  label="이메일"
+                  htmlFor="support-email"
+                  error={
+                    emailInvalid
+                      ? "이메일 주소를 정확히 입력해 주세요."
+                      : undefined
+                  }
+                >
+                  <Input
+                    id="support-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) =>
+                      setEmail(e.target.value.slice(0, EMAIL_MAX))
+                    }
+                    placeholder="you@example.com"
+                    invalid={emailInvalid}
+                  />
+                </Field>
+                <Field
+                  label="연락처"
+                  htmlFor="support-phone"
+                  error={
+                    phoneInvalid ? "연락처를 정확히 입력해 주세요." : undefined
+                  }
+                >
+                  <Input
+                    id="support-phone"
+                    type="tel"
+                    inputMode="tel"
+                    value={phone}
+                    onChange={(e) =>
+                      setPhone(e.target.value.slice(0, PHONE_MAX))
+                    }
+                    placeholder="010-1234-5678"
+                    invalid={phoneInvalid}
+                  />
+                </Field>
+              </div>
+              {contactMissing && (
+                <p className="text-[12px] text-point-red">
+                  이메일 또는 연락처 중 하나는 입력해 주세요.
+                </p>
+              )}
+            </div>
           </div>
         )}
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { MailIcon, SearchIcon } from "lucide-react";
+import { MailIcon, PhoneIcon, SearchIcon } from "lucide-react";
 
 import Table, { Column } from "@/component/admin/ui/table/table";
 import Pagination from "@/component/admin/ui/pagination";
@@ -38,10 +38,16 @@ const FILTERS: { value: StatusFilter; label: string }[] = [
   { value: "all", label: "전체" },
 ];
 
+/** 이메일과 전화 중 있는 것만. 둘 중 하나만 남기는 문의가 있다. */
+const contactText = (i: { email?: string | null; phone?: string | null }) =>
+  [i.email, i.phone].filter(Boolean).join(" · ") || "-";
+
 const formatStamp = (iso: string | null) => {
   if (!iso) return "-";
   const d = new Date(iso);
-  return isNaN(d.getTime()) ? "-" : d.toLocaleString("ko-KR", { hour12: false });
+  return isNaN(d.getTime())
+    ? "-"
+    : d.toLocaleString("ko-KR", { hour12: false });
 };
 
 const AdminInquiries = () => {
@@ -155,9 +161,9 @@ const AdminInquiries = () => {
             </div>
             <div
               className="font-mono text-[11px] text-text-sub truncate"
-              title={r.email}
+              title={contactText(r)}
             >
-              {r.email}
+              {contactText(r)}
             </div>
           </div>
         ),
@@ -201,7 +207,8 @@ const AdminInquiries = () => {
         </div>
         {data && (
           <span className="text-[12px] text-text-sub">
-            총 <span className="font-semibold text-text-main">{data.total}</span>건
+            총{" "}
+            <span className="font-semibold text-text-main">{data.total}</span>건
           </span>
         )}
       </div>
@@ -303,9 +310,10 @@ const InquiryDetail = ({ id, onClose }: InquiryDetailProps) => {
     ["admin-inquiry", id],
   );
 
-  const reply = usePost<{ content: string; close?: boolean }, InquiryReplyResult>(
-    `api/admin/inquiries/${id}/reply`,
-  );
+  const reply = usePost<
+    { content: string; close?: boolean },
+    InquiryReplyResult
+  >(`api/admin/inquiries/${id}/reply`);
   const changeStatus = usePatch<InquiryThreadDto, { status: InquiryStatus }>(
     `api/admin/inquiries/${id}/status`,
   );
@@ -362,7 +370,7 @@ const InquiryDetail = ({ id, onClose }: InquiryDetailProps) => {
       title={thread?.subject ?? "문의"}
       description={
         thread
-          ? `#${thread.id} · ${CATEGORY_LABEL[thread.category]} · ${thread.name} <${thread.email}>`
+          ? `#${thread.id} · ${CATEGORY_LABEL[thread.category]} · ${thread.name} · ${contactText(thread)}`
           : undefined
       }
       footerType={0}
@@ -419,15 +427,28 @@ const InquiryDetail = ({ id, onClose }: InquiryDetailProps) => {
               <TextareaBox
                 value={content}
                 onChange={setContent}
-                placeholder="답변을 입력하세요. 사용자 화면과 메일로 함께 전달됩니다."
+                placeholder={
+                  thread.email
+                    ? "답변을 입력하세요. 사용자 화면과 메일로 함께 전달됩니다."
+                    : "답변을 입력하세요. 사용자 화면에 남습니다 — 문자는 직접 보내주세요."
+                }
                 rows={5}
                 size="sm"
               />
               <div className="flex items-center justify-between gap-2">
-                <span className="inline-flex items-center gap-1 text-[11px] text-gray-500">
-                  <MailIcon className="w-3 h-3" />
-                  {thread.email}
-                </span>
+                {thread.email ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] text-gray-500">
+                    <MailIcon className="w-3 h-3" />
+                    {thread.email}
+                  </span>
+                ) : (
+                  // 메일 주소가 없으면 답변을 등록해도 알림이 나가지 않는다.
+                  // 운영자가 직접 문자를 보내야 하므로 번호를 바로 옆에 띄운다.
+                  <span className="inline-flex items-center gap-1 text-[11px] text-point-amber">
+                    <PhoneIcon className="w-3 h-3" />
+                    {thread.phone} · 이메일이 없어 문자로 안내해야 합니다
+                  </span>
+                )}
                 <div className="flex items-center gap-1.5">
                   <Button
                     variant="sub2"

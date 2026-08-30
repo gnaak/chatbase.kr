@@ -13,6 +13,23 @@ https://chatbase.kr
 """
 
 
+def _contact(inquiry: Inquiry) -> str:
+    """관리자 알림에 찍는 연락처. 이메일과 전화 중 있는 것만 붙는다.
+
+    전화번호만 있으면 자동 알림이 나가지 않는다 — 운영자가 직접 문자로
+    답해야 하므로, 알림 본문에서 그 사실이 바로 보여야 한다.
+    """
+    parts = []
+    if inquiry.email:
+        parts.append(f"이메일 {inquiry.email}")
+    if inquiry.phone:
+        parts.append(f"전화 {inquiry.phone}")
+    joined = " · ".join(parts) or "없음"
+    if not inquiry.email:
+        joined += "  ← 이메일이 없어 답변 메일이 나가지 않습니다. 문자로 안내해 주세요."
+    return joined
+
+
 def _quote(content: str) -> str:
     """본문을 인용 형태로 들여쓴다. 메일에서 원문과 안내문을 구분하기 위한 것."""
     return "\n".join(f"  {line}" for line in content.strip().splitlines())
@@ -50,7 +67,8 @@ def admin_alert(
 
 번호: #{inquiry.id}
 유형: {CATEGORY_LABEL.get(inquiry.category, "일반 문의")}
-작성자: {inquiry.name} <{inquiry.email}> ({account})
+작성자: {inquiry.name} ({account})
+연락처: {_contact(inquiry)}
 제목: {inquiry.subject}
 
 {_quote(content)}

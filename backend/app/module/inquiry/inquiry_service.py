@@ -26,6 +26,10 @@ SUBJECT_MAX = 200
 CONTENT_MAX = 5000
 NAME_MAX = 50
 EMAIL_MAX = 100
+#: 저장은 정규화된 값(숫자와 선행 +)이라 20자면 국제번호까지 들어간다.
+#: 입력은 하이픈·공백이 섞여 들어오므로 자르기 전 길이를 넉넉히 잡는다.
+PHONE_MAX = 20
+PHONE_INPUT_MAX = 32
 
 #: 같은 IP에서 1시간에 받을 문의 수. 공개 엔드포인트라 상한이 없으면 봇이 테이블을 채운다.
 #: Redis가 없어서 DB COUNT로 센다 — ix_inquiry_ip_created 인덱스가 받쳐준다.
@@ -55,6 +59,25 @@ def _client_ip(request) -> str | None:
 
 def _text(body: dict, key: str, limit: int) -> str:
     return str(body.get(key) or "").strip()[:limit]
+
+
+def _normalize_phone(value: str) -> str:
+    """하이픈·공백·괄호를 걷어내고 숫자(와 선행 +)만 남긴다.
+
+    운영자가 화면에서 복사해 문자 앱에 붙여넣는 값이다. 표기가 제각각이면
+    붙여넣을 때마다 손을 봐야 하므로 저장 시점에 한 번 정리해 둔다.
+    """
+    if not value:
+        return ""
+    plus = value.lstrip().startswith("+")
+    digits = "".join(ch for ch in value if ch.isdigit())
+    return ("+" + digits if plus else digits)[:PHONE_MAX]
+
+
+def _looks_like_phone(value: str) -> bool:
+    """국번 체계를 판정하지 않는다. 오타가 아니라 '번호가 아닌 것'만 거른다."""
+    digits = value.lstrip("+")
+    return digits.isdigit() and 9 <= len(digits) <= 15
 
 
 def _looks_like_email(value: str) -> bool:
@@ -107,6 +130,7 @@ class InquiryService:
         # 공개 응답에 주소를 실으면 토큰이 새는 순간 주소까지 같이 샌다.
         if include_email:
             data["email"] = inquiry.email
+            data["phone"] = inquiry.phone
             data["ip"] = inquiry.ip
         return data
 
@@ -146,13 +170,23 @@ class InquiryService:
         email = _text(body, "email", EMAIL_MAX).lower() or (
             user.email if user else ""
         )
+        phone = _normalize_phone(_text(body, "phone", PHONE_INPUT_MAX))
         subject = _text(body, "subject", SUBJECT_MAX)
         content = _text(body, "content", CONTENT_MAX)
 
         if not name:
             fail("이름을 입력해 주세요.", "INQUIRY_NAME_REQUIRED")
-        if not _looks_like_email(email):
-            fail("답변받을 이메일 주소를 정확히 입력해 주세요.", "INQUIRY_EMAIL_INVALID")
+        if email and not _looks_like_email(email):
+            fail("이메일 주소를 정확히 입력해 주세요.", "INQUIRY_EMAIL_INVALID")
+        if phone and not _looks_like_phone(phone):
+            fail("연락처를 정확히 입력해 주세요.", "INQUIRY_PHONE_INVALID")
+        # 둘 중 하나만 있으면 된다. 전화번호만 남기면 자동 알림은 못 가고
+        # 운영자가 직접 문자로 답하게 된다 — 그건 화면에서 안내한다.
+        if not email and not phone:
+            fail(
+                "답변받을 이메일 또는 연락처 중 하나는 입력해 주세요.",
+                "INQUIRY_CONTACT_REQUIRED",
+            )
         if not subject:
             fail("제목을 입력해 주세요.", "INQUIRY_SUBJECT_REQUIRED")
         if not content:
@@ -177,7 +211,8 @@ class InquiryService:
         inquiry = Inquiry(
             user_id=user.id if user else None,
             name=name,
-            email=email,
+            email=email or None,
+            phone=phone or None,
             category=category,
             subject=subject,
             status=InquiryStatus.OPEN,

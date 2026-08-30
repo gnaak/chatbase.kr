@@ -17,7 +17,7 @@ export interface InquiryMessage {
   created_at: string | null;
 }
 
-/** 목록·상세 공통 헤더. `email`/`ip`는 어드민 응답에만 실린다. */
+/** 목록·상세 공통 헤더. `email`/`phone`/`ip`는 어드민 응답에만 실린다. */
 export interface Inquiry {
   id: number;
   subject: string;
@@ -28,7 +28,10 @@ export interface Inquiry {
   answered_at: string | null;
   created_at: string | null;
   updated_at: string | null;
-  email?: string;
+  /** 이메일과 전화 중 최소 하나. 둘 다 있을 수도, 한쪽만 있을 수도 있다. */
+  email?: string | null;
+  /** 운영자가 직접 문자를 보내려고 받는 연락처. 자동 발송은 없다. */
+  phone?: string | null;
   ip?: string | null;
 }
 

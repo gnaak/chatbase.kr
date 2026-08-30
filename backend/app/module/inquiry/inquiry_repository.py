@@ -67,13 +67,17 @@ class InquiryRepository:
             conditions.append(Inquiry.status == status)
         if keyword:
             like = f"%{keyword}%"
-            conditions.append(
-                or_(
-                    Inquiry.subject.like(like),
-                    Inquiry.name.like(like),
-                    Inquiry.email.like(like),
-                )
-            )
+            targets = [
+                Inquiry.subject.like(like),
+                Inquiry.name.like(like),
+                Inquiry.email.like(like),
+            ]
+            # 저장된 전화번호는 숫자만이라 "010-1234"로는 안 걸린다. 검색어에서도
+            # 구분자를 걷어내고 비교하되, 숫자가 없으면 조건을 붙이지 않는다.
+            digits = "".join(ch for ch in keyword if ch.isdigit())
+            if digits:
+                targets.append(Inquiry.phone.like(f"%{digits}%"))
+            conditions.append(or_(*targets))
 
         base = select(Inquiry)
         if conditions:

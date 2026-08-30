@@ -127,7 +127,7 @@ const SupportThread = () => {
               </p>
               <p className="text-[12px] text-text-sub mt-0.5 leading-relaxed">
                 답변이 등록되면 이 주소에서 확인하고 이어서 질문할 수 있습니다.
-                답변 알림은 입력하신 이메일로도 보내드립니다.
+                남겨주신 연락처로도 안내드립니다.
               </p>
             </div>
             <Button

@@ -70,7 +70,7 @@ PLAN_LIMITS: dict[Plan, PlanLimits] = {
         history_days=7,
     ),
     Plan.STANDARD: PlanLimits(
-        bots=3,
+        bots=1,
         monthly_messages=None,
         file_learning=True,
         kakao_channel=False,
@@ -78,7 +78,7 @@ PLAN_LIMITS: dict[Plan, PlanLimits] = {
         history_days=90,
     ),
     Plan.PREMIUM: PlanLimits(
-        bots=10,
+        bots=3,
         monthly_messages=None,
         file_learning=True,
         kakao_channel=True,

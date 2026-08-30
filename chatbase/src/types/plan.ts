@@ -98,14 +98,14 @@ export const PLANS: Plan[] = [
     unit: "/ 월 · VAT 별도",
     tagline: "홈페이지 상담 자동화",
     features: [
-      { label: "챗봇 3개" },
+      { label: "챗봇 1개" },
       { label: "대화 수 제한 없음" },
       { label: "파일 학습", note: "OpenAI 키 필요" },
       { label: "대화 기록 90일" },
       { label: "Powered by 배지 제거" },
     ],
     limits: {
-      bots: 3,
+      bots: 1,
       monthlyMessages: null,
       fileLearning: true,
       kakaoChannel: false,
@@ -121,13 +121,13 @@ export const PLANS: Plan[] = [
     tagline: "여러 채널 · 여러 봇 운영",
     features: [
       { label: "Standard의 모든 기능" },
-      { label: "챗봇 10개" },
+      { label: "챗봇 3개" },
       { label: "카카오톡 채널 연동" },
       { label: "대화 기록 무제한" },
       { label: "우선 지원" },
     ],
     limits: {
-      bots: 10,
+      bots: 3,
       monthlyMessages: null,
       fileLearning: true,
       kakaoChannel: true,

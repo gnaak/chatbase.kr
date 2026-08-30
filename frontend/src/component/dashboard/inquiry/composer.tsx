@@ -52,6 +52,7 @@ const InquiryComposer = ({
         </span>
         <Button
           size="sm"
+          pill
           disabled={!text || pending}
           onClick={() => onSubmit(text)}
           rightIcon={<SendHorizonal className="w-3.5 h-3.5" />}

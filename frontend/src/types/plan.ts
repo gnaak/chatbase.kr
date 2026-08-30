@@ -163,5 +163,6 @@ export const ENTERPRISE = {
     "세금계산서 발행",
   ],
   cta: "구축 문의하기",
-  href: "mailto:hello@chatbase.kr",
+  /** 문의 페이지를 제휴 유형으로 열어둔다. 메일과 달리 스레드가 남아 추적된다. */
+  href: "/support?category=partnership",
 } as const;

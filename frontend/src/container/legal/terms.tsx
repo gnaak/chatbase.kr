@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 import LegalLayout, { Section, SubList } from "@/container/legal/layout";
 
 const Terms = () => (
@@ -128,6 +130,10 @@ const Terms = () => (
     <Section number="14" title="문의">
       <p>
         본 약관과 서비스에 대한 문의는{" "}
+        <Link to="/support" className="text-text-main hover:underline">
+          1:1 문의
+        </Link>
+        {" "}또는{" "}
         <a
           href="mailto:hello@chatbase.kr"
           className="text-text-main hover:underline"

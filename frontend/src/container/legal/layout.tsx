@@ -45,6 +45,9 @@ const LegalLayout = ({ title, effectiveDate, children }: LegalLayoutProps) => {
           <Link to="/privacy" className="hover:text-text-main">
             개인정보처리방침
           </Link>
+          <Link to="/support" className="hover:text-text-main">
+            문의하기
+          </Link>
           <a href="mailto:hello@chatbase.kr" className="hover:text-text-main">
             hello@chatbase.kr
           </a>

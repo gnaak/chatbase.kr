@@ -158,6 +158,13 @@ export const TermsContent = () => (
     <Section number="14" title="문의">
       <p>
         본 약관과 서비스에 대한 문의는{" "}
+        {/* Link가 아니라 a인 이유: 이 본문은 랜딩의 약관 모달 안에서도 렌더된다.
+            모달 open은 라우트와 무관한 로컬 state라, Link로 이동하면 새 화면
+            위에 모달이 그대로 남는다. 전체 새로고침이 맞다. */}
+        <a href="/support" className="text-text-main hover:underline">
+          1:1 문의
+        </a>
+        {" "}또는{" "}
         <a
           href="mailto:hello@chatbase.kr"
           className="text-text-main hover:underline"

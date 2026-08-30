@@ -35,6 +35,8 @@ import SupportDetail from "./container/dashboard/supportDetail";
 import EmbedChat from "./container/embed";
 import Terms from "./container/legal/terms";
 import Privacy from "./container/legal/privacy";
+import SupportForm from "./container/support";
+import SupportThread from "./container/support/thread";
 import Guide from "./container/guide";
 import {
   ProtectedRoute,
@@ -67,6 +69,8 @@ function App() {
               <Route path="/embed/:botId" element={<EmbedChat />} />
               <Route path="/terms" element={<Terms />} />
               <Route path="/privacy" element={<Privacy />} />
+              <Route path="/support" element={<SupportForm />} />
+              <Route path="/support/:token" element={<SupportThread />} />
 
               {/* 비로그인 전용: 이미 로그인된 사용자는 /dashboard로 */}
               <Route element={<PublicOnlyRoute />}>

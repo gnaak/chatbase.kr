@@ -58,7 +58,8 @@ const Support = () => {
           !composing && (
             <Button
               size="sm"
-              leftIcon={<Plus className="w-3.5 h-3.5" />}
+              pill
+              leftIcon={<Plus className="w-4 h-4" />}
               onClick={() => setComposing(true)}
             >
               새 문의
@@ -90,7 +91,7 @@ const Support = () => {
                     답변드립니다.
                   </p>
                 </div>
-                <Button size="sm" onClick={() => setComposing(true)}>
+                <Button size="sm" pill onClick={() => setComposing(true)}>
                   문의하기
                 </Button>
               </Card>
@@ -236,7 +237,7 @@ const NewInquiryForm = ({ onClose }: NewInquiryFormProps) => {
         <Button variant="ghost" size="sm" onClick={onClose}>
           취소
         </Button>
-        <Button size="sm" disabled={!canSubmit} onClick={handleSubmit}>
+        <Button size="sm" pill disabled={!canSubmit} onClick={handleSubmit}>
           {create.isPending ? "등록 중..." : "문의 등록"}
         </Button>
       </div>

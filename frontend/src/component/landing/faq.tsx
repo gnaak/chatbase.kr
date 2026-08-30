@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useState, ReactNode } from "react";
 import { ExternalLink, Plus } from "lucide-react";
 import Button from "@/component/dashboard/ui/button";
@@ -222,13 +223,13 @@ const Faq = () => {
 
         <p className="mt-8 text-center text-[13px] text-text-sub">
           답을 찾지 못하셨나요?{" "}
-          <a
-            href="mailto:hello@chatbase.kr"
+          <Link
+            to="/support"
             className="text-text-main underline underline-offset-2"
           >
-            hello@chatbase.kr
-          </a>
-          로 문의주세요.
+            1:1 문의하기
+          </Link>
+          . 보통 영업일 기준 하루 안에 답변드립니다.
         </p>
       </div>
     </section>

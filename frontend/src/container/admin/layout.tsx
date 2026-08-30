@@ -6,6 +6,7 @@ import {
   UsersIcon,
   CreditCardIcon,
   CpuIcon,
+  MessagesSquareIcon,
 } from "lucide-react";
 
 const adminMenu: AdminMenuItem[] = [
@@ -33,6 +34,12 @@ const adminMenu: AdminMenuItem[] = [
     label: "모델 관리",
     to: "/admin/models",
     icon: CpuIcon,
+  },
+  {
+    type: "link",
+    label: "문의 관리",
+    to: "/admin/inquiries",
+    icon: MessagesSquareIcon,
   },
 ];
 

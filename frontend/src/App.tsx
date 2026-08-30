@@ -12,6 +12,7 @@ import AdminGroup from "./container/admin/group";
 import AdminCustomers from "./container/admin/customers";
 import AdminPayments from "./container/admin/payments";
 import AdminModels from "./container/admin/models";
+import AdminInquiries from "./container/admin/inquiries";
 import ClientLayOut from "./container/client/layout";
 import Landing from "./container/landing";
 import Login from "./container/auth/login";
@@ -111,6 +112,7 @@ function App() {
                   <Route path="/admin/customers" element={<AdminCustomers />} />
                   <Route path="/admin/payments" element={<AdminPayments />} />
                   <Route path="/admin/models" element={<AdminModels />} />
+                  <Route path="/admin/inquiries" element={<AdminInquiries />} />
                 </Route>
               </Route>
               <Route path="*" element={<NotFoundPage />} />

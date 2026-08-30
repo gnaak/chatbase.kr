@@ -39,6 +39,12 @@ const EmbedChat = () => {
   const { botId } = useParams();
   // widget.js가 iframe에 ?mode=widget을 붙여서 호출 → 버블 버튼 없이 채팅창만 표시
   const isWidgetMode = new URLSearchParams(window.location.search).get("mode") === "widget";
+  /**
+   * iframe 밖에서 이 주소를 직접 연 경우 — 카페·메일에 뿌리는 공유 링크가 여기다.
+   * 닫아줄 부모가 없고 화면 폭도 우리가 정해야 해서 세 곳에서 갈린다:
+   * 창 크기(windowClass) · 헤더의 X · 최종 렌더 분기.
+   */
+  const isStandalone = window.parent === window;
 
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -162,6 +168,9 @@ const EmbedChat = () => {
    * 모바일은 패널이 전체화면이라 버블(닫기 버튼)이 가려지므로,
    * 헤더의 X가 부모에게 닫으라고 알린다. 호스트 사이트 origin은 알 수 없어 "*",
    * 대신 보내는 값에 식별용 source를 넣고 부모는 e.source로 우리 iframe인지 검사한다.
+   *
+   * 공유 링크(isStandalone)에는 그 메시지를 받을 부모가 없다. 눌러도 아무 일이
+   * 안 일어나는 버튼이 되므로 그쪽에서는 X를 아예 그리지 않는다.
    */
   const handleClose = () => {
     if (!isWidgetMode) {
@@ -173,7 +182,7 @@ const EmbedChat = () => {
 
   const windowClass = [
     "flex flex-col bg-bg-card overflow-hidden",
-    isWidgetMode
+    isWidgetMode || isStandalone
       ? "w-full h-screen"
       : "w-[360px] h-[560px] rounded-comfy shadow-[0_8px_32px_rgba(0,0,0,0.18)] animate-fade-slide",
   ].join(" ");
@@ -195,9 +204,11 @@ const EmbedChat = () => {
             <Bar className="h-2.5 w-16" />
           </div>
         </div>
-        <IconBtn label="닫기" onClick={handleClose}>
-          <X className="w-3.5 h-3.5" />
-        </IconBtn>
+        {!isStandalone && (
+          <IconBtn label="닫기" onClick={handleClose}>
+            <X className="w-3.5 h-3.5" />
+          </IconBtn>
+        )}
       </header>
 
       <div className="flex-1 px-3.5 py-3.5 space-y-2.5 bg-bg-sub/40">
@@ -239,9 +250,11 @@ const EmbedChat = () => {
           <IconBtn label="대화 초기화" onClick={handleReset}>
             <RotateCcw className="w-3.5 h-3.5" />
           </IconBtn>
-          <IconBtn label="닫기" onClick={handleClose}>
-            <X className="w-3.5 h-3.5" />
-          </IconBtn>
+          {!isStandalone && (
+            <IconBtn label="닫기" onClick={handleClose}>
+              <X className="w-3.5 h-3.5" />
+            </IconBtn>
+          )}
         </div>
       </header>
 
@@ -320,10 +333,31 @@ const EmbedChat = () => {
     </div>
   );
 
+  /**
+   * 공유 링크로 직접 연 경우 — 카페·메일에 붙이는 주소가 여기로 온다.
+   *
+   * ?mode=widget이 없으면 원래는 버블 하나만 떠 있는 빈 화면이 나오는데, 링크를
+   * 받은 사람은 그게 눌러야 하는 물건인지 모른다. 그래서 파라미터와 무관하게
+   * 채팅창을 바로 띄운다.
+   *
+   * 폭을 480px로 묶는 이유: 위젯 창은 iframe이 크기를 정해주는 걸 전제로 w-full이라,
+   * 모니터에서 그냥 열면 말풍선이 화면 끝까지 늘어난다.
+   * 기둥은 배경색이 아니라 shadow-border로 나눈다 (DESIGN.md 6).
+   */
+  if (isStandalone) {
+    return (
+      <div className="min-h-screen flex justify-center bg-bg-card font-sans">
+        <div className="w-full max-w-[480px] shadow-border">
+          {botLoading ? loadingWindow : chatWindow}
+        </div>
+      </div>
+    );
+  }
+
   // widget.js 사용 시: 채팅창만 (버블 버튼은 widget.js가 관리)
   if (isWidgetMode) return botLoading ? loadingWindow : chatWindow;
 
-  // standalone iframe 사용 시: 버블 버튼 + 채팅창
+  // iframe 직접 삽입 시: 버블 버튼 + 채팅창
   return (
     <div className="fixed bottom-4 right-4 flex flex-col items-end gap-3 font-sans">
       {isOpen && (botLoading ? loadingWindow : chatWindow)}

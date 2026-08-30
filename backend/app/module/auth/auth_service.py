@@ -53,6 +53,15 @@ class AuthService:
         if not user_obj or not verify_password(password, user_obj.password if auth_type == "admin" else user_obj.password):
             fail("user does not exists", "USER_DOES_NOT_EXISTS", 404)
 
+        # 탈퇴한 계정은 active=False로 남는다(거래기록 보관 의무 때문에 행을 지우지
+        # 않는다). 여기서 막지 않으면 탈퇴한 사람이 그대로 다시 들어온다.
+        # 관리자가 수동으로 비활성화한 계정도 같은 경로로 막힌다.
+        # `not active`가 아니라 `is False`인 이유: active 컬럼이 nullable이라
+        # DB에 직접 넣은 행은 NULL일 수 있다. NULL을 차단으로 해석하면
+        # 멀쩡한 계정이 잠긴다. 명시적으로 False인 것만 막는다.
+        if auth_type == "user" and user_obj.active is False:
+            fail("비활성화된 계정입니다.", "INACTIVE_ACCOUNT", 403)
+
         return user_obj, auth_type
 
 

@@ -62,8 +62,15 @@ class ServiceProvider:
     @property
     def user_service(self):
         if not self._user_service:
+            from app.module.auth.auth_token import AuthToken
             from app.module.user.user_service import UserService
-            self._user_service = UserService(self.user_repo)
+            # 탈퇴가 쿠키를 지우고 OpenAI 벡터 스토어를 정리해야 해서 셋을 받는다.
+            self._user_service = UserService(
+                self.user_repo,
+                token_util=AuthToken(),
+                api_key_service=self.api_key_service,
+                vector_store_service=self.vector_store_service,
+            )
         return self._user_service
 
     @property

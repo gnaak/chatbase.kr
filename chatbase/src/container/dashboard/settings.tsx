@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Sun, Moon, Monitor, Trash2, Save } from "lucide-react";
+import { Sun, Moon, Monitor, Trash2, Save, AlertTriangle } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import Topbar from "@/component/layout/topbar";
 import Button from "@/ui/button";
@@ -10,7 +10,7 @@ import Input from "@/ui/input";
 import Skeleton from "@/ui/skeleton";
 import { useTheme } from "@/hooks/common/useTheme";
 import type { Theme } from "@/context/ThemeProvider";
-import { useGet, usePatch } from "@/hooks/common/useAPI";
+import { useGet, usePatch, usePost } from "@/hooks/common/useAPI";
 import { useToast } from "@/hooks/common/useToast";
 
 interface MeDto {
@@ -25,6 +25,19 @@ interface UpdateMePayload {
   name?: string;
   profile_image?: string;
 }
+
+interface ChangePasswordPayload {
+  current_password: string;
+  new_password: string;
+}
+
+interface WithdrawPayload {
+  password?: string;
+}
+
+//: 백엔드 `user_service.MIN_PASSWORD_LENGTH`와 같은 값이어야 한다.
+//  여기서 먼저 막는 건 왕복을 아끼기 위한 것이고, 진짜 검사는 서버가 한다.
+const MIN_PASSWORD_LENGTH = 8;
 
 const ME_QUERY_KEY = ["me"];
 
@@ -51,6 +64,9 @@ const ProfileSection = () => {
   const toast = useToast();
   const { data: me, isLoading } = useGet<MeDto>("api/user/me", ME_QUERY_KEY);
   const updateMe = usePatch<MeDto, UpdateMePayload>("api/user/me");
+  const changePassword = usePost<ChangePasswordPayload, unknown>(
+    "api/user/me/password",
+  );
 
   const [name, setName] = useState("");
   const [pwOpen, setPwOpen] = useState(false);
@@ -75,17 +91,39 @@ const ProfileSection = () => {
     );
   };
 
-  const handleSavePassword = () => {
-    if (!newPw || newPw !== confirmPw) {
-      toast.error("새 비밀번호와 확인이 일치하지 않습니다.");
-      return;
-    }
-    // TODO: 비밀번호 변경 API (Phase 후속)
-    toast.info("비밀번호 변경 API는 추후 지원될 예정입니다.");
+  const closePasswordForm = () => {
+    setPwOpen(false);
     setCurrentPw("");
     setNewPw("");
     setConfirmPw("");
-    setPwOpen(false);
+  };
+
+  const handleSavePassword = () => {
+    if (!currentPw) {
+      toast.error("현재 비밀번호를 입력해 주세요.");
+      return;
+    }
+    if (newPw.length < MIN_PASSWORD_LENGTH) {
+      toast.error(`새 비밀번호는 ${MIN_PASSWORD_LENGTH}자 이상이어야 합니다.`);
+      return;
+    }
+    if (newPw !== confirmPw) {
+      toast.error("새 비밀번호와 확인이 일치하지 않습니다.");
+      return;
+    }
+
+    changePassword.mutate(
+      { current_password: currentPw, new_password: newPw },
+      {
+        onSuccess: () => {
+          toast.success("비밀번호가 변경되었습니다.");
+          closePasswordForm();
+        },
+        // 입력값은 지우지 않는다 — 틀렸을 때 처음부터 다시 치게 하면 짜증난다.
+        onError: (err) =>
+          toast.error(err?.message || "비밀번호 변경에 실패했습니다."),
+      },
+    );
   };
 
   return (
@@ -167,18 +205,19 @@ const ProfileSection = () => {
                   />
                 </Field>
                 <div className="flex items-center gap-2">
-                  <Button size="sm" pill onClick={handleSavePassword}>
-                    저장
+                  <Button
+                    size="sm"
+                    pill
+                    onClick={handleSavePassword}
+                    disabled={changePassword.isPending}
+                  >
+                    {changePassword.isPending ? "변경 중..." : "저장"}
                   </Button>
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => {
-                      setPwOpen(false);
-                      setCurrentPw("");
-                      setNewPw("");
-                      setConfirmPw("");
-                    }}
+                    onClick={closePasswordForm}
+                    disabled={changePassword.isPending}
                   >
                     취소
                   </Button>
@@ -253,12 +292,38 @@ const AppearanceSection = () => {
 
 const DangerSection = () => {
   const toast = useToast();
+  const { data: me } = useGet<MeDto>("api/user/me", ME_QUERY_KEY);
+  const withdraw = usePost<WithdrawPayload, unknown>("api/user/me/withdraw");
+
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [password, setPassword] = useState("");
+
+  const closeConfirm = () => {
+    setConfirmOpen(false);
+    setPassword("");
+  };
 
   const handleDelete = () => {
-    setConfirmOpen(false);
-    // TODO: 계정 삭제 API
-    toast.info("계정 삭제 API는 추후 지원될 예정입니다.");
+    // 소셜 로그인 전용 계정은 비밀번호가 없다. 서버도 같은 기준으로 판단한다.
+    if (me?.has_password && !password) {
+      toast.error("비밀번호를 입력해 주세요.");
+      return;
+    }
+
+    withdraw.mutate(
+      me?.has_password ? { password } : {},
+      {
+        onSuccess: () => {
+          // 서버가 쿠키를 지웠다. 라우터로 넘기면 죽은 세션으로 대시보드를
+          // 한 번 더 그리게 되므로, 통째로 다시 띄워 상태를 비운다.
+          window.location.href = "/";
+        },
+        onError: (err) => {
+          toast.error(err?.message || "계정 삭제에 실패했습니다.");
+          setPassword("");
+        },
+      },
+    );
   };
 
   return (
@@ -277,8 +342,8 @@ const DangerSection = () => {
               이 문구를 지울 때는 반드시 그 모달이 살아 있는지 먼저 확인할 것.
             */}
             <p className="hidden sm:block text-[12px] text-text-sub mt-0.5 leading-relaxed">
-              모든 챗봇, 대화 로그, 등록된 API 키, 결제 정보가 즉시 삭제됩니다. 이
-              작업은 되돌릴 수 없습니다.
+              모든 챗봇, 대화 로그, 등록된 API 키, 결제수단이 즉시 삭제됩니다. 이
+              작업은 되돌릴 수 없습니다. 결제 내역은 법령에 따라 보관됩니다.
             </p>
           </div>
           <Button
@@ -296,11 +361,29 @@ const DangerSection = () => {
       <ConfirmModal
         open={confirmOpen}
         variant="danger"
+        icon={<AlertTriangle className="w-4 h-4 text-point-red" />}
         title="정말로 계정을 삭제할까요?"
-        description="모든 챗봇, 대화 로그, 등록된 API 키, 결제 정보가 즉시 삭제되며 복구할 수 없습니다."
-        confirmLabel="계정 삭제"
+        description={
+          <div className="flex flex-col gap-3">
+            <p>
+              모든 챗봇, 대화 로그, 등록된 API 키가 삭제되며 복구할 수 없습니다.
+            </p>
+            {me?.has_password && (
+              <Input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="비밀번호 확인"
+                autoComplete="current-password"
+                // 모달 안이라 Enter로 바로 지워지면 사고가 난다. 버튼만 받는다.
+                onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
+              />
+            )}
+          </div>
+        }
+        confirmLabel={withdraw.isPending ? "삭제 중..." : "계정 삭제"}
         onConfirm={handleDelete}
-        onCancel={() => setConfirmOpen(false)}
+        onCancel={closeConfirm}
       />
     </Section>
   );

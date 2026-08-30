@@ -70,6 +70,31 @@
         } catch (e) {}
       })();
     </script>
+
+    <!-- Google Analytics 4 -->
+    <script>
+      /*
+       * /embed 에는 싣지 않는다.
+       *
+       * 그 경로는 **고객 사이트 안에서 도는 화면**이다(위젯 iframe · iframe 직접 삽입).
+       * 여기에 우리 애널리틱스를 붙이면 남의 고객 방문자를 우리가 추적하는 게 되고,
+       * 개인정보처리방침에 없는 일이다. suppress 가 아니라 **스크립트 자체를 안 받는다** —
+       * 그래야 고객 사이트에서 구글로 나가는 요청이 아예 생기지 않는다.
+       *
+       * SPA 라우팅은 GA4 향상된 측정의 history 이벤트가 잡는다(기본 켜짐).
+       */
+      (function () {
+        if (location.pathname.indexOf("/embed") === 0) return;
+        var s = document.createElement("script");
+        s.async = true;
+        s.src = "https://www.googletagmanager.com/gtag/js?id=G-QWJEXZL10M";
+        document.head.appendChild(s);
+        window.dataLayer = window.dataLayer || [];
+        window.gtag = function () { window.dataLayer.push(arguments); };
+        window.gtag("js", new Date());
+        window.gtag("config", "G-QWJEXZL10M");
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

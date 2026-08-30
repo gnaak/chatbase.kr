@@ -52,6 +52,23 @@ const EmbedChat = () => {
    */
   const forceBadge = params.get("badge") === "1";
   /**
+   * 배지 링크. 이 화면은 방문자를 추적하지 않는다(GA4 를 안 싣는다).
+   * 대신 이 주소로 들어온 utm_* 을 **그대로 넘겨준다** — 카페 글에 데모봇 링크를
+   * 붙이면, 거기서 배지를 타고 온 사람의 출처가 랜딩까지 이어진다.
+   * utm_* 이 없으면(=고객 사이트에 설치된 위젯) 배지 자체를 출처로 남긴다.
+   */
+  const badgeHref = (() => {
+    const utm = new URLSearchParams();
+    params.forEach((v, k) => {
+      if (k.startsWith("utm_")) utm.set(k, v);
+    });
+    if (!utm.toString()) {
+      utm.set("utm_source", "widget_badge");
+      utm.set("utm_medium", "referral");
+    }
+    return `https://chatbase.kr/?${utm}`;
+  })();
+  /**
    * iframe 밖에서 이 주소를 직접 연 경우 — 카페·메일에 뿌리는 공유 링크가 여기다.
    * 닫아줄 부모가 없고 화면 폭도 우리가 정해야 해서 세 곳에서 갈린다:
    * 창 크기(windowClass) · 헤더의 X · 최종 렌더 분기.
@@ -333,7 +350,7 @@ const EmbedChat = () => {
       {(forceBadge || bot?.show_badge !== false) && (
         <div className="shrink-0 flex justify-center py-1.5 bg-bg-card">
           <a
-            href="https://chatbase.kr"
+            href={badgeHref}
             target="_blank"
             rel="noopener noreferrer"
             className="text-[10px] text-text-disabled hover:text-text-sub transition-colors"

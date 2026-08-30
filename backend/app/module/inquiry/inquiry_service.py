@@ -339,6 +339,7 @@ class InquiryService:
         items = []
         for inquiry in inquiries:
             stat = stats.get(inquiry.id) or {}
+            first = stat.get("first")
             last = stat.get("last")
             items.append(
                 {
@@ -346,8 +347,9 @@ class InquiryService:
                     "message_count": stat.get("count", 0),
                     "last_sender": _enum_value(last.sender) if last else None,
                     "last_message_at": _iso(last.created_at) if last else None,
-                    # 목록에서 내용을 짐작할 수 있게 앞부분만.
-                    "preview": (last.content[:120] if last else ""),
+                    # 목록에 싣는 건 첫 글(= 문의 본문)이다. 마지막 글을 쓰면
+                    # 답장한 뒤 우리가 쓴 문장으로 바뀌어 무슨 문의였는지 알 수 없다.
+                    "content": (first.content[:200] if first else ""),
                 }
             )
 

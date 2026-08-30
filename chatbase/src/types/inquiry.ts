@@ -44,8 +44,8 @@ export interface InquiryListItem extends Inquiry {
   message_count: number;
   last_sender: InquirySender | null;
   last_message_at: string | null;
-  /** 어드민 목록에만 있다. 마지막 글 앞 120자. */
-  preview?: string;
+  /** 어드민 목록에만 있다. 문의 본문(첫 글) 앞 200자. */
+  content?: string;
 }
 
 export interface AdminInquiryList {

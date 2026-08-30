@@ -107,37 +107,50 @@ class InquiryRepository:
     async def message_stats(
         self, inquiry_ids: list[int]
     ) -> dict[int, dict]:
-        """목록 화면용 요약: 스레드별 글 수 + 마지막 글.
+        """목록 화면용 요약: 스레드별 글 수 + 첫 글 + 마지막 글.
 
-        목록의 각 행마다 스레드를 통째로 읽으면 N+1이 된다. 두 번의 집계 쿼리로
-        끝낸다 — 개수 한 번, 마지막 글 한 번.
+        목록의 각 행마다 스레드를 통째로 읽으면 N+1이 된다. 쿼리 두 번으로 끝낸다 —
+        집계(개수·첫 글 id·마지막 글 id) 한 번, 그 id들의 본문 한 번.
+        (개수와 마지막 글을 따로 세던 것을 한 집계로 합쳐, 첫 글이 늘었는데도
+        쿼리는 3회에서 2회로 줄었다.)
+
+        첫 글이 필요한 이유: 목록에 보여줄 것은 "무엇을 물었나"다. 마지막 글을 쓰면
+        답장을 보낸 순간 우리가 쓴 문장으로 바뀌어, 어떤 문의였는지가 목록에서 사라진다.
         """
         if not inquiry_ids:
             return {}
 
-        count_rows = await self.db.execute(
-            select(InquiryMessage.inquiry_id, func.count(InquiryMessage.id))
-            .where(InquiryMessage.inquiry_id.in_(inquiry_ids))
-            .group_by(InquiryMessage.inquiry_id)
-        )
-        stats: dict[int, dict] = {
-            iid: {"count": 0, "last": None} for iid in inquiry_ids
-        }
-        for iid, count in count_rows.all():
-            stats[iid]["count"] = int(count)
-
-        last_ids = await self.db.execute(
-            select(func.max(InquiryMessage.id))
-            .where(InquiryMessage.inquiry_id.in_(inquiry_ids))
-            .group_by(InquiryMessage.inquiry_id)
-        )
-        ids = [row[0] for row in last_ids.all() if row[0] is not None]
-        if ids:
-            last_rows = await self.db.execute(
-                select(InquiryMessage).where(InquiryMessage.id.in_(ids))
+        bounds = await self.db.execute(
+            select(
+                InquiryMessage.inquiry_id,
+                func.count(InquiryMessage.id),
+                func.min(InquiryMessage.id),
+                func.max(InquiryMessage.id),
             )
-            for msg in last_rows.scalars().all():
-                stats[msg.inquiry_id]["last"] = msg
+            .where(InquiryMessage.inquiry_id.in_(inquiry_ids))
+            .group_by(InquiryMessage.inquiry_id)
+        )
+
+        stats: dict[int, dict] = {
+            iid: {"count": 0, "first": None, "last": None} for iid in inquiry_ids
+        }
+        # 글이 하나뿐인 스레드는 first_id == last_id다. set으로 모아 중복 조회를 막는다.
+        wanted: set[int] = set()
+        bound_by_iid: dict[int, tuple[int, int]] = {}
+        for iid, count, first_id, last_id in bounds.all():
+            stats[iid]["count"] = int(count)
+            if first_id is not None and last_id is not None:
+                bound_by_iid[iid] = (first_id, last_id)
+                wanted.update((first_id, last_id))
+
+        if wanted:
+            rows = await self.db.execute(
+                select(InquiryMessage).where(InquiryMessage.id.in_(wanted))
+            )
+            by_id = {msg.id: msg for msg in rows.scalars().all()}
+            for iid, (first_id, last_id) in bound_by_iid.items():
+                stats[iid]["first"] = by_id.get(first_id)
+                stats[iid]["last"] = by_id.get(last_id)
 
         return stats
 

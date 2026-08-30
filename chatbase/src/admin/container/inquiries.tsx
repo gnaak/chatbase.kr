@@ -134,16 +134,30 @@ const AdminInquiries = () => {
       {
         key: "subject",
         header: "제목",
+        width: "200px",
         align: "left",
-        // 마지막 글 미리보기(r.preview)는 걷어냈다. 목록에서 필요한 건 "무엇이
-        // 들어왔나"까지고, 내용은 어차피 상세를 열어야 읽힌다. 대신 행이 한 줄로
-        // 내려가 한 화면에 두 배 가까이 들어온다.
         render: (r: InquiryListItem) => (
           <div
             className="text-[13px] text-text-main truncate"
             title={r.subject}
           >
             {r.subject}
+          </div>
+        ),
+      },
+      {
+        // width를 주지 않은 유일한 컬럼이라 남는 가로 폭을 전부 받는다.
+        // 본문은 첫 글이라, 답장을 보낸 뒤에도 "무엇을 물었나"가 그대로 남는다.
+        // truncate가 white-space:nowrap이라 본문의 줄바꿈은 공백으로 눕는다.
+        key: "content",
+        header: "내용",
+        align: "left",
+        render: (r: InquiryListItem) => (
+          <div
+            className="text-[12px] text-text-sub truncate"
+            title={r.content || undefined}
+          >
+            {r.content || "-"}
           </div>
         ),
       },
@@ -166,7 +180,7 @@ const AdminInquiries = () => {
         // 잦은데, 같은 칸에 있으면 이름 길이에 따라 시작 위치가 들쭉날쭉했다.
         key: "email",
         header: "연락처",
-        width: "196px",
+        width: "180px",
         align: "left",
         render: (r: InquiryListItem) => (
           <div

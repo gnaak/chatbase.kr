@@ -300,7 +300,8 @@ const EmbedChat = () => {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-1.5">
+          {bot?.multilingual && <LangPill value={lang} onChange={setLang} />}
           <IconBtn label="대화 초기화" onClick={handleReset}>
             <RotateCcw className="w-3.5 h-3.5" />
           </IconBtn>
@@ -311,12 +312,6 @@ const EmbedChat = () => {
           )}
         </div>
       </header>
-      {bot?.multilingual && (
-        <div className="shrink-0 flex justify-end px-3.5 py-1.5 border-b border-line bg-bg-card">
-          <LangPill value={lang} onChange={setLang} />
-        </div>
-      )}
-
       <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-contain px-3.5 py-3.5 space-y-2.5 bg-bg-sub/40">
         {messages.map((msg) => {
           if (!msg.content && msg.id >= 0) return null;

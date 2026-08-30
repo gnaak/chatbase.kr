@@ -117,44 +117,88 @@ def faqs_hash(faqs) -> str:
     ).hexdigest()
 
 
+#: 실행 중인 번역 태스크. **참조를 들고 있어야 한다.**
+#:
+#: 이벤트 루프는 태스크를 약한 참조로만 잡는다. `asyncio.create_task(...)` 의
+#: 반환값을 버리면 GC 가 실행 도중에 태스크를 수거할 수 있고, 그러면 번역이
+#: 조용히 중간에 사라진다 — 로그도 안 남아서 "DeepL 이 안 돈다"로만 보인다.
+_translation_tasks: set = set()
+
+
+def schedule_faq_translation(bot_id: int) -> None:
+    """FAQ 번역을 백그라운드로 띄운다. 참조를 보관해 GC 를 막는다."""
+    task = asyncio.create_task(_translate_bot_faqs(bot_id))
+    _translation_tasks.add(task)
+    task.add_done_callback(_translation_tasks.discard)
+
+
 async def _translate_bot_faqs(bot_id: int) -> None:
     """FAQ를 en/ja/zh로 번역해 저장한다. **백그라운드 전용.**
 
     요청 반환 뒤에 도는 작업이라 요청 스코프 세션을 못 쓴다. 자체 세션을 연다
     (`kakao_skill_service._answer_via_callback`와 같은 방식).
 
-    실패해도 조용히 끝낸다 — 번역이 없으면 원문(한국어) FAQ가 그대로 나가고,
-    번역 실패로 봇 저장이 되돌아가면 안 된다.
+    번역이 실패해도 봇 저장을 되돌리지 않는다 — 번역이 없으면 원문(한국어) FAQ가
+    그대로 나가므로 서비스는 산다. 다만 **왜 안 됐는지는 반드시 로그로 남긴다.**
+    조용히 넘어가면 키가 없는 건지, 한도가 찬 건지, 봇이 다국어가 아닌 건지
+    바깥에서 구분할 방법이 없다.
     """
     from app.core.database.base import SessionLocal
     from app.module.bot.bot_repository import BotRepository
     from app.module.infra.deepl import deepl_service
 
     if not deepl_service.is_configured():
+        logger.info(
+            "faq translation skipped bot_id=%s: DEEPL_API_KEY 미설정", bot_id
+        )
         return
 
     try:
         async with SessionLocal() as db:
             repo = BotRepository(db)
             bot = await repo.find_by_id(bot_id)
-            if not bot or not bot.multilingual:
+            if not bot:
+                logger.info("faq translation skipped bot_id=%s: 봇 없음", bot_id)
+                return
+            if not bot.multilingual:
+                logger.info(
+                    "faq translation skipped bot_id=%s: 다국어 꺼짐", bot_id
+                )
                 return
 
             source = bot.faqs or []
+            if not source:
+                logger.info(
+                    "faq translation skipped bot_id=%s: FAQ 없음", bot_id
+                )
+                return
+
             digest = faqs_hash(source)
+            done, skipped, failed = [], [], []
 
             for lang in TRANSLATION_LANGS:
                 existing = await repo.find_translation(bot_id, lang)
                 if existing and existing.source_hash == digest:
-                    continue  # 원문 그대로 — 호출하지 않는다
+                    skipped.append(lang)  # 원문 그대로 — 호출하지 않는다
+                    continue
                 translated = await deepl_service.translate_faqs(source, lang)
                 if translated is None:
-                    continue  # 한도 소진·오류. 다음 저장 때 다시 시도된다
+                    failed.append(lang)  # 한도 소진·오류. 다음 저장 때 재시도
+                    continue
                 await repo.upsert_translation(bot_id, lang, translated, digest)
+                done.append(lang)
 
             await db.commit()
+            logger.info(
+                "faq translation bot_id=%s faqs=%d 저장=%s 생략=%s 실패=%s",
+                bot_id,
+                len(source),
+                done or "-",
+                skipped or "-",
+                failed or "-",
+            )
     except Exception as exc:  # noqa: BLE001
-        logger.warning("faq translation failed bot_id=%s: %s", bot_id, exc)
+        logger.exception("faq translation failed bot_id=%s: %s", bot_id, exc)
 
 
 class BotService:
@@ -358,7 +402,7 @@ class BotService:
         # 원문이 안 바뀌었으면 `_translate_bot_faqs` 안에서 해시로 걸러 아예
         # 호출하지 않으므로, 매번 부르는 비용은 사실상 0이다.
         if bot.multilingual:
-            asyncio.create_task(_translate_bot_faqs(bot.id))
+            schedule_faq_translation(bot.id)
         return success(data=_bot_to_dict(bot))
 
     async def update_bot(self, request):
@@ -409,7 +453,7 @@ class BotService:
         # 원문이 안 바뀌었으면 `_translate_bot_faqs` 안에서 해시로 걸러 아예
         # 호출하지 않으므로, 매번 부르는 비용은 사실상 0이다.
         if bot.multilingual:
-            asyncio.create_task(_translate_bot_faqs(bot.id))
+            schedule_faq_translation(bot.id)
         return success(data=_bot_to_dict(bot))
 
     async def delete_bot(self, request):

@@ -6,6 +6,8 @@ declare global {
   interface Window {
     webkitSpeechRecognition: any;
     SpeechRecognition: any;
+    /** widget.js가 중복 로드를 막으려고 세우는 플래그. */
+    __chatbase_loaded?: boolean;
   }
 
   var webkitSpeechRecognition: any;

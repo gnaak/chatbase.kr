@@ -157,6 +157,20 @@ const EmbedChat = () => {
     setError(null);
   };
 
+  /**
+   * 위젯 모드에서는 창을 여닫는 주체가 부모의 widget.js라 여기서 닫을 수 없다.
+   * 모바일은 패널이 전체화면이라 버블(닫기 버튼)이 가려지므로,
+   * 헤더의 X가 부모에게 닫으라고 알린다. 호스트 사이트 origin은 알 수 없어 "*",
+   * 대신 보내는 값에 식별용 source를 넣고 부모는 e.source로 우리 iframe인지 검사한다.
+   */
+  const handleClose = () => {
+    if (!isWidgetMode) {
+      setIsOpen(false);
+      return;
+    }
+    window.parent.postMessage({ source: "chatbase-widget", type: "close" }, "*");
+  };
+
   const windowClass = [
     "flex flex-col bg-bg-card overflow-hidden",
     isWidgetMode
@@ -172,12 +186,18 @@ const EmbedChat = () => {
    */
   const loadingWindow = (
     <div className={windowClass}>
-      <header className="shrink-0 flex items-center gap-2.5 px-3.5 h-12 border-b border-line">
-        <Bar className="w-7 h-7 rounded-full shrink-0" />
-        <div className="flex flex-col gap-1.5">
-          <Bar className="h-3 w-28" />
-          <Bar className="h-2.5 w-16" />
+      {/* 로딩 중에도 닫을 수 있어야 한다 — 모바일 전체화면에서는 이 X가 유일한 탈출구다. */}
+      <header className="shrink-0 flex items-center justify-between px-3.5 h-12 border-b border-line">
+        <div className="flex items-center gap-2.5">
+          <Bar className="w-7 h-7 rounded-full shrink-0" />
+          <div className="flex flex-col gap-1.5">
+            <Bar className="h-3 w-28" />
+            <Bar className="h-2.5 w-16" />
+          </div>
         </div>
+        <IconBtn label="닫기" onClick={handleClose}>
+          <X className="w-3.5 h-3.5" />
+        </IconBtn>
       </header>
 
       <div className="flex-1 px-3.5 py-3.5 space-y-2.5 bg-bg-sub/40">
@@ -219,11 +239,9 @@ const EmbedChat = () => {
           <IconBtn label="대화 초기화" onClick={handleReset}>
             <RotateCcw className="w-3.5 h-3.5" />
           </IconBtn>
-          {!isWidgetMode && (
-            <IconBtn label="닫기" onClick={() => setIsOpen(false)}>
-              <X className="w-3.5 h-3.5" />
-            </IconBtn>
-          )}
+          <IconBtn label="닫기" onClick={handleClose}>
+            <X className="w-3.5 h-3.5" />
+          </IconBtn>
         </div>
       </header>
 

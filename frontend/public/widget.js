@@ -39,6 +39,10 @@
   var BUBBLE = 48;
   var GAP = 12;
   var MARGIN = 20;
+  // 이 폭 이하에서는 패널을 전체화면으로 띄운다.
+  var MOBILE_MAX = 640;
+  // 데스크톱 패널이 버블·여백을 뺀 뒤 쓸 수 있는 높이
+  var RESERVED = MARGIN * 2 + BUBBLE + GAP;
 
   // ── 호스트 컨테이너 (Shadow DOM으로 호스트 사이트 CSS 격리)
   var host = document.createElement("div");
@@ -52,6 +56,12 @@
   var shadow = host.attachShadow({ mode: "open" });
 
   // ── 스타일 (Shadow DOM 내부 한정)
+  //
+  // 모바일 주의: 100vh는 "주소창이 접힌 상태"의 큰 뷰포트 높이라 실제로 보이는
+  // 높이보다 크다. 하단(bottom) 기준으로 세운 패널에 100vh 기반 높이를 주면
+  // 그 차이만큼 패널 윗부분(헤더)이 화면 위로 잘려 올라간다. 그래서 모바일에서는
+  // 전체화면(.full)으로 띄우고, 정확한 크기는 아래 syncPanel()이 visualViewport로
+  // 직접 맞춘다. dvh는 그 JS가 돌기 전/못 도는 브라우저를 위한 근사값.
   var style = document.createElement("style");
   style.textContent =
     "*{box-sizing:border-box;margin:0;padding:0}" +
@@ -60,10 +70,12 @@
     ".bubble:hover{transform:scale(1.05)}" +
     ".bubble:active{transform:scale(.96)}" +
     ".bubble svg{width:20px;height:20px;display:block}" +
-    ".panel{pointer-events:auto;width:" + WIDTH + "px;height:" + HEIGHT + "px;max-width:calc(100vw - " + (MARGIN * 2) + "px);max-height:calc(100vh - " + (MARGIN * 2 + BUBBLE + GAP) + "px);border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 24px 60px rgba(0,0,0,.18),0 0 0 1px rgba(0,0,0,.06);transform-origin:bottom right;animation:cb-pop .15s ease-out}" +
+    ".panel{pointer-events:auto;width:" + WIDTH + "px;height:" + HEIGHT + "px;max-width:calc(100vw - " + (MARGIN * 2) + "px);max-height:calc(100vh - " + RESERVED + "px);max-height:calc(100dvh - " + RESERVED + "px);border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 24px 60px rgba(0,0,0,.18),0 0 0 1px rgba(0,0,0,.06);transform-origin:bottom right;animation:cb-pop .15s ease-out}" +
     ".panel iframe{width:100%;height:100%;border:0;display:block}" +
+    ".panel.full{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;max-width:none;max-height:none;border-radius:0;box-shadow:none;transform-origin:center bottom;animation:cb-rise .18s ease-out;overscroll-behavior:contain}" +
+    ".wrap.full .bubble{display:none}" +
     "@keyframes cb-pop{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}" +
-    "@media(max-width:480px){.panel{width:calc(100vw - " + (MARGIN * 2) + "px);height:calc(100vh - " + (MARGIN * 2 + BUBBLE + GAP) + "px)}}";
+    "@keyframes cb-rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}";
   shadow.appendChild(style);
 
   // ── 마크업
@@ -108,15 +120,85 @@
   renderBubble();
 
   var open = false;
+
+  var isMobile = function () {
+    return window.matchMedia("(max-width:" + MOBILE_MAX + "px)").matches;
+  };
+
+  // 전체화면일 때 패널을 "실제로 보이는 영역"에 맞춘다.
+  // visualViewport는 주소창이 접히거나 키보드가 올라온 뒤의 크기·위치를 알려주므로
+  // 이 값으로 맞추면 패널이 화면 위아래로 튀어나가지 않는다.
+  var syncPanel = function () {
+    if (!open || !isMobile()) return;
+    var vv = window.visualViewport;
+    panel.style.width = (vv ? vv.width : window.innerWidth) + "px";
+    panel.style.height = (vv ? vv.height : window.innerHeight) + "px";
+    panel.style.top = (vv ? vv.offsetTop : 0) + "px";
+    panel.style.left = (vv ? vv.offsetLeft : 0) + "px";
+  };
+
+  var resetPanelSize = function () {
+    panel.style.width = "";
+    panel.style.height = "";
+    panel.style.top = "";
+    panel.style.left = "";
+  };
+
+  // 전체화면 동안 호스트 페이지 스크롤 잠금. 닫을 때 원래 값으로 되돌린다.
+  var lock = null;
+  var lockScroll = function () {
+    if (lock) return;
+    var html = document.documentElement;
+    var body = document.body;
+    lock = { html: html.style.overflow, body: body.style.overflow };
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+  };
+  var unlockScroll = function () {
+    if (!lock) return;
+    document.documentElement.style.overflow = lock.html;
+    document.body.style.overflow = lock.body;
+    lock = null;
+  };
+
+  var applyLayout = function () {
+    var full = open && isMobile();
+    wrap.classList.toggle("full", full);
+    panel.classList.toggle("full", full);
+    if (full) {
+      lockScroll();
+      syncPanel();
+    } else {
+      unlockScroll();
+      resetPanelSize();
+    }
+  };
+
   var setOpen = function (next) {
     open = next;
     panel.style.display = open ? "block" : "none";
     bubble.setAttribute("aria-label", open ? "채팅 닫기" : "채팅 열기");
+    applyLayout();
   };
 
   bubble.addEventListener("click", function () {
     setOpen(!open);
   });
+
+  // 전체화면에서는 버블이 가려지므로 iframe 안의 닫기 버튼이 부모에게 알린다.
+  // e.source 검사로 우리 iframe이 보낸 메시지만 받는다.
+  window.addEventListener("message", function (e) {
+    if (e.source !== iframe.contentWindow) return;
+    var data = e.data;
+    if (data && data.source === "chatbase-widget" && data.type === "close") setOpen(false);
+  });
+
+  window.addEventListener("resize", applyLayout);
+  window.addEventListener("orientationchange", applyLayout);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", syncPanel);
+    window.visualViewport.addEventListener("scroll", syncPanel);
+  }
 
   // 봇 메타 fetch — widget_icon 적용. 실패해도 기본 SVG로 표시.
   fetch(baseURL + "/api/bot/public/" + encodeURIComponent(botId))

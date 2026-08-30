@@ -5,7 +5,7 @@
 ```
 backend/    FastAPI — 하나. 두 상품이 같이 쓴다
 chatbase/   React — chatbase.kr (챗봇)      :3000
-llm/        React — llm.chatbase.kr (AEO)   :3001
+aeo/        React — aeo.chatbase.kr (AEO)   :3001
 ```
 
 **상품이 둘이고 서로를 전제하지 않는다.** AEO만 쓰는 고객이 따로 있다.
@@ -15,7 +15,17 @@ llm/        React — llm.chatbase.kr (AEO)   :3001
 `npm install`도 `npm run dev`도 각 폴더에서 따로 한다.
 대신 디자인 시스템·인증 훅이 양쪽에 복사돼 있으므로, 고칠 때 양쪽을 같이 본다.
 
-세부 규칙은 `chatbase/CLAUDE.md`, `llm/CLAUDE.md`, `backend/CLAUDE.md` 참고.
+세부 규칙은 `chatbase/CLAUDE.md`, `aeo/CLAUDE.md`, `backend/CLAUDE.md` 참고.
+
+### 문서 위치
+
+상품 문서는 상품 폴더 안에 있다. 루트에는 레포 전체에 걸치는 것만 둔다.
+
+| 위치 | 문서 |
+|------|------|
+| 루트 | `CLAUDE.md`(이 문서) · `DESIGN.md`(디자인 시스템 — 두 앱 공용) |
+| `chatbase/` | `PROJECT.md` `NEED.md` `TODO.md` `SALES.md` `PROGRESS.md` `chatbase-knowledge.txt` |
+| `aeo/` | `PROJECT.md`(AEO가 뭔지 + 상품 정의) `TODO.md` |
 
 ## 기술 스택
 
@@ -66,9 +76,10 @@ llm/        React — llm.chatbase.kr (AEO)   :3001
 
 ## Phase 관리
 
-**시작 순서**: `PROJECT.md` 기능 정의 작성 → Claude가 Phase 계획 수립 → 사용자 승인 → Phase 1부터 개발
+**시작 순서**: `<상품>/PROJECT.md` 기능 정의 → Claude가 Phase 계획 수립 →
+사용자 승인 → Phase 1부터 개발
 
-**Phase 양식**:
+**Phase 양식** (계획을 세울 때):
 ```markdown
 ## Phase N: [이름]
 **목표**: ...
@@ -77,8 +88,15 @@ llm/        React — llm.chatbase.kr (AEO)   :3001
 **커밋 메시지(안)**: `N단계: [설명]` — 실제 커밋은 지시를 받고 한다
 ```
 
-## agent-progress.md 형식
+## 진행 기록 — `<상품>/PROGRESS.md`
 
+진행 기록은 **상품 폴더 안의 `PROGRESS.md`**에 쓴다.
+`chatbase/PROGRESS.md` · `aeo/PROGRESS.md`. 루트에는 두지 않는다.
+
+두 상품에 걸치는 작업(결제·인증처럼 백엔드 공용)은 **주된 상품 쪽에 쓰고**,
+다른 쪽 문서에서 링크로 가리킨다. 같은 내용을 두 곳에 복사하지 않는다.
+
+**Phase 완료 시 양식**:
 ```markdown
 ## N 단계: [이름]
 - 상태: ⬜ 대기 / 🔄 진행중 / ✅ 완료 / ❌ 실패
@@ -86,6 +104,9 @@ llm/        React — llm.chatbase.kr (AEO)   :3001
 - 수행 내용:
 - 이슈/메모:
 ```
+
+`이슈/메모`에는 **왜 그렇게 했는지**와 **밟은 함정**을 남긴다.
+"무엇을 했다"는 diff를 보면 알지만, "왜"와 "다음에 조심할 것"은 여기 없으면 사라진다.
 
 ## 트러블슈팅
 

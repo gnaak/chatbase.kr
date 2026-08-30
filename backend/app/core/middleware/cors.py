@@ -14,6 +14,9 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
     "https://chatbase.kr",
     "https://www.chatbase.kr",
+    # llm.chatbase.kr(AEO)이 nginx에서 /api/를 자기 도메인으로 프록시하면 same-origin이라
+    # 여기 없어도 된다. 프록시 없이 chatbase.kr을 직접 부르는 경우를 위해 남겨둔다.
+    "https://llm.chatbase.kr",
 ]
 
 

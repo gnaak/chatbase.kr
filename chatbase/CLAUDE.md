@@ -4,7 +4,7 @@ React 19 + TypeScript + Vite + TanStack Query v5 + Tailwind CSS v3 + lucide-reac
 
 ## 폴더 구조
 
-**독립 앱이다.** `../llm`과 코드도 `node_modules`도 공유하지 않는다.
+**독립 앱이다.** `../aeo`과 코드도 `node_modules`도 공유하지 않는다.
 백엔드(`../backend`)만 같이 쓴다 — 계정·결제·어드민이 공용이기 때문.
 
 ```
@@ -37,13 +37,13 @@ npm run dev      # :3000
 npm run build    # dist/
 ```
 
-`../llm`은 :3001에서 자기 앱으로 따로 돈다. 각자 자기 `/`를 가지므로
+`../aeo`은 :3001에서 자기 앱으로 따로 돈다. 각자 자기 `/`를 가지므로
 로컬에서도 도메인이 나뉜 것처럼 동작한다.
 
 ### llm 앱과의 관계
 
 두 앱은 **아무것도 공유하지 않는다.** 로그인 훅·UI 컴포넌트가 양쪽에 따로 있다.
-`ui/button.tsx` 같은 걸 고치면 `../llm/src/ui/button.tsx`도 같이 봐야 한다.
+`ui/button.tsx` 같은 걸 고치면 `../aeo/src/ui/button.tsx`도 같이 봐야 한다.
 
 공유하는 건 백엔드 하나뿐이다. 계정 쿠키가 `domain=chatbase.kr`라
 서브도메인끼리 로그인이 이어진다.

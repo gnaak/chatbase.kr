@@ -25,7 +25,7 @@ interface AppShellProps {
 }
 
 /**
- * 두 상품(chatbase.kr · llm.chatbase.kr)이 공유하는 셸.
+ * 두 상품(chatbase.kr · aeo.chatbase.kr)이 공유하는 셸.
  *
  * 프로바이더 스택과 404는 어느 상품에서도 같으므로 여기 한 벌만 둔다.
  * 상품별로 다른 건 `<Routes>` 안의 내용뿐이고, 그건 진입점이 조립한다.

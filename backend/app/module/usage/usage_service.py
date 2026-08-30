@@ -145,6 +145,10 @@ class UsageService:
                 # 게이팅 판정은 서버가 한다. 프론트가 플랜 이름을 비교하면
                 # 카카오를 포함하는 플랜이 늘어날 때 조용히 어긋난다.
                 "kakao_channel": limits.kakao_channel,
+                # 같은 이유로 다국어도 값으로 내려보낸다.
+                # 지금은 GLOBAL만 true지만, 프론트에 `plan === "global"`을
+                # 심어두면 플랜이 늘어날 때 화면이 조용히 틀어진다.
+                "multilingual": limits.multilingual,
                 "per_bot": [
                     {
                         "bot_id": bot_id,

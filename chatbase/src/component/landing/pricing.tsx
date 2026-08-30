@@ -9,12 +9,12 @@ const Pricing = () => {
       id="pricing"
       className="border-b border-line min-h-screen flex items-center"
     >
-      <div className="w-full max-w-6xl mx-auto px-6 md:px-8 py-12 md:py-16">
+      <div className="w-full max-w-7xl mx-auto px-6 md:px-8 py-12 md:py-16">
         <div className="text-center mb-9">
           <h2 className="text-[32px] md:text-[40px] font-semibold tracking-heading text-text-main">
             쓰는 만큼만, 부담 없이.
           </h2>
-          <p className="mt-3 text-[15px] text-text-sub max-w-xl mx-auto leading-relaxed">
+          <p className="mt-3 text-[15px] text-text-sub max-w-3xl mx-auto leading-relaxed">
             무료로 내 사이트에 붙여 먼저 써보세요. 모델 사용료는 본인 키로 직접
             결제되니, 유료 플랜은 대화가 몇 건이든 추가 과금이 없습니다.
           </p>
@@ -25,7 +25,7 @@ const Pricing = () => {
           )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {PLANS.map((plan) => (
             <div
               key={plan.name}

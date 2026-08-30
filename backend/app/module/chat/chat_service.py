@@ -40,7 +40,9 @@ def _resolve_effective_model(bot_model: str, override: str | None) -> str:
         return bot_model
 
 
-def _build_system_prompt(bot, vector_store_id: str | None = None) -> str:
+def _build_system_prompt(
+    bot, vector_store_id: str | None = None, multilingual: bool = False
+) -> str:
     """봇 system_prompt + 학습 텍스트 + (fallback 또는 web search) 규칙 합성.
 
     - 학습 자료 + fallback 있음: 자료에 없는 질문은 fallback 그대로 답변.
@@ -55,6 +57,22 @@ def _build_system_prompt(bot, vector_store_id: str | None = None) -> str:
     if (bot.system_prompt or "").strip():
         parts.append(bot.system_prompt.strip())
 
+    # 다국어: 방문자가 쓴 언어로 답한다.
+    #
+    # 번역 API도 언어 감지도 쓰지 않는다 — LLM이 사용자 메시지를 보고 알아서
+    # 맞춘다. 학습 자료가 한국어여도 답은 방문자 언어로 나가고, 원가는 0이다.
+    #
+    # QR에 `?lang=` 을 실어도 그건 **첫 인사말만** 정한다. 대화는 사용자가 실제로
+    # 쓴 언어를 따라가는 게 맞다 — 일본인이 영어로 물으면 영어로 답해야 한다.
+    if multilingual:
+        parts.append(
+            "언어 규칙:\n"
+            "- 사용자가 사용한 언어와 같은 언어로 답변하세요.\n"
+            "- 참고 자료가 다른 언어로 쓰여 있어도 답변은 사용자 언어로 옮겨서 하세요.\n"
+            "- 고유명사(상호·메뉴명·지명)는 원문을 함께 적어주세요. "
+            "방문자가 현장에서 그 이름을 찾아야 하기 때문입니다."
+        )
+
     # training_type이 "file"이면 텍스트 학습은 쓰지 않는다.
     # (모드를 바꿔도 예전 training_text가 DB에 남아 조용히 주입되는 것 방지)
     training_type = getattr(bot, "training_type", None) or "text"
@@ -68,12 +86,22 @@ def _build_system_prompt(bot, vector_store_id: str | None = None) -> str:
     if has_knowledge:
         fallback = (bot.fallback or "").strip()
         if fallback:
+            # 다국어일 때 fallback 을 "그대로" 답하게 두면 외국인 방문자에게
+            # 한국어 문장이 튀어나온다. 4개 국어로 응대하다가 모르는 질문 하나에서
+            # 한국어가 나오는 게 이 상품에서 제일 티나는 사고라 여기만 규칙을 바꾼다.
+            fallback_rule = (
+                "- 자료에 없거나 확실하지 않은 질문에는 다른 말 없이 "
+                "다음 문장을 **사용자 언어로 옮겨서** 답변하세요:\n"
+                if multilingual
+                else "- 자료에 없거나 확실하지 않은 질문에는 다른 말 없이 정확히 "
+                "다음 문장을 그대로 답변하세요:\n"
+            )
             parts.append(
                 "중요 규칙:\n"
                 "- 위에 제공된 참고 자료(또는 첨부된 파일)에 명시된 내용 안에서만 답변하세요.\n"
                 "- 추측하거나 일반 상식/사전 지식으로 답변하지 마세요.\n"
-                "- 자료에 없거나 확실하지 않은 질문에는 다른 말 없이 정확히 다음 문장을 그대로 답변하세요:\n"
-                f'"{fallback}"'
+                + fallback_rule
+                + f'"{fallback}"'
             )
         else:
             parts.append(
@@ -82,6 +110,25 @@ def _build_system_prompt(bot, vector_store_id: str | None = None) -> str:
                 "- 자료에 답이 없으면 web search 도구를 사용해 인터넷에서 최신 정보를 검색해 답변하세요."
             )
     return "\n\n".join(parts)
+
+
+async def _multilingual_allowed(bot, usage_service) -> bool:
+    """봇 설정과 **현재 플랜**을 모두 만족할 때만 다국어를 켠다.
+
+    봇의 `multilingual` 플래그만 보면, GLOBAL을 한 달 결제해 켜둔 뒤 STANDARD로
+    내려도 계속 돈다. 그러면 99,000원을 유지할 이유가 없어져 가격이 무너진다.
+    `_ensure_multilingual_allowed`(쓰기 시점)만으로는 못 막는다 — 하향은 봇을
+    건드리지 않고 일어나기 때문이다.
+
+    판정할 수단이 없으면(usage_service 미주입) **끈다.** 확인 못 하는 유료 기능은
+    주지 않는 쪽이 안전하고, 이 코드베이스가 `resolve_plan`에서 FREE로 떨어뜨리는
+    것과 같은 방향이다.
+    """
+    if not getattr(bot, "multilingual", False):
+        return False
+    if usage_service is None:
+        return False
+    return not await usage_service.is_feature_blocked(bot, "multilingual")
 
 
 def _should_enable_web_search(bot) -> bool:
@@ -229,7 +276,9 @@ class ChatService:
             if provider == Provider.OPENAI
             else None
         )
-        system = _build_system_prompt(bot, vec_id)
+        system = _build_system_prompt(
+            bot, vec_id, await _multilingual_allowed(bot, self.usage_service)
+        )
         try:
             answer = await self.llm_service.chat(
                 model=effective_model,
@@ -368,7 +417,9 @@ class ChatService:
                     if provider == Provider.OPENAI
                     else None
                 )
-                system = _build_system_prompt(bot, vec_id)
+                system = _build_system_prompt(
+            bot, vec_id, await _multilingual_allowed(bot, self.usage_service)
+        )
 
                 history = await chat_repo.find_messages(session.id)
                 api_messages = [

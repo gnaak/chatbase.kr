@@ -17,9 +17,29 @@ interface BotPublicDto {
   greeting: string | null;
   active: boolean;
   faqs: { q: string; a: string }[] | null;
+  /** 다국어 응대 여부. 켜져 있으면 LLM이 방문자가 쓴 언어로 답한다. */
+  multilingual?: boolean;
+  /** 언어별 첫 인사말. `{ en, ja, zh }`. 없는 언어는 `greeting`으로 떨어진다. */
+  greetings?: Record<string, string> | null;
   /** 유료 플랜은 false. 응답 전이거나 필드가 없으면 표시하는 쪽으로 기운다. */
   show_badge?: boolean;
 }
+
+/**
+ * 방문자 언어 한 글자로 줄이기. `ko-KR` → `ko`, `zh-TW` → `zh`.
+ *
+ * QR 이 `?lang=ja` 를 실어 오면 그걸 쓰고, 없으면 브라우저 설정을 본다.
+ * 감지에 실패하면 `ko` 로 떨어진다 — 국내 손님이 다수라 그쪽이 안전하다.
+ *
+ * 대화 자체의 언어는 여기서 정하지 않는다. LLM 이 사용자가 실제로 쓴 말을 보고
+ * 맞춘다(`chat_service._build_system_prompt`). 이 값이 정하는 건 **첫 인사말뿐**이다.
+ */
+const resolveLang = (fromQuery: string | null): string => {
+  const raw = (fromQuery || navigator.language || "ko").toLowerCase();
+  const base = raw.split("-")[0];
+  return ["ko", "en", "ja", "zh"].includes(base) ? base : "ko";
+};
+
 
 interface ChatMessage {
   id: number;
@@ -38,6 +58,8 @@ interface StreamRequest {
 const EmbedChat = () => {
   const { botId } = useParams();
   const params = new URLSearchParams(window.location.search);
+  // 한 번만 읽는다. 언어는 세션 중에 바뀌지 않으므로 상태로 들 이유가 없다.
+  const lang = resolveLang(params.get("lang"));
   // widget.js가 iframe에 ?mode=widget을 붙여서 호출 → 버블 버튼 없이 채팅창만 표시
   const isWidgetMode = params.get("mode") === "widget";
   /**
@@ -91,11 +113,13 @@ const EmbedChat = () => {
   );
   const { sendMessage } = useChatStream<StreamRequest>("api/chat/stream");
 
+  // 그 언어 인사말 → 없으면 기본(한국어) 인사말 → 그것도 없으면 인사 없음.
+  const greetingText = bot?.greetings?.[lang] || bot?.greeting || null;
   useEffect(() => {
-    if (bot?.greeting) {
-      setMessages([{ id: 0, role: "bot", content: bot.greeting, created_at: null }]);
+    if (greetingText) {
+      setMessages([{ id: 0, role: "bot", content: greetingText, created_at: null }]);
     }
-  }, [bot?.greeting]);
+  }, [greetingText]);
 
   const lastContent = messages[messages.length - 1]?.content ?? "";
   useEffect(() => {
@@ -187,7 +211,7 @@ const EmbedChat = () => {
   };
 
   const handleReset = () => {
-    setMessages(bot?.greeting ? [{ id: 0, role: "bot", content: bot.greeting, created_at: null }] : []);
+    setMessages(greetingText ? [{ id: 0, role: "bot", content: greetingText, created_at: null }] : []);
     setSessionId(undefined);
     setError(null);
   };

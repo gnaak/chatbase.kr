@@ -1,10 +1,27 @@
 """플랜별 한도 정의.
 
-프론트 `frontend/src/types/plan.ts`의 가격표와 숫자가 일치해야 한다.
+프론트 `chatbase/src/types/plan.ts`의 가격표와 숫자가 일치해야 한다.
 한쪽만 고치면 "가격표에 3개라고 써놓고 1개에서 막히는" 상황이 생긴다.
+(실제로 한동안 어긋나 있었다 — 프론트는 1/1/3, 백엔드는 1/3/10이었다.)
 
 BYOK라 모델 사용료가 우리 원가에 잡히지 않으므로 **유료 플랜은 대화 건수를
 제한하지 않는다**(`monthly_messages=None`). 유료 전환 레버는 Free의 월 대화 한도다.
+
+## 봇 개수를 값의 축으로 쓴다
+
+봇이 여러 개 필요한 사람은 사실상 **제작사·다점포**다. 단일 사업자는 1개면 된다.
+그래서 STANDARD에 3개를 주던 것을 1개로 조였다 — 안 쓰는 한도를 주면 가장 값비싼
+고객(제작사)이 가장 싼 플랜에 눌러앉는다.
+
+## GLOBAL
+
+QR + 다국어 응대. 호텔·게스트하우스·관광지처럼 **외국인 방문자를 받는 곳**이
+산다. 값의 축은 봇 개수가 아니라 `multilingual` 하나다 — 봇 개수는 아래 플랜을
+여러 개 사면 우회되지만, 다국어는 그렇게 못 한다.
+
+한때 여기에 PARTNER(제작사 재판매, 고객사 분리 로그인)를 두려다 접었다.
+분리 로그인은 만들다가 되돌렸고, **구현이 없는 기능으로 플랜을 만들면 안 된다.**
+되살릴 거면 `chatbase/PROGRESS.md` 13단계를 먼저 볼 것.
 """
 
 from __future__ import annotations
@@ -44,6 +61,8 @@ class Plan(str, enum.Enum):
     FREE = "free"
     STANDARD = "standard"
     PREMIUM = "premium"
+    #: QR + 다국어. 외국인 방문자를 받는 곳(호텔·게스트하우스·관광지)용.
+    GLOBAL = "global"
 
 
 @dataclass(frozen=True)
@@ -58,6 +77,10 @@ class PlanLimits:
     remove_badge: bool
     #: 대화 기록 보관 일수. None = 무제한
     history_days: int | None
+    #: 다국어 응대. 켜면 방문자가 쓴 언어로 답한다(`chat_service._build_system_prompt`).
+    #: GLOBAL 전용이다. 봇 개수는 하위 플랜을 여러 개 사면 우회되지만 이건 안 되므로
+    #: 가격 방어선 역할을 한다.
+    multilingual: bool
 
 
 PLAN_LIMITS: dict[Plan, PlanLimits] = {
@@ -68,6 +91,7 @@ PLAN_LIMITS: dict[Plan, PlanLimits] = {
         kakao_channel=False,
         remove_badge=False,
         history_days=7,
+        multilingual=False,
     ),
     Plan.STANDARD: PlanLimits(
         bots=1,
@@ -76,6 +100,7 @@ PLAN_LIMITS: dict[Plan, PlanLimits] = {
         kakao_channel=False,
         remove_badge=True,
         history_days=90,
+        multilingual=False,
     ),
     Plan.PREMIUM: PlanLimits(
         bots=3,
@@ -84,23 +109,34 @@ PLAN_LIMITS: dict[Plan, PlanLimits] = {
         kakao_channel=True,
         remove_badge=True,
         history_days=None,
+        multilingual=False,
+    ),
+    Plan.GLOBAL: PlanLimits(
+        bots=5,
+        monthly_messages=None,
+        file_learning=True,
+        kakao_channel=True,
+        remove_badge=True,
+        history_days=None,
+        multilingual=True,
     ),
 }
 
 
-#: 플랜별 월 결제 금액(원). `frontend/src/types/plan.ts`의 가격표와 일치해야 한다.
+#: 플랜별 월 결제 금액(원). `chatbase/src/types/plan.ts`의 가격표와 일치해야 한다.
 #: 표기는 "VAT 별도"지만 청구 금액은 이 값 그대로 나간다.
 PLAN_PRICES: dict[Plan, int] = {
     Plan.FREE: 0,
     Plan.STANDARD: 19_000,
     Plan.PREMIUM: 49_000,
+    Plan.GLOBAL: 99_000,
 }
 
 #: 결제로 전환할 수 있는 플랜. FREE는 결제 대상이 아니다.
-PAID_PLANS: tuple[Plan, ...] = (Plan.STANDARD, Plan.PREMIUM)
+PAID_PLANS: tuple[Plan, ...] = (Plan.STANDARD, Plan.PREMIUM, Plan.GLOBAL)
 
 #: 낮은 등급 → 높은 등급 순. 상향/하향 판정에 쓴다.
-PLAN_ORDER: tuple[Plan, ...] = (Plan.FREE, Plan.STANDARD, Plan.PREMIUM)
+PLAN_ORDER: tuple[Plan, ...] = (Plan.FREE, Plan.STANDARD, Plan.PREMIUM, Plan.GLOBAL)
 
 
 def tier_of(plan: Plan) -> int:

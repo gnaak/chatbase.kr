@@ -55,6 +55,12 @@ export interface PlanLimits {
   fileLearning: boolean;
   kakaoChannel: boolean;
   historyDays: number | null;
+  /**
+   * 다국어 응대. 켜면 방문자가 쓴 언어로 답한다.
+   * GLOBAL 전용 — 봇 개수는 하위 플랜을 여러 개 사면 우회되지만 이건 안 되므로
+   * 가격 방어선 역할을 한다.
+   */
+  multilingual: boolean;
 }
 
 export interface Plan {
@@ -88,6 +94,7 @@ export const PLANS: Plan[] = [
       fileLearning: false,
       kakaoChannel: false,
       historyDays: 7,
+      multilingual: false,
     },
     cta: "무료로 시작",
     href: "/dashboard",
@@ -110,6 +117,7 @@ export const PLANS: Plan[] = [
       fileLearning: true,
       kakaoChannel: false,
       historyDays: 90,
+      multilingual: false,
     },
     cta: "시작하기",
     href: "/dashboard",
@@ -124,7 +132,6 @@ export const PLANS: Plan[] = [
       { label: "챗봇 3개" },
       { label: "카카오톡 채널 연동" },
       { label: "대화 기록 무제한" },
-      { label: "우선 지원" },
     ],
     limits: {
       bots: 3,
@@ -132,12 +139,38 @@ export const PLANS: Plan[] = [
       fileLearning: true,
       kakaoChannel: true,
       historyDays: null,
+      multilingual: false,
     },
     cta: "시작하기",
     href: "/dashboard",
     featured: true,
   },
+  {
+    name: "GLOBAL",
+    price: "₩99,000",
+    unit: "/ 월 · VAT 별도",
+    tagline: "외국인 방문자 응대",
+    features: [
+      { label: "Premium의 모든 기능" },
+      { label: "챗봇 5개" },
+      { label: "다국어 응대", note: "한 · 영 · 일 · 중" },
+      { label: "QR 코드 제공" },
+      { label: "우선 지원" },
+    ],
+    limits: {
+      bots: 5,
+      monthlyMessages: null,
+      fileLearning: true,
+      kakaoChannel: true,
+      historyDays: null,
+      multilingual: true,
+    },
+    cta: "시작하기",
+    href: "/dashboard",
+  },
 ];
+
+
 
 /**
  * 상위 → 하위 플랜으로 갈 때 잃는 것들. 하향 확인창에서 미리 알려주는 데 쓴다.
@@ -148,6 +181,11 @@ export const PLANS: Plan[] = [
 export const planLosses = (from: PlanLimits, to: PlanLimits): string[] => {
   const losses: string[] = [];
 
+  if (from.multilingual && !to.multilingual) {
+    losses.push(
+      "다국어 응대가 중단됩니다 (외국인 방문자에게도 한국어로만 답변합니다. QR은 그대로 열리지만 언어가 맞지 않습니다)",
+    );
+  }
   if (from.kakaoChannel && !to.kakaoChannel) {
     losses.push("카카오톡 채널 연동이 중단됩니다 (오픈빌더에 등록한 챗봇이 응답을 멈춥니다)");
   }

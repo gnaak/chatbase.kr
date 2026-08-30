@@ -54,6 +54,8 @@ def _bot_to_dict(bot: Bot) -> dict:
         "active": bot.active,
         "has_vector_store": bool(bot.vector_store_id),
         "faqs": bot.faqs or [],
+        "multilingual": bool(bot.multilingual),
+        "greetings": bot.greetings or {},
         "created_at": bot.created_at.isoformat() if bot.created_at else None,
         "updated_at": bot.updated_at.isoformat() if bot.updated_at else None,
     }
@@ -130,6 +132,25 @@ class BotService:
         """챗봇 상품의 플랜 한도. 구독이 없으면 FREE로 떨어진다."""
         return await limits_of(self.bot_repo.db, user_id)
 
+    async def _ensure_multilingual_allowed(self, user_id: int, requested) -> None:
+        """다국어는 GLOBAL 플랜에서만 켤 수 있다.
+
+        **끄는 건 언제나 허용한다** — 하향한 사람이 켜둔 봇을 정리하려는데 그것마저
+        막으면 빠져나갈 길이 없다.
+
+        플랜 이름으로 비교하지 않고 `multilingual` 값으로 본다. 이 기능을 포함하는
+        플랜이 늘어나도 여기는 고칠 게 없어야 한다.
+        """
+        if not requested:
+            return
+        limits = await self._plan_limits(user_id)
+        if not limits.multilingual:
+            fail(
+                "다국어 응대는 GLOBAL 플랜에서 사용할 수 있습니다.",
+                "MULTILINGUAL_NOT_ALLOWED",
+                403,
+            )
+
     async def _ensure_owner(self, slug: str, user_id: int) -> Bot:
         bot = await self.bot_repo.find_by_slug(slug)
         if not bot:
@@ -192,6 +213,11 @@ class BotService:
                 "greeting": bot.greeting,
                 "active": bot.active,
                 "faqs": bot.faqs or [],
+                # 언어별 인사말을 통째로 내린다. 첫 화면은 방문자가 아직 아무 말도
+                # 하기 전이라 서버가 언어를 알 수 없고, QR 의 `?lang=` 은 프론트에만
+                # 있다. 몇 백 바이트라 왕복을 한 번 더 하는 것보다 싸다.
+                "multilingual": bool(bot.multilingual),
+                "greetings": bot.greetings or {},
                 "show_badge": not limits.remove_badge,
             }
         )
@@ -222,6 +248,7 @@ class BotService:
 
         # 플랜별 챗봇 개수 제한
         await self._ensure_bot_slot(user_id)
+        await self._ensure_multilingual_allowed(user_id, body.get("multilingual"))
 
         # API 키가 등록되지 않은 provider의 모델로는 챗봇을 만들 수 없음
         provider = resolve_provider(model)
@@ -248,6 +275,8 @@ class BotService:
             fallback=body.get("fallback"),
             model=model,
             faqs=body.get("faqs"),
+            multilingual=bool(body.get("multilingual", False)),
+            greetings=body.get("greetings"),
             active=body.get("active", True),
         )
         await self.bot_repo.add(bot)
@@ -262,6 +291,8 @@ class BotService:
 
         body = await request.json()
         was_active = bool(bot.active)
+        if "multilingual" in body:
+            await self._ensure_multilingual_allowed(user_id, body["multilingual"])
         for field in (
             "name",
             "logo",
@@ -273,6 +304,8 @@ class BotService:
             "fallback",
             "model",
             "faqs",
+            "multilingual",
+            "greetings",
             "active",
         ):
             if field in body:

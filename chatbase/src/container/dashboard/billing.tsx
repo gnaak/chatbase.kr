@@ -300,6 +300,7 @@ const Billing = () => {
 
   // 플랜을 못 불러온 동안은 가장 보수적인 Free로 그린다(권한을 넓게 보여주지 않는다).
   const currentPlanName = usage ? planToPlanName(usage.plan) : "FREE";
+
   const foundIdx = PLANS.findIndex((plan) => plan.name === currentPlanName);
   const currentIdx = foundIdx >= 0 ? foundIdx : 0;
   const currentPlan = PLANS[currentIdx];
@@ -497,7 +498,7 @@ const Billing = () => {
               결제 시 2개월 무료
             </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {PLANS.map((plan, idx) => {
                 const isCurrent = idx === currentIdx;
                 // 하향 예약이 걸린 플랜. 아직 적용 전이라 "이용 중"과 구분해야 한다.

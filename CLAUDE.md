@@ -1,6 +1,12 @@
 # chatbase.kr — CLAUDE.md
 
-단일 서비스 구조: `frontend/`(React), `backend/`(FastAPI).
+`frontend/`(React), `backend/`(FastAPI) 한 레포.
+
+**상품이 둘이다.** `chatbase.kr`(챗봇)과 `llm.chatbase.kr`(AEO/GEO)이며
+서로를 전제하지 않는다 — AEO만 쓰는 고객이 따로 있다.
+계정·결제·어드민은 공유하고, 구독은 `(user_id, product)`로 상품마다 따로 잡는다.
+프론트는 진입점 둘(`index.html` / `llm.html`)로 갈리고 백엔드는 하나다.
+
 세부 규칙은 `frontend/CLAUDE.md`, `backend/CLAUDE.md` 참고.
 
 ## 기술 스택

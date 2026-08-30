@@ -9,6 +9,17 @@
 
     /* Bundler mode */
     "moduleResolution": "bundler",
+
+    /* 경로 alias — vite.config.ts 와 반드시 같이 유지한다.
+       여기 없으면 에디터가 @shared/... 를 못 찾아 정의로 이동이 안 된다. */
+    "baseUrl": ".",
+    "paths": {
+      "@shared/*": ["src/shared/*"],
+      "@chatbase/*": ["src/chatbase/*"],
+      "@llm/*": ["src/llm/*"],
+      "@admin/*": ["src/admin/*"],
+      "@/*": ["src/*"]
+    },
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",

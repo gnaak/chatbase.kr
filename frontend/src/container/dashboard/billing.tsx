@@ -361,7 +361,7 @@ const Billing = () => {
                 </div>
 
                 {currentIdx === 0 && (
-                  <a href="#plans" className="shrink-0">
+                  <a href="#plans" className="shrink-0 ml-auto">
                     <Button size="md" pill variant="primary">
                       플랜 올리기
                     </Button>
@@ -594,7 +594,10 @@ const Billing = () => {
                     가능합니다
                   </p>
                 ) : (
-                  <p className="text-[12px] text-text-sub mt-0.5">
+                  // 위 두 갈래(다음 결제일 / 해지 안내)와 달리 이건 상태가 아니라
+                  // 권유 문구다. 좁은 화면에서 "카드 등록" 버튼과 자리를 다툴
+                  // 값어치가 없어 여기만 감춘다.
+                  <p className="hidden sm:block text-[12px] text-text-sub mt-0.5">
                     등록해두면 플랜을 시작할 때 바로 선택할 수 있습니다.
                   </p>
                 )}
@@ -789,7 +792,7 @@ const Billing = () => {
                   </p>
                 </div>
               </div>
-              <a href={ENTERPRISE.href}>
+              <a href={ENTERPRISE.href} className="shrink-0 ml-auto">
                 <Button size="sm" pill variant="secondary">
                   {ENTERPRISE.cta}
                 </Button>

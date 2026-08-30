@@ -6,6 +6,12 @@ export interface UsageSummary {
    * 플랜에 포함돼 있으면 항상 false다(물어볼 필요가 없어 서버가 조회를 생략한다).
    */
   kakao_in_use: boolean;
+  /**
+   * 이 플랜이 카카오톡 채널을 포함하는지. 백엔드 `PlanLimits.kakao_channel`이 그대로 온다.
+   * 화면에서 `plan === "premium"` 같은 비교를 하지 않기 위한 값 —
+   * 카카오를 포함하는 플랜이 늘어나도 프론트는 고칠 게 없어야 한다.
+   */
+  kakao_channel: boolean;
   /** "YYYY-MM" (KST) */
   year_month: string;
   messages_used: number;

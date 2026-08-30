@@ -17,7 +17,7 @@ import Skeleton from "@/component/dashboard/ui/skeleton";
 import LineChart from "@/component/dashboard/ui/lineChart";
 import { useGet, usePost } from "@/hooks/common/useAPI";
 import { useToast } from "@/hooks/common/useToast";
-import type { StatsSummary, StatsTopics } from "@/types/stats";
+import type { LlmErrorKind, StatsSummary, StatsTopics } from "@/types/stats";
 
 interface BotDto {
   id: string; // slug
@@ -101,14 +101,18 @@ const Stats = () => {
       <Topbar
         title="통계"
         description="방문자가 무엇을 묻고, 챗봇이 무엇을 답하지 못했는지 확인합니다."
-        actions={
-          <div className="flex items-center gap-2">
-            <Select
-              value={botId}
-              onChange={setBotId}
-              options={botOptions}
-              className="w-36"
-            />
+      />
+
+      <div className="flex-1 overflow-y-auto px-8 md:px-12 py-8">
+        <div className="flex flex-col gap-4 max-w-4xl mx-auto">
+          {/*
+            봇 필터와 기간은 Topbar가 아니라 본문 우측 상단에 둔다. 헤더에 있으면
+            좁은 화면에서 제목·햄버거와 56px 한 줄을 다퉈 다 찌그러진다.
+            기간은 왼쪽, 봇 필터는 오른쪽. 봇 필터의 ml-auto는 flex-wrap으로
+            아랫줄에 떨어졌을 때도 오른쪽 정렬을 유지시킨다 — justify-between만
+            쓰면 단독으로 남은 줄에서는 왼쪽에 붙어버린다.
+          */}
+          <div className="flex items-center gap-2 flex-wrap">
             {/* 단위는 3개뿐이라 드롭다운보다 pill이 낫다 — 한 번에 다 보이고
                 현재 선택이 눈에 들어온다. */}
             <div className="inline-flex items-center gap-0.5 p-0.5 rounded-full bg-bg-sub shadow-border">
@@ -129,16 +133,22 @@ const Stats = () => {
                 </button>
               ))}
             </div>
+            <Select
+              value={botId}
+              onChange={setBotId}
+              options={botOptions}
+              className="w-36 ml-auto"
+            />
           </div>
-        }
-      />
 
-      <div className="flex-1 overflow-y-auto px-8 md:px-12 py-8">
-        <div className="flex flex-col gap-4 max-w-4xl mx-auto">
           {isLoading || !data ? (
             <StatsSkeleton />
           ) : (
             <>
+              {/* 오류는 맨 위에 둔다 — 아래 지표가 아무리 좋아도 지금 봇이
+                  죽어 있으면 그게 먼저 알아야 할 사실이다. */}
+              <LlmErrorAlert errors={data.llm_errors} />
+
               {data.truncated && (
                 <Note>
                   대화량이 많아 최근 일부만 집계했습니다. 기간을 좁히면 정확한
@@ -424,6 +434,84 @@ const ChannelRow = ({ label, value }: { label: string; value: number }) => (
     <span className="text-[12px] font-mono text-text-sub">{value}명</span>
   </div>
 );
+
+/**
+ * 종류별 조치 문구. 건수만 보여주면 주인은 "그래서 뭘 하라고?"에서 멈춘다.
+ * 백엔드가 종류를 나눈 이유가 이것이라, 여기서 반드시 행동으로 번역해야 한다.
+ */
+const ERROR_GUIDE: Record<LlmErrorKind, { label: string; action: string }> = {
+  auth: {
+    label: "API 키 오류",
+    action: "키가 만료됐거나 삭제됐습니다. 다시 등록해 주세요.",
+  },
+  quota: {
+    label: "크레딧 · 한도",
+    action: "제공자(OpenAI 등)에서 잔액과 사용 한도를 확인해 주세요.",
+  },
+  timeout: {
+    label: "응답 지연",
+    action: "카카오톡은 5초 안에 답해야 합니다. 더 빠른 모델을 고려해 보세요.",
+  },
+  other: {
+    label: "기타 오류",
+    action: "대부분 제공자 쪽 일시 장애입니다. 반복되면 문의해 주세요.",
+  },
+};
+
+/**
+ * 최근 24시간 LLM 실패 알림.
+ *
+ * 방문자는 "일시적인 오류가 발생했어요"만 받고 주인은 알 방법이 없었다.
+ * 이 배너가 그 간극을 메운다. 오류가 없으면 아무것도 그리지 않는다 —
+ * "오류 0건"을 상시 노출하면 배너가 배경이 되어 진짜 오류를 놓친다.
+ */
+const LlmErrorAlert = ({ errors }: { errors: StatsSummary["llm_errors"] }) => {
+  if (!errors || errors.total === 0) return null;
+
+  const last = errors.last_at ? new Date(errors.last_at) : null;
+
+  return (
+    <Card variant="outline" className="p-5 bg-warning-bg">
+      <div className="flex items-start gap-3">
+        <div className="w-8 h-8 rounded-DEFAULT bg-bg-card shadow-border flex items-center justify-center shrink-0">
+          <AlertTriangle className="w-4 h-4 text-warning" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[13px] font-semibold text-text-main">
+            최근 {errors.hours}시간 동안 답변 실패 {errors.total.toLocaleString()}건
+          </div>
+          <p className="text-[12px] text-text-sub mt-0.5 leading-relaxed">
+            방문자에게는 "일시적인 오류가 발생했어요"만 전달됐습니다.
+            {last && ` 마지막 발생 ${last.toLocaleString("ko-KR")}.`}
+          </p>
+
+          <ul className="mt-3 flex flex-col gap-2">
+            {errors.by_kind.map(({ kind, count }) => (
+              <li
+                key={kind}
+                className="flex items-start gap-2 text-[12px] leading-relaxed"
+              >
+                <span className="shrink-0 px-1.5 py-0.5 rounded bg-bg-card shadow-border font-medium text-text-main">
+                  {ERROR_GUIDE[kind]?.label ?? kind} {count.toLocaleString()}건
+                </span>
+                <span className="text-text-sub">
+                  {ERROR_GUIDE[kind]?.action}
+                </span>
+              </li>
+            ))}
+          </ul>
+
+          <Link
+            to="/dashboard/keys"
+            className="inline-block mt-3 text-[12px] underline text-text-main hover:opacity-80"
+          >
+            API 키 관리로 이동
+          </Link>
+        </div>
+      </div>
+    </Card>
+  );
+};
 
 const Note = ({ children }: { children: React.ReactNode }) => (
   <div className="flex items-start gap-2 px-3 py-2.5 rounded-comfy bg-bg-sub shadow-border mt-4">

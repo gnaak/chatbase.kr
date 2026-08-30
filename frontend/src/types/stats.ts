@@ -34,7 +34,26 @@ export interface StatsSummary {
   total_bots: number;
   /** 집계 상한을 넘겨 일부만 반영됨 */
   truncated: boolean;
+  /**
+   * 방문자 경로(위젯·카카오)에서 난 LLM 호출 실패.
+   *
+   * 화면의 기간 선택과 **무관하게 최근 24시간 고정**이다. "지금 봇이 죽어 있는가"를
+   * 묻는 지표라, 30일을 고르면 한 달 전에 끝난 키 만료가 계속 떠서 못 쓰게 된다.
+   */
+  llm_errors: {
+    hours: number;
+    total: number;
+    by_kind: { kind: LlmErrorKind; count: number }[];
+    /** ISO. 마지막 발생 시각 — "지금도 나는 중"과 "아까 잠깐"을 가른다 */
+    last_at: string | null;
+  };
 }
+
+/**
+ * 봇 주인이 취할 조치가 갈리는 단위. 백엔드 `LlmErrorKind`와 값이 일치해야 한다.
+ * auth = 키 재등록 / quota = 제공자 결제·한도 / timeout = 모델이 느림 / other = 대개 제공자 장애
+ */
+export type LlmErrorKind = "auth" | "quota" | "timeout" | "other";
 
 /** `POST /api/stats/topics` 응답. LLM이 질문을 주제별로 묶은 결과. */
 export interface StatsTopics {

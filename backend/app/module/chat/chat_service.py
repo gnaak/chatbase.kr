@@ -14,9 +14,12 @@ from app.module.chat.chat_repository import ChatRepository
 from app.module.chat.chat_session import ChatSession
 from app.module.infra.llm.llm_service import (
     LLMService,
+    classify_llm_error,
     resolve_provider,
     strip_citations,
 )
+from app.module.llm_error.llm_error import LlmErrorChannel, LlmErrorKind
+from app.module.llm_error.llm_error_repository import LlmErrorRepository
 from app.module.usage.usage_service import (
     usage_service_for,
     visitor_unavailable_message,
@@ -101,26 +104,12 @@ def _format_llm_error(provider_value: str, exc: Exception) -> str:
     대시보드 미리보기에서만 쓴다. 방문자 경로는 VISITOR_LLM_ERROR_MESSAGE.
     """
     raw = str(exc)
-    low = raw.lower()
-    if (
-        "api_key" in low
-        or "auth_token" in low
-        or "x-api-key" in low
-        or "authentication" in low
-        or "401" in raw
-        or "unauthorized" in low
-        or "invalid api key" in low
-        or "api key not valid" in low
-    ):
+    # 판정은 classify_llm_error 하나만 쓴다. 여기서 따로 문자열을 훑으면
+    # 화면은 "키 오류"라는데 통계 화면은 "기타"로 잡히는 상태가 된다.
+    kind = classify_llm_error(exc)
+    if kind == "auth":
         hint = f"⚠️ {provider_value} API 키가 유효하지 않습니다. (없거나 잘못 입력됐을 수 있어요.)"
-    elif (
-        "quota" in low
-        or "insufficient" in low
-        or "billing" in low
-        or "credit" in low
-        or "429" in raw
-        or "rate limit" in low
-    ):
+    elif kind == "quota":
         hint = f"⚠️ {provider_value} 토큰/크레딧이 부족하거나 호출 한도를 초과했습니다."
     else:
         hint = "⚠️ 모델 호출 실패"
@@ -294,7 +283,7 @@ class ChatService:
         주입된 self.chat_repo/bot_repo의 세션은 라우터 return 후 dependency
         cleanup으로 닫히므로, 이 메서드는 자체 SessionLocal 컨텍스트를 연다.
         """
-        print("[stream] entered generator")
+        logger.debug("[stream] 제너레이터 진입")
         bot_slug = (body.get("bot_id") or "").strip()
         visitor_id = (body.get("visitor_id") or "").strip()
         content = (body.get("content") or "").strip()
@@ -305,9 +294,9 @@ class ChatService:
             yield _sse("error", {"message": "bot_id, visitor_id, content가 필요합니다."})
             return
 
-        print("[stream] opening SessionLocal...")
+        logger.debug("[stream] SessionLocal 여는 중")
         async with SessionLocal() as db:
-            print("[stream] db acquired")
+            logger.debug("[stream] db 획득")
             chat_repo = ChatRepository(db)
             bot_repo = BotRepository(db)
             api_key_repo = ApiKeyRepository(db)
@@ -316,7 +305,7 @@ class ChatService:
 
             try:
                 bot = await bot_repo.find_by_slug(bot_slug)
-                print(f"[stream] bot loaded: {bot.id if bot else None}")
+                logger.debug("[stream] 봇 로드 bot=%s", bot.id if bot else None)
                 if not bot or not bot.active:
                     yield _sse("error", {"message": "이 챗봇은 현재 사용할 수 없습니다."})
                     return
@@ -356,7 +345,7 @@ class ChatService:
                 await db.refresh(user_msg)
                 await db.refresh(session)
 
-                print("[stream] yielding meta")
+                logger.debug("[stream] meta 전송 직전")
                 yield _sse(
                     "meta",
                     {
@@ -364,7 +353,7 @@ class ChatService:
                         "user_message": _msg_to_dict(user_msg),
                     },
                 )
-                print("[stream] meta yielded")
+                logger.debug("[stream] meta 전송 완료")
 
                 effective_model = _resolve_effective_model(bot.model, model_override)
                 provider = resolve_provider(effective_model)
@@ -391,7 +380,7 @@ class ChatService:
                 ]
 
                 full_text = ""
-                print(f"[stream] starting LLM call: {effective_model}")
+                logger.debug("[stream] LLM 호출 시작 model=%s", effective_model)
                 try:
                     async for chunk in self.llm_service.chat_stream(
                         model=effective_model,
@@ -402,13 +391,23 @@ class ChatService:
                         enable_web_search=_should_enable_web_search(bot),
                     ):
                         if not full_text:
-                            print("[stream] first LLM chunk received")
+                            logger.debug("[stream] 첫 청크 수신")
                         full_text += chunk
                         yield _sse("chunk", {"text": chunk})
-                except Exception:
+                except Exception as exc:
                     logger.exception(
                         "위젯 스트리밍 LLM 실패 bot=%s user=%s provider=%s chars=%d",
                         bot.slug, bot.user_id, provider.value, len(full_text),
+                    )
+                    # 방문자는 중립 문구만 받으므로, 주인이 알 수 있게 DB에도 남긴다.
+                    # 아래 db.commit()에 같이 실린다.
+                    await LlmErrorRepository(db).record(
+                        bot_id=bot.id,
+                        channel=LlmErrorChannel.WIDGET,
+                        kind=LlmErrorKind(classify_llm_error(exc)),
+                        provider=provider.value,
+                        model=effective_model,
+                        message=str(exc),
                     )
                     # 이미 일부가 나갔으면 이어서 붙이고, 아직이면 이 문구만 나간다.
                     err_msg = VISITOR_LLM_ERROR_MESSAGE
@@ -436,7 +435,7 @@ class ChatService:
 
                 yield _sse("done", {"bot_message": _msg_to_dict(bot_msg)})
             except Exception as exc:
-                print(f"[chat] stream error: {exc}")
+                logger.exception("위젯 스트리밍 실패 bot=%s visitor=%s", bot_slug, visitor_id)
                 yield _sse("error", {"message": str(exc)})
 
     # ── 대시보드 미리보기 (봇 소유자만, DB 저장 O, visitor_id=preview-{user_id}) ──
@@ -556,7 +555,8 @@ class ChatService:
                         full_text += chunk
                         yield _sse("chunk", {"text": chunk})
                 except Exception as exc:
-                    print(f"[preview] LLM stream failed: {exc}")
+                    # preview_bot은 폼 override를 얹은 SimpleNamespace라 slug가 없다. DB 객체를 쓴다.
+                    logger.exception("미리보기 LLM 실패 bot=%s provider=%s", bot.slug, provider.value)
                     err_msg = _format_llm_error(provider.value, exc)
                     full_text += err_msg
                     yield _sse("chunk", {"text": err_msg})
@@ -579,7 +579,7 @@ class ChatService:
 
                 yield _sse("done", {"bot_message": _msg_to_dict(bot_msg)})
             except Exception as exc:
-                print(f"[preview] stream error: {exc}")
+                logger.exception("미리보기 스트리밍 실패 user=%s", user_id)
                 yield _sse("error", {"message": str(exc)})
 
     async def quick_stream(
@@ -642,7 +642,7 @@ class ChatService:
                         full_text += chunk
                         yield _sse("chunk", {"text": chunk})
                 except Exception as exc:
-                    print(f"[quick-preview] LLM stream failed: {exc}")
+                    logger.exception("즉시 미리보기 LLM 실패 provider=%s", provider.value)
                     err_msg = _format_llm_error(provider.value, exc)
                     full_text += err_msg
                     yield _sse("chunk", {"text": err_msg})
@@ -653,7 +653,7 @@ class ChatService:
 
                 yield _sse("done", {})
             except Exception as exc:
-                print(f"[quick-preview] stream error: {exc}")
+                logger.exception("즉시 미리보기 스트리밍 실패 user=%s", user_id)
                 yield _sse("error", {"message": str(exc)})
 
     # ── 대시보드 (with_login) ─────────────────

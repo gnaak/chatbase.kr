@@ -26,7 +26,7 @@ const Kakao = () => {
   const [openSlug, setOpenSlug] = useState<string | null>(null);
 
   // 플랜을 못 불러온 동안은 보수적으로 미포함 취급.
-  const included = usage?.plan === "premium";
+  const included = usage?.kakao_channel === true;
   const blocked = !included;
   // 처음부터 안 쓴 사람과 쓰다가 끊긴 사람은 안내가 달라야 한다.
   // 후자는 이미 오픈빌더에 URL을 등록해둬서, 지금 채널이 죽어 있는 상태다.
@@ -80,7 +80,9 @@ const Kakao = () => {
                   </p>
                 </div>
               </div>
-              <Link to="/dashboard/billing" className="shrink-0">
+              {/* flex-wrap으로 아래 줄에 떨어질 때 justify-between이 단독 아이템을
+                  왼쪽에 붙여버린다. ml-auto로 어느 줄에 놓이든 오른쪽 끝에 세운다. */}
+              <Link to="/dashboard/billing" className="shrink-0 ml-auto">
                 <Button size="sm" pill variant="primary">
                   {interrupted ? "PREMIUM으로 올리기" : "플랜 보기"}
                 </Button>

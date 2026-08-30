@@ -38,6 +38,7 @@ class ServiceProvider:
         self._usage_repo = None
         self._usage_service = None
         self._stats_repo = None
+        self._llm_error_repo = None
         self._stats_service = None
         self._inquiry_repo = None
         self._inquiry_service = None
@@ -216,6 +217,13 @@ class ServiceProvider:
         return self._stats_repo
 
     @property
+    def llm_error_repo(self):
+        if not self._llm_error_repo:
+            from app.module.llm_error.llm_error_repository import LlmErrorRepository
+            self._llm_error_repo = LlmErrorRepository(self.db)
+        return self._llm_error_repo
+
+    @property
     def stats_service(self):
         if not self._stats_service:
             from app.module.stats.stats_service import StatsService
@@ -223,6 +231,7 @@ class ServiceProvider:
                 stats_repo=self.stats_repo,
                 api_key_service=self.api_key_service,
                 llm_service=self.llm_service,
+                llm_error_repo=self.llm_error_repo,
             )
         return self._stats_service
 
@@ -236,6 +245,7 @@ class ServiceProvider:
                 api_key_service=self.api_key_service,
                 llm_service=self.llm_service,
                 usage_service=self.usage_service,
+                llm_error_repo=self.llm_error_repo,
             )
         return self._kakao_skill_service
 

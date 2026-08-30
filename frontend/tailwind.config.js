@@ -61,11 +61,22 @@ export default {
           "0%": { transform: "translateX(-100%)" },
           "100%": { transform: "translateX(100%)" },
         },
+        // 모바일 내비 드로어. 왼쪽에서 밀려 들어온다.
+        "drawer-in": {
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(0)" },
+        },
+        "fade-in": {
+          "0%": { opacity: "0" },
+          "100%": { opacity: "1" },
+        },
       },
       animation: {
         "fade-slide": "fade-slide 150ms ease-out",
         caret: "caret 1s steps(2, end) infinite",
         shimmer: "shimmer 1.6s ease-in-out infinite",
+        "drawer-in": "drawer-in 180ms ease-out",
+        "fade-in": "fade-in 180ms ease-out",
       },
       colors: {
         // Admin 전용 고정 색상 (legacy — kept for existing admin pages)

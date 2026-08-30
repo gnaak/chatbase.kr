@@ -140,6 +140,9 @@ class UsageService:
                 "warn": limit is not None and used >= limit * WARN_RATIO,
                 "exceeded": limit is not None and used >= limit,
                 "bots_limit": limits.bots,
+                # 게이팅 판정은 서버가 한다. 프론트가 플랜 이름을 비교하면
+                # 카카오를 포함하는 플랜이 늘어날 때 조용히 어긋난다.
+                "kakao_channel": limits.kakao_channel,
                 "per_bot": [
                     {
                         "bot_id": bot_id,

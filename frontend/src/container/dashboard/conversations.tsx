@@ -1,13 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, Bot, User, MessagesSquare, Filter } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Search, Bot, User, MessagesSquare, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Topbar from "@/component/dashboard/layout/topbar";
+import Card from "@/component/dashboard/ui/card";
 import Input from "@/component/dashboard/ui/input";
 import Select, { SelectOption } from "@/component/dashboard/ui/select";
 import Skeleton from "@/component/dashboard/ui/skeleton";
 import { useGet } from "@/hooks/common/useAPI";
+
+/**
+ * 대화 로그 — 세션 목록(표) + 전체를 덮는 상세 모달.
+ *
+ * 예전에는 좌우 2단(목록 380px + 상세)이었는데, 좁은 화면에서 `grid-cols-1`로
+ * 접히면서 목록과 상세가 한 칸에 위아래로 겹쳐 쌓여 둘 다 못 보는 상태가 됐다.
+ * 그리고 넓은 화면에서도 380px 칸에 말줄임으로 미리보기를 욱여넣느라 정작
+ * "누가 무엇을 물었나"가 안 보였다.
+ *
+ * 표로 펼치면 봇·질문·방문자·시각이 한 줄에 다 들어오고, 대화 전문은 모달이
+ * 화면을 덮고 보여준다. 목록과 상세가 폭을 나눠 가질 이유가 없어진다.
+ */
 
 interface BotDto {
   id: string; // slug
@@ -35,6 +48,16 @@ interface SessionDetailDto {
   session: SessionDto;
   messages: MessageDto[];
 }
+
+/**
+ * 표의 칸 나눔과 좌우 여백. 헤더와 각 행이 **반드시 같은 값을 써야** 세로줄이 맞는다.
+ * 한쪽만 고치면 헤더와 내용이 어긋난 표가 되므로 한 상수로 묶어둔다.
+ *
+ * 방문자 ID는 `v_8f3a...` 같은 난수라 읽을 일이 거의 없다. 넓게 잡아둘 이유가
+ * 없어서 줄이고, 그만큼을 실제로 읽는 "마지막 대화"에 넘겼다.
+ */
+const COLS = "md:grid-cols-[148px_minmax(0,1fr)_124px_76px]";
+const ROW_PADDING = "px-5 md:px-6";
 
 const formatRelative = (iso: string | null): string => {
   if (!iso) return "";
@@ -111,170 +134,249 @@ const Conversations = () => {
     <>
       <Topbar
         title="대화 로그"
-        description="챗봇별 대화 세션을 확인합니다."
-        actions={
-          <div className="hidden md:flex items-center gap-2">
-            <Filter className="w-3.5 h-3.5 text-text-sub" />
-            <Select
-              value={botFilter}
-              onChange={setBotFilter}
-              options={botFilterOptions}
-              className="w-44"
-            />
-          </div>
-        }
+        description="방문자가 챗봇과 나눈 대화를 확인합니다."
       />
 
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(320px,380px)_minmax(0,1fr)] min-h-0">
-        {/* 좌측: 세션 리스트 */}
-        <aside className="relative flex flex-col border-r border-line min-h-0">
-          <div className="px-4 py-3 border-b border-line shrink-0">
+      <div className="flex-1 overflow-y-auto px-8 md:px-12 py-8">
+        <div className="flex flex-col gap-4 max-w-5xl mx-auto">
+          {/*
+            봇 필터가 예전에는 Topbar 안에 `hidden md:flex`로 있어서 모바일에서는
+            아예 사라졌다 — 필터링 자체가 불가능했다. 검색창 옆으로 내려 두 화면
+            모두에서 쓸 수 있게 한다.
+          */}
+          <div className="flex items-center gap-2 flex-wrap">
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="방문자 ID, 메시지 검색"
               leftIcon={<Search className="w-4 h-4" />}
+              className="flex-1 min-w-[180px]"
+            />
+            <Select
+              value={botFilter}
+              onChange={setBotFilter}
+              options={botFilterOptions}
+              className="w-40 ml-auto"
             />
           </div>
 
-          <div className="flex-1 overflow-y-auto scrollbar-hide">
+          <Card variant="outline" className="overflow-hidden">
+            {/* 칸 이름은 넓은 화면에서만. 모바일은 행 자체가 쌓이는 형태라 머리말이 의미 없다. */}
+            <div
+              className={[
+                "hidden md:grid gap-x-4 h-10 items-center border-b border-line bg-bg-sub/50",
+                "text-[11px] font-medium tracking-tight text-text-sub",
+                ROW_PADDING,
+                COLS,
+              ].join(" ")}
+            >
+              <span>챗봇</span>
+              <span>마지막 대화</span>
+              <span>방문자</span>
+              <span className="text-right">시각</span>
+            </div>
+
             {sessionsLoading ? (
-              // 세션이 오기 전에 "결과 없음"을 띄우면 목록이 들어올 때 화면이 뒤집힌다.
-              <SessionListSkeleton />
+              <SessionTableSkeleton />
+            ) : filteredSessions.length === 0 ? (
+              <EmptyRow hasSessions={!!sessions && sessions.length > 0} />
             ) : (
-              <ul>
-                {filteredSessions.map((s) => (
-                  <li key={s.id}>
-                    <SessionRow
-                      session={s}
-                      botName={botNameMap.get(s.bot_id) ?? "봇"}
-                      active={s.id === selectedId}
-                      onClick={() => setSelectedId(s.id)}
-                    />
-                  </li>
-                ))}
-              </ul>
+              filteredSessions.map((s) => (
+                <SessionRow
+                  key={s.id}
+                  session={s}
+                  botName={botNameMap.get(s.bot_id) ?? "봇"}
+                  onClick={() => setSelectedId(s.id)}
+                />
+              ))
             )}
-          </div>
-
-          {!sessionsLoading && filteredSessions.length === 0 && (
-            <EmptyPanel
-              icon={Search}
-              title="결과 없음"
-              description="아직 대화 세션이 없거나 검색어가 일치하지 않습니다."
-            />
-          )}
-        </aside>
-
-        {/* 우측: 선택된 세션 디테일 */}
-        <section className="relative flex flex-col min-h-0 bg-bg-sub/30">
-          {selectedId && !detailReady ? (
-            // 세션을 눌렀는데 "대화를 선택하세요"가 다시 보이면 클릭이 씹힌 것처럼 보인다.
-            <SessionDetailSkeleton />
-          ) : selected && detail ? (
-            <SessionDetail
-              detail={detail}
-              botName={botNameMap.get(selected.bot_id) ?? "봇"}
-            />
-          ) : (
-            <EmptyPanel
-              icon={MessagesSquare}
-              title="대화를 선택하세요"
-              description="좌측 리스트에서 세션을 클릭하면 전체 대화 내용이 표시됩니다."
-            />
-          )}
-        </section>
+          </Card>
+        </div>
       </div>
+
+      {selected && (
+        <SessionModal
+          session={selected}
+          detail={detailReady ? detail : undefined}
+          botName={botNameMap.get(selected.bot_id) ?? "봇"}
+          onClose={() => setSelectedId(undefined)}
+        />
+      )}
     </>
   );
 };
 
+/**
+ * 표의 한 행.
+ *
+ * 마크업은 하나고 `md:order-*`로 순서만 바꾼다. 모바일/데스크톱용 마크업을
+ * 두 벌 두면 한쪽에만 칸을 추가하는 사고가 난다.
+ *
+ *   모바일 (2칸)              데스크톱 (4칸)
+ *   ┌──────────┬────────┐    ┌────┬────────┬──────┬────┐
+ *   │ 봇       │  시각  │    │ 봇 │ 마지막 │ 방문 │시각│
+ *   ├──────────┴────────┤    └────┴────────┴──────┴────┘
+ *   │ 마지막 대화        │
+ *   │ 방문자             │
+ *   └───────────────────┘
+ */
 const SessionRow = ({
   session,
   botName,
-  active,
   onClick,
 }: {
   session: SessionDto;
   botName: string;
-  active: boolean;
   onClick: () => void;
 }) => (
   <button
     type="button"
     onClick={onClick}
     className={[
-      "w-full text-left px-4 py-3 flex flex-col gap-1.5 border-b border-line transition-colors",
-      active ? "bg-bg-hover" : "hover:bg-bg-hover/60",
+      "w-full text-left py-3 md:py-3.5 border-b border-line last:border-b-0",
+      "hover:bg-bg-hover transition-colors",
+      "grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 md:gap-y-0 items-center",
+      ROW_PADDING,
+      COLS,
     ].join(" ")}
   >
-    <div className="flex items-center justify-between gap-2">
-      <div className="flex items-center gap-2 min-w-0">
-        <div className="w-6 h-6 rounded-full bg-bg-sub shadow-border flex items-center justify-center shrink-0">
-          <Bot className="w-3 h-3 text-text-sub" />
-        </div>
-        <span className="text-[12px] font-medium text-text-main truncate">
-          {botName}
-        </span>
-      </div>
-      <span className="text-[11px] text-text-sub shrink-0 font-mono">
-        {formatRelative(session.last_message_at)}
+    <span className="md:order-1 flex items-center gap-2 min-w-0">
+      <span className="w-5 h-5 rounded-full bg-bg-sub flex items-center justify-center shrink-0">
+        <Bot className="w-3 h-3 text-text-sub" />
       </span>
-    </div>
-    <p className="text-[13px] text-text-main line-clamp-2 leading-relaxed">
+      <span className="text-[13px] font-medium text-text-main truncate">
+        {botName}
+      </span>
+    </span>
+
+    {/* 모바일에서는 첫 줄 오른쪽, 데스크톱에서는 마지막 칸.
+        tabular-nums로 자릿수를 고정해야 "3분 전 / 12분 전"이 오른쪽에서 흔들리지 않는다. */}
+    <span className="md:order-4 shrink-0 text-[11px] tabular-nums text-text-sub text-right">
+      {formatRelative(session.last_message_at)}
+    </span>
+
+    <p className="col-span-2 md:col-span-1 md:order-2 text-[13px] text-text-main leading-relaxed line-clamp-2 md:line-clamp-1">
       {session.preview ?? "(메시지 없음)"}
     </p>
-    <span className="font-mono text-[11px] text-text-sub">{session.visitor_id}</span>
+
+    <span className="col-span-2 md:col-span-1 md:order-3 font-mono text-[11px] text-text-disabled truncate">
+      {session.visitor_id}
+    </span>
   </button>
 );
 
-const SessionDetail = ({
+/**
+ * 대화 전문 모달.
+ *
+ * 모바일은 화면을 통째로 덮고, 데스크톱은 가운데 띄운다 — 27인치에서까지
+ * 전체화면으로 덮으면 대화 몇 줄 보려고 화면을 다 잃는다.
+ *
+ * body로 포탈을 쏘는 이유는 [`mobileNav.tsx`]와 같다: Topbar의 `backdrop-blur`가
+ * fixed 자식의 containing block이 되기 때문에, 그 영향권 밖에서 그려야 한다.
+ */
+const SessionModal = ({
+  session,
   detail,
   botName,
+  onClose,
 }: {
-  detail: SessionDetailDto;
+  session: SessionDto;
+  /** 아직 안 왔으면 undefined — 헤더는 목록이 이미 아는 값으로 먼저 그린다. */
+  detail?: SessionDetailDto;
   botName: string;
+  onClose: () => void;
 }) => {
-  const { session, messages } = detail;
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  // 대화는 아래가 최신이라 열자마자 끝으로 보낸다.
+  useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [session.id, messages.length]);
+  }, [detail]);
 
-  return (
-    <>
-      <header className="shrink-0 flex items-center justify-between gap-4 px-6 py-3 border-b border-line bg-bg">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-8 h-8 rounded-full bg-bg-sub shadow-border flex items-center justify-center shrink-0">
-            <User className="w-4 h-4 text-text-sub" />
-          </div>
-          <div className="min-w-0">
-            <div className="text-[13px] font-semibold text-text-main truncate">
-              방문자{" "}
-              <span className="font-mono text-text-sub">{session.visitor_id}</span>
-            </div>
-            <div className="text-[11px] text-text-sub">
-              {botName} · 시작 {formatRelative(session.started_at)}
-            </div>
-          </div>
-        </div>
-      </header>
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex md:items-center md:justify-center"
+      role="dialog"
+      aria-modal="true"
+      aria-label="대화 내용"
+    >
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-label="닫기"
+        onClick={onClose}
+        className="absolute inset-0 bg-black/40 animate-fade-in motion-reduce:animate-none"
+      />
 
       <div
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto scrollbar-hide px-6 py-6 space-y-3"
+        className="
+          relative flex flex-col overflow-hidden bg-bg-card
+          w-full h-full
+          md:w-[min(720px,90vw)] md:h-[min(85vh,720px)]
+          md:rounded-comfy md:shadow-[0_24px_60px_rgba(0,0,0,0.18)]
+          animate-fade-slide motion-reduce:animate-none
+        "
       >
-        {messages.length === 0 ? (
-          <p className="text-[13px] text-text-sub text-center py-12">
-            메시지가 없습니다.
-          </p>
-        ) : (
-          messages.map((msg) => <MessageRow key={msg.id} message={msg} />)
-        )}
+        <header className="shrink-0 flex items-center justify-between gap-3 px-5 h-14 border-b border-line">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="w-8 h-8 rounded-full bg-bg-sub shadow-border flex items-center justify-center shrink-0">
+              <User className="w-4 h-4 text-text-sub" />
+            </span>
+            <div className="min-w-0">
+              <div className="text-[13px] font-semibold text-text-main truncate">
+                방문자{" "}
+                <span className="font-mono text-text-sub">
+                  {session.visitor_id}
+                </span>
+              </div>
+              <div className="text-[11px] text-text-sub truncate">
+                {botName} · 시작 {formatRelative(session.started_at)}
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="닫기"
+            className="
+              shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-full
+              text-text-sub hover:text-text-main hover:bg-bg-hover active:bg-bg-active
+              transition-colors duration-150
+              focus:outline-none focus-visible:shadow-focus
+            "
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </header>
+
+        <div
+          ref={scrollRef}
+          className="flex-1 overflow-y-auto scrollbar-hide px-5 py-5 space-y-3 bg-bg-sub/30"
+        >
+          {!detail ? (
+            <MessagesSkeleton />
+          ) : detail.messages.length === 0 ? (
+            <p className="text-[13px] text-text-sub text-center py-12">
+              메시지가 없습니다.
+            </p>
+          ) : (
+            detail.messages.map((msg) => (
+              <MessageRow key={msg.id} message={msg} />
+            ))
+          )}
+        </div>
       </div>
-    </>
+    </div>,
+    document.body,
   );
 };
 
@@ -288,7 +390,7 @@ const MessageRow = ({ message }: { message: MessageDto }) => {
         <div className="w-7 h-7 rounded-full bg-bg-sub shadow-border flex items-center justify-center shrink-0">
           <Bot className="w-3.5 h-3.5 text-text-sub" />
         </div>
-        <div className="flex flex-col gap-1 max-w-[70%]">
+        <div className="flex flex-col gap-1 max-w-[80%] md:max-w-[70%]">
           <div className="px-3 py-2 rounded-comfy bg-bg-card shadow-border text-[13px] leading-relaxed text-text-main break-words">
             <Markdown text={message.content} />
           </div>
@@ -300,7 +402,7 @@ const MessageRow = ({ message }: { message: MessageDto }) => {
 
   return (
     <div className="flex justify-end">
-      <div className="flex flex-col gap-1 max-w-[70%] items-end">
+      <div className="flex flex-col gap-1 max-w-[80%] md:max-w-[70%] items-end">
         <div className="px-3 py-2 rounded-comfy bg-text-main text-text-inverse text-[13px] leading-relaxed whitespace-pre-wrap break-words">
           {message.content}
         </div>
@@ -364,75 +466,68 @@ const Markdown = ({ text }: { text: string }) => (
   </ReactMarkdown>
 );
 
-/** SessionRow와 같은 골격의 로딩 행. */
-const SessionListSkeleton = () => (
-  <div>
+/** SessionRow와 같은 골격의 로딩 행. 표가 들어올 때 높이가 튀지 않게 맞춘다. */
+const SessionTableSkeleton = () => (
+  <>
     {[0, 1, 2, 3, 4].map((i) => (
       <div
         key={i}
-        className="px-4 py-3 flex flex-col gap-1.5 border-b border-line"
+        className={[
+          "py-3 md:py-3.5 border-b border-line last:border-b-0",
+          "grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 md:gap-y-0 items-center",
+          ROW_PADDING,
+          COLS,
+        ].join(" ")}
       >
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Skeleton className="w-6 h-6 rounded-full shrink-0" />
-            <Skeleton className="h-3 w-24" />
-          </div>
-          <Skeleton className="h-2.5 w-10" />
+        <div className="md:order-1 flex items-center gap-2">
+          <Skeleton className="w-5 h-5 rounded-full shrink-0" />
+          <Skeleton className="h-3 w-20" />
         </div>
-        <div className="flex flex-col gap-1">
-          <Skeleton className="h-[17px] w-full" />
-          <Skeleton className="h-[17px] w-3/4" />
-        </div>
-        <Skeleton className="h-2.5 w-28" />
+        <Skeleton className="md:order-4 h-2.5 w-10 ml-auto" />
+        <Skeleton className="col-span-2 md:col-span-1 md:order-2 h-[17px] w-full" />
+        <Skeleton className="col-span-2 md:col-span-1 md:order-3 h-2.5 w-28" />
       </div>
     ))}
-  </div>
+  </>
 );
 
-/** SessionDetail과 같은 골격(헤더 + 메시지 버블)의 로딩 화면. */
-const SessionDetailSkeleton = () => (
+/** 모달이 열린 직후, 대화가 오기 전. 버블 골격을 그대로 흉내 낸다. */
+const MessagesSkeleton = () => (
   <>
-    <header className="shrink-0 flex items-center gap-3 px-6 py-3 border-b border-line bg-bg">
-      <Skeleton className="w-8 h-8 rounded-full shrink-0" />
-      <div className="flex flex-col gap-1.5">
-        <Skeleton className="h-3.5 w-40" />
-        <Skeleton className="h-2.5 w-28" />
-      </div>
-    </header>
-
-    <div className="flex-1 px-6 py-6 space-y-3">
-      <div className="flex items-start gap-2">
-        <Skeleton className="w-7 h-7 rounded-full shrink-0" />
-        <Skeleton className="h-14 w-1/2 rounded-comfy" />
-      </div>
-      <div className="flex justify-end">
-        <Skeleton className="h-10 w-2/5 rounded-comfy" />
-      </div>
-      <div className="flex items-start gap-2">
-        <Skeleton className="w-7 h-7 rounded-full shrink-0" />
-        <Skeleton className="h-20 w-3/5 rounded-comfy" />
-      </div>
+    <div className="flex items-start gap-2">
+      <Skeleton className="w-7 h-7 rounded-full shrink-0" />
+      <Skeleton className="h-14 w-1/2 rounded-comfy" />
+    </div>
+    <div className="flex justify-end">
+      <Skeleton className="h-10 w-2/5 rounded-comfy" />
+    </div>
+    <div className="flex items-start gap-2">
+      <Skeleton className="w-7 h-7 rounded-full shrink-0" />
+      <Skeleton className="h-20 w-3/5 rounded-comfy" />
     </div>
   </>
 );
 
-// 좌우 패널의 빈 상태를 같은 기준 박스(패널 전체) 중앙에 동일한 모양으로 배치한다
-const EmptyPanel = ({
-  icon: Icon,
-  title,
-  description,
-}: {
-  icon: LucideIcon;
-  title: string;
-  description: string;
-}) => (
-  <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 pointer-events-none">
+/**
+ * 대화가 하나도 없는 것과 검색 결과가 없는 것은 다른 상황이다.
+ * 같은 문구를 쓰면 "검색어를 지우면 나온다"는 사실을 못 알아챈다.
+ */
+const EmptyRow = ({ hasSessions }: { hasSessions: boolean }) => (
+  <div className="flex flex-col items-center justify-center text-center px-6 py-16">
     <div className="w-12 h-12 rounded-DEFAULT bg-bg-sub shadow-border flex items-center justify-center mb-4">
-      <Icon className="w-5 h-5 text-text-sub" />
+      {hasSessions ? (
+        <Search className="w-5 h-5 text-text-sub" />
+      ) : (
+        <MessagesSquare className="w-5 h-5 text-text-sub" />
+      )}
     </div>
-    <p className="text-[14px] font-semibold text-text-main mb-1">{title}</p>
+    <p className="text-[14px] font-semibold text-text-main mb-1">
+      {hasSessions ? "결과 없음" : "아직 대화가 없습니다"}
+    </p>
     <p className="text-[12px] text-text-sub max-w-xs leading-relaxed">
-      {description}
+      {hasSessions
+        ? "검색어와 일치하는 대화가 없습니다."
+        : "방문자가 챗봇과 대화하면 여기에 쌓입니다."}
     </p>
   </div>
 );

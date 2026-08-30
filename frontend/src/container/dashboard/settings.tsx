@@ -270,7 +270,13 @@ const DangerSection = () => {
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="text-[13px] font-medium text-text-main">계정 삭제</div>
-            <p className="text-[12px] text-text-sub mt-0.5 leading-relaxed">
+            {/*
+              좁은 화면에서는 감춘다. 경고를 없애는 것처럼 보이지만 아니다 —
+              아래 ConfirmModal이 같은 내용을 다시 띄우고, 그걸 지나야만 실제로
+              삭제된다. 즉 경고는 흐름에서 빠지지 않고 "누르기 직전"으로 옮겨진다.
+              이 문구를 지울 때는 반드시 그 모달이 살아 있는지 먼저 확인할 것.
+            */}
+            <p className="hidden sm:block text-[12px] text-text-sub mt-0.5 leading-relaxed">
               모든 챗봇, 대화 로그, 등록된 API 키, 결제 정보가 즉시 삭제됩니다. 이
               작업은 되돌릴 수 없습니다.
             </p>

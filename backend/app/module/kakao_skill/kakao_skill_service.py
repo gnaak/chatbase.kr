@@ -29,7 +29,8 @@ from app.core.utils.response import fail, success
 from app.module.api_key.api_key import Provider
 from app.module.chat.chat_message import ChatMessage, MessageRole
 from app.module.chat.chat_session import ChatSession
-from app.module.infra.llm.llm_service import resolve_provider
+from app.module.infra.llm.llm_service import classify_llm_error, resolve_provider
+from app.module.llm_error.llm_error import LlmErrorChannel, LlmErrorKind
 
 # 프롬프트 합성 규칙은 위젯과 반드시 같아야 하므로 chat_service를 SOT로 재사용한다.
 from app.module.usage.usage_service import visitor_unavailable_message
@@ -229,6 +230,7 @@ async def _answer_via_callback(bot_id: int, session_id: int, callback_url: str) 
     from app.module.bot.bot_repository import BotRepository
     from app.module.chat.chat_repository import ChatRepository
     from app.module.infra.llm.llm_service import LLMService
+    from app.module.llm_error.llm_error_repository import LlmErrorRepository
     from app.module.usage.usage_repository import UsageRepository
     from app.module.usage.usage_service import UsageService
     from app.module.user.user_repository import UserRepository
@@ -247,6 +249,7 @@ async def _answer_via_callback(bot_id: int, session_id: int, callback_url: str) 
                 api_key_service=ApiKeyService(ApiKeyRepository(db)),
                 llm_service=LLMService(),
                 usage_service=usage_service,
+                llm_error_repo=LlmErrorRepository(db),
             )
 
             bot = await bot_repo.find_by_id(bot_id)
@@ -308,12 +311,14 @@ class KakaoSkillService:
         api_key_service,
         llm_service,
         usage_service=None,
+        llm_error_repo=None,
     ):
         self.chat_repo = chat_repo
         self.bot_repo = bot_repo
         self.api_key_service = api_key_service
         self.llm_service = llm_service
         self.usage_service = usage_service
+        self.llm_error_repo = llm_error_repo
 
     # ── 오픈빌더 스킬 요청 처리 ──────────────
     async def handle_skill(self, request) -> JSONResponse:
@@ -454,6 +459,23 @@ class KakaoSkillService:
             last = KST.localize(last)
         return (now_kst() - last) > timedelta(hours=SESSION_TTL_HOURS)
 
+    async def _record_error(self, bot, kind, provider_value: str, message: str) -> None:
+        """LLM 실패를 통계용으로 남긴다. 주입이 없으면 조용히 넘어간다.
+
+        커밋은 호출부에 맡긴다 — 동기 경로도 콜백 경로도 답변을 저장하면서
+        어차피 커밋한다. 여기서 따로 커밋하면 그 트랜잭션을 반으로 자른다.
+        """
+        if not self.llm_error_repo:
+            return
+        await self.llm_error_repo.record(
+            bot_id=bot.id,
+            channel=LlmErrorChannel.KAKAO,
+            kind=kind,
+            provider=provider_value,
+            model=bot.model,
+            message=message,
+        )
+
     async def _generate(
         self, bot, session: ChatSession, timeout: float = SKILL_TIMEOUT_SECONDS
     ) -> str:
@@ -491,16 +513,25 @@ class KakaoSkillService:
                 "kakao TIMEOUT bot=%s model=%s elapsed=%.2fs limit=%.1fs",
                 bot.slug, bot.model, elapsed, timeout,
             )
+            # 타임아웃도 주인이 알아야 한다 — 모델이 느려 카카오 채널만 조용히
+            # 못 쓰는 상태가 될 수 있고, 그건 위젯 화면만 봐서는 안 보인다.
+            await self._record_error(
+                bot, LlmErrorKind.TIMEOUT, provider.value,
+                f"{elapsed:.2f}s (limit {timeout:.1f}s)",
+            )
             return (
                 "답변을 만드는 데 시간이 조금 더 필요해요.\n"
                 "한 번만 더 여쭤봐 주시겠어요?"
             )
-        except Exception:
+        except Exception as exc:
             # 방문자에게는 중립 문구만. 원문(키 오류·크레딧 부족·제공자 과부하)은
             # 카카오톡 상대가 손쓸 수 없는 정보이고 봇 주인의 사정을 노출한다.
             logger.exception(
                 "kakao LLM 호출 실패 bot=%s user=%s provider=%s",
                 bot.slug, bot.user_id, provider.value,
+            )
+            await self._record_error(
+                bot, LlmErrorKind(classify_llm_error(exc)), provider.value, str(exc)
             )
             return VISITOR_LLM_ERROR_MESSAGE
 

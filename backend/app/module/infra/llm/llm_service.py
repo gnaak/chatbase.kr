@@ -50,6 +50,42 @@ MODEL_PROVIDER_MAP = {
 MODEL_API_ID: dict[str, str] = {}
 
 
+# ── 오류 분류 ────────────────────────────────
+# 세 제공자의 SDK가 예외 타입을 제각각 쓴다. 타입으로 가르려면 세 SDK를 전부
+# import해야 하고 버전이 오를 때마다 깨진다. 문자열 판정이 정확하진 않지만
+# 여기서 필요한 건 "주인이 무엇을 해야 하는가" 수준의 구분이라 이 정도로 충분하다.
+def classify_llm_error(exc: Exception) -> str:
+    """LLM 예외를 `auth` / `quota` / `other`로. 값은 `LlmErrorKind`와 맞춘다.
+
+    화면 문구(`_format_llm_error`)와 DB 적재(`LlmErrorRepository.record`)가
+    같은 판정을 써야 한다. 두 곳에서 따로 문자열을 훑으면 화면은 "키 오류"라고
+    하는데 통계는 "기타"로 잡히는 상태가 된다.
+    """
+    raw = str(exc)
+    low = raw.lower()
+    if (
+        "api_key" in low
+        or "auth_token" in low
+        or "x-api-key" in low
+        or "authentication" in low
+        or "401" in raw
+        or "unauthorized" in low
+        or "invalid api key" in low
+        or "api key not valid" in low
+    ):
+        return "auth"
+    if (
+        "quota" in low
+        or "insufficient" in low
+        or "billing" in low
+        or "credit" in low
+        or "429" in raw
+        or "rate limit" in low
+    ):
+        return "quota"
+    return "other"
+
+
 def resolve_provider(model: str) -> Provider:
     for prefix, provider in MODEL_PROVIDER_MAP.items():
         if model.startswith(prefix):

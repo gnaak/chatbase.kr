@@ -28,6 +28,10 @@ from app.module.usage.usage import UsageMonthly
 from app.module.payment.payment import BillingMethod, Payment, Subscription
 from app.module.inquiry.inquiry import Inquiry, InquiryMessage
 
+# llm_error는 라우터가 없다 — 기록은 chat/kakao가 하고 조회는 stats가 한다.
+# 모델만 등록해 Base.metadata에 올린다.
+from app.module.llm_error.llm_error import LlmError
+
 
 def setup_routers(app: FastAPI):
     """모든 도메인 라우터를 FastAPI 인스턴스에 등록"""

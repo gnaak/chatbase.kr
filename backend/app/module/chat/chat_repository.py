@@ -67,7 +67,9 @@ class ChatRepository:
         result = await self.db.execute(
             select(ChatMessage)
             .where(ChatMessage.session_id == session_id)
-            .order_by(ChatMessage.created_at.asc())
+            # created_at은 초 단위라 같은 초에 들어온 질문/답변의 순서가 뒤집힌다.
+            # 아래 find_last_messages와 같은 이유로 id를 쓴다.
+            .order_by(ChatMessage.id.asc())
         )
         return list(result.scalars().all())
 

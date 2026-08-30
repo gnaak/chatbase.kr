@@ -276,7 +276,7 @@ const Guide = () => {
                 </p>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2 pl-[38px]">
+            <div className="flex flex-wrap items-center justify-end gap-2">
               <Link to="/dashboard/conversations">
                 <Button
                   size="sm"

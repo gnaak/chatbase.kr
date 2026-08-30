@@ -61,7 +61,12 @@ const Button = forwardRef<HTMLButtonElement, DashButtonProps>(
           "transition-colors duration-150",
           "focus:outline-none focus-visible:shadow-focus",
           "disabled:cursor-not-allowed",
-          full ? "w-full" : "",
+          // 라벨은 줄바꿈도, 찌그러지지도 않는다.
+          // flex 행에서 `min-w-0`인 설명 옆에 놓이면(결제의 "카드 등록",
+          // 설정의 "계정 삭제") 버튼이 shrink 대상이 되는데, 좌우 아이콘이
+          // shrink-0이라 줄어들 곳이 글자밖에 없어 라벨이 0폭으로 사라진다.
+          full ? "w-full" : "shrink-0",
+          "whitespace-nowrap",
           variantClasses[variant],
           sizeClasses[size],
           pill ? pillExtraPadding[size] : "",

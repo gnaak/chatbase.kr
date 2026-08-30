@@ -34,6 +34,9 @@ MAX_UNANSWERED = 50
 #: 주제 묶기에 넣을 질문 최대 개수. 프롬프트가 너무 길어지면 비용도 지연도 커진다.
 MAX_TOPIC_QUESTIONS = 300
 
+#: LLM 오류를 보여주는 창. 화면의 기간 선택과 무관하게 고정이다 — 아래 `_llm_errors` 주석 참고.
+ERROR_WINDOW_HOURS = 24
+
 _WS = re.compile(r"\s+")
 
 #: 집계 단위. 기간이 길어지면 일별 막대가 너무 많아져 못 읽는다.
@@ -77,10 +80,42 @@ def _norm(text: str) -> str:
 
 
 class StatsService:
-    def __init__(self, stats_repo, api_key_service=None, llm_service=None):
+    def __init__(
+        self,
+        stats_repo,
+        api_key_service=None,
+        llm_service=None,
+        llm_error_repo=None,
+    ):
         self.stats_repo = stats_repo
         self.api_key_service = api_key_service
         self.llm_service = llm_service
+        self.llm_error_repo = llm_error_repo
+
+    # ── LLM 오류 (최근 24시간) ──────────────────
+    async def _llm_errors(self, bot_ids: list[int]) -> dict:
+        """방문자 경로에서 난 LLM 실패 요약.
+
+        기간 필터(days)와 **무관하게 24시간 고정**이다. 이 값은 추세가 아니라
+        "지금 봇이 죽어 있는가"를 묻는 지표라, 30일을 고르면 한 달 전에 끝난
+        키 만료가 계속 떠서 오히려 못 쓰게 된다.
+        """
+        empty = {"hours": ERROR_WINDOW_HOURS, "total": 0, "by_kind": [], "last_at": None}
+        if not self.llm_error_repo or not bot_ids:
+            return empty
+
+        since = (now_kst() - timedelta(hours=ERROR_WINDOW_HOURS)).replace(tzinfo=None)
+        by_kind = await self.llm_error_repo.count_by_kind_since(bot_ids, since)
+        if not by_kind:
+            return empty
+
+        last_at = await self.llm_error_repo.last_at(bot_ids, since)
+        return {
+            "hours": ERROR_WINDOW_HOURS,
+            "total": sum(n for _k, n in by_kind),
+            "by_kind": [{"kind": k, "count": n} for k, n in by_kind],
+            "last_at": last_at.isoformat() if last_at else None,
+        }
 
     # ── 기간 내 원자료 수집 ─────────────────────
     async def _collect(self, user_id: int, bot_slug: str | None, days: int):
@@ -227,6 +262,8 @@ class StatsService:
                 "total_bots": len(bots),
                 # 상한에 걸렸으면 수치가 일부만 반영된 것이다. 숨기면 안 된다.
                 "truncated": total_messages > len(messages),
+                # 방문자에게는 중립 문구만 나가서 주인이 모르는 채로 봇이 죽어 있을 수 있다.
+                "llm_errors": await self._llm_errors([b.id for b in bots]),
             }
         )
 

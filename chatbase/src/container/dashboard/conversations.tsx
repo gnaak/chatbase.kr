@@ -2,13 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Search, Bot, User, MessagesSquare, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import Topbar from "@/component/layout/topbar";
 import Card from "@/ui/card";
 import Input from "@/ui/input";
 import Select, { SelectOption } from "@/ui/select";
 import Skeleton from "@/ui/skeleton";
 import { useGet } from "@/hooks/common/useAPI";
+import { remarkGfmKo } from "@/utils/format/markdown";
 
 /**
  * 대화 로그 — 세션 목록(표) + 전체를 덮는 상세 모달.
@@ -428,7 +428,7 @@ const MessageRow = ({ message }: { message: MessageDto }) => {
 
 const Markdown = ({ text }: { text: string }) => (
   <ReactMarkdown
-    remarkPlugins={[remarkGfm]}
+    remarkPlugins={[remarkGfmKo]}
     components={{
       p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
       strong: ({ children }) => <strong className="font-semibold">{children}</strong>,

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, FormEvent } from "react";
 import { Send, Bot, RotateCcw, X, MessageCircle } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import { useChatStream } from "@/hooks/common/useAPI";
+import { remarkGfmKo } from "@/utils/format/markdown";
 
 interface PreviewStreamRequest {
   bot_id: string;
@@ -433,7 +433,7 @@ const normalizeMarkdown = (text: string) =>
 
 const Markdown = ({ text }: { text: string }) => (
   <ReactMarkdown
-    remarkPlugins={[remarkGfm, remarkBreaks]}
+    remarkPlugins={[remarkGfmKo, remarkBreaks]}
     components={{
       p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
       strong: ({ children }) => <strong className="font-semibold">{children}</strong>,

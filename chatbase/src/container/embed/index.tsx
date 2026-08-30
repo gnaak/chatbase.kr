@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Bot, Send, RotateCcw, X, MessageCircle } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 // 홑 개행(\n)을 줄바꿈으로 렌더링. 없으면 마크다운 규칙상 공백으로 합쳐져
 // LLM 답변과 인사 메시지의 줄이 전부 붙어 나온다.
 import remarkBreaks from "remark-breaks";
 import { useChatStream, useGet } from "@/hooks/common/useAPI";
 import { getVisitorId } from "@/hooks/common/visitorId";
+import { remarkGfmKo } from "@/utils/format/markdown";
 
 interface BotPublicDto {
   id: string;
@@ -417,7 +417,7 @@ const normalizeMarkdown = (text: string) =>
 
 const Markdown = ({ text }: { text: string }) => (
   <ReactMarkdown
-    remarkPlugins={[remarkGfm, remarkBreaks]}
+    remarkPlugins={[remarkGfmKo, remarkBreaks]}
     components={{
       p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
       strong: ({ children }) => <strong className="font-semibold">{children}</strong>,

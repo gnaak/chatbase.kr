@@ -1,7 +1,7 @@
 import httpx
 from bs4 import BeautifulSoup
 
-from app.core.utils.plan import limits_for
+from app.module.payment.plan_lookup import limits_of
 from app.core.utils.response import fail, success
 from app.module.api_key.api_key import Provider
 from app.module.api_key.api_key_service import ApiKeyService
@@ -104,11 +104,8 @@ class BotService:
             )
 
     async def _plan_limits(self, user_id: int):
-        """사용자 플랜 한도. user_repo가 없으면(구 호출부) Free로 본다."""
-        if not self.user_repo:
-            return limits_for(None)
-        user = await self.user_repo.get_user_by_id(user_id)
-        return limits_for(getattr(user, "plan", None))
+        """챗봇 상품의 플랜 한도. 구독이 없으면 FREE로 떨어진다."""
+        return await limits_of(self.bot_repo.db, user_id)
 
     async def _ensure_owner(self, slug: str, user_id: int) -> Bot:
         bot = await self.bot_repo.find_by_slug(slug)

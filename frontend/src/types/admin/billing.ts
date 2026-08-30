@@ -44,13 +44,12 @@ export interface AdminSubscription {
   email: string;
   name: string | null;
   /** 게이팅이 실제로 보는 값. `plan`과 다르면 돈과 권한이 따로 논다. */
-  user_plan: string;
+  /** 어느 상품의 구독인가. 'chatbot' | 'aeo' */
+  product: string;
   status: SubscriptionStatus;
   plan: string | null;
   /** 다음 결제일에 적용될 하향 예약. */
   scheduled_plan: string | null;
-  /** `user_plan`과 구독 상태가 어긋남 — 수동 부여·실패 뒤처리 누락 신호. */
-  plan_mismatch: boolean;
   /** 다음 청구에 쓸 카드. billingKey는 내려오지 않는다. */
   method: BillingMethod | null;
   method_count: number;

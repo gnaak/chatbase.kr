@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 
 from app.core.config.settings import settings
 from app.core.database.base import now_kst
-from app.core.utils.plan import PLAN_ORDER, price_for, resolve_plan
+from app.core.utils.plan import PLAN_ORDER, Plan, Product, price_for, resolve_plan
 from app.core.utils.response import fail, success
 from app.module.admin.admin import Admin
 from app.module.admin.admin_repository import AdminRepository
@@ -148,14 +148,24 @@ class AdminService:
         ).all()
         session_counts = dict(session_rows)
 
+        # 게이팅이 구독을 보므로 표시도 구독을 봐야 한다. 구독 행이 없는 사람은 FREE.
+        plan_rows = (
+            await db.execute(
+                select(Subscription.user_id, Subscription.plan).where(
+                    Subscription.product == Product.CHATBOT
+                )
+            )
+        ).all()
+        plan_by_user = dict(plan_rows)
+
         data = [
             {
                 "id": u.id,
                 "email": u.email,
                 "name": u.name,
                 "active": u.active,
-                # 게이팅의 단일 소스. 구독 상태와 어긋나면 결제 관리 화면에서 잡힌다.
-                "plan": u.plan,
+                # 챗봇 상품의 플랜. 구독이 없으면 free.
+                "plan": resolve_plan(plan_by_user.get(u.id)).value,
                 "workspace_name": u.workspace_name,
                 "created_at": u.created_at.isoformat() if u.created_at else None,
                 "last_login_at": (
@@ -211,13 +221,27 @@ class AdminService:
                 # 하향 예약이 걸려 있으면 다음 청구부터 그 금액이라, 그게 실제 MRR이다.
                 mrr += price_for(resolve_plan(sub.scheduled_plan or sub.plan))
 
-        plan_rows = (
-            await db.execute(select(User.plan, func.count(User.id)).group_by(User.plan))
+        # 유료 플랜은 구독에서 세고, FREE는 "나머지 전부"로 잡는다.
+        # 구독 행이 아예 없는 사람도 FREE라 구독만 group by 하면 빠진다.
+        paid_rows = (
+            await db.execute(
+                select(Subscription.plan, func.count(Subscription.id))
+                .where(Subscription.product == Product.CHATBOT)
+                .group_by(Subscription.plan)
+            )
         ).all()
         plan_counts = {p.value: 0 for p in PLAN_ORDER}
-        for raw, count in plan_rows:
-            plan = resolve_plan(raw).value
-            plan_counts[plan] = plan_counts.get(plan, 0) + int(count or 0)
+        for raw, count in paid_rows:
+            plan = resolve_plan(raw)
+            if plan == Plan.FREE:
+                continue  # plan이 비어 있는 구독(NONE/만료)은 아래에서 FREE로 잡힌다
+            plan_counts[plan.value] = plan_counts.get(plan.value, 0) + int(count or 0)
+        total_users = int(
+            (await db.execute(select(func.count(User.id)))).scalar() or 0
+        )
+        plan_counts[Plan.FREE.value] = max(
+            0, total_users - sum(v for k, v in plan_counts.items() if k != Plan.FREE.value)
+        )
 
         async def _revenue(*conditions) -> int:
             value = (
@@ -291,29 +315,17 @@ class AdminService:
             status = sub.status or SubscriptionStatus.NONE
             paid = totals.get(user.id, {})
 
-            # 게이팅은 user.plan만 보므로, 구독 상태와 어긋나면 돈과 권한이 따로 논다.
-            # 수동 부여·청구 실패 뒤처리 누락이 여기서 드러난다.
-            expected = (
-                sub.plan
-                if status
-                in (
-                    SubscriptionStatus.ACTIVE,
-                    SubscriptionStatus.CANCELED,
-                    SubscriptionStatus.PAST_DUE,
-                )
-                else None
-            )
-
+            # `plan_mismatch`가 있던 자리. 게이팅이 이제 이 구독 행을 직접 읽으므로
+            # "받은 돈과 열어준 기능이 어긋나는" 상태 자체가 생길 수 없다.
             data.append(
                 {
                     "user_id": user.id,
                     "email": user.email,
                     "name": user.name,
-                    "user_plan": user.plan,
+                    "product": _enum_value(sub.product) or Product.CHATBOT.value,
                     "status": _enum_value(status),
                     "plan": sub.plan,
                     "scheduled_plan": sub.scheduled_plan,
-                    "plan_mismatch": resolve_plan(user.plan) != resolve_plan(expected),
                     "method": _method_summary(method_by_id.get(sub.billing_method_id)),
                     "method_count": method_counts.get(user.id, 0),
                     "retry_count": sub.retry_count or 0,

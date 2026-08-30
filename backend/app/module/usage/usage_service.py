@@ -1,6 +1,7 @@
 import logging
 
-from app.core.utils.plan import limits_for, resolve_plan
+from app.core.utils.plan import resolve_plan
+from app.module.payment.plan_lookup import limits_of, plan_of
 from app.core.utils.response import fail, success
 from app.module.usage.usage_repository import UsageRepository, current_year_month
 
@@ -56,14 +57,14 @@ class UsageService:
         self.usage_repo = usage_repo
         self.user_repo = user_repo
 
-    async def _plan_of(self, user_id: int) -> str | None:
-        user = await self.user_repo.get_user_by_id(user_id)
-        return getattr(user, "plan", None) if user else None
+    async def _limits_of(self, user_id: int):
+        """챗봇 상품의 플랜 한도."""
+        return await limits_of(self.usage_repo.db, user_id)
 
     # ── 대화 경로에서 호출 ──────────────────────
     async def is_blocked(self, bot) -> bool:
         """이 요청을 막아야 하는가. 월 대화 한도 초과 여부."""
-        limits = limits_for(await self._plan_of(bot.user_id))
+        limits = await self._limits_of(bot.user_id)
         if limits.monthly_messages is None:
             return False
 
@@ -83,7 +84,7 @@ class UsageService:
 
     async def is_feature_blocked(self, bot, feature: str) -> bool:
         """플랜에 없는 기능인가. `PlanLimits`의 bool 필드명을 그대로 받는다."""
-        limits = limits_for(await self._plan_of(bot.user_id))
+        limits = await self._limits_of(bot.user_id)
         return not getattr(limits, feature, True)
 
     async def ensure_can_send(self, bot) -> None:
@@ -114,8 +115,9 @@ class UsageService:
             fail("사용자를 찾을 수 없습니다.", "USER_NOT_FOUND", 404)
 
         year_month = current_year_month()
-        plan = resolve_plan(getattr(user, "plan", None))
-        limits = limits_for(getattr(user, "plan", None))
+        raw_plan = await plan_of(self.usage_repo.db, user.id)
+        plan = resolve_plan(raw_plan)
+        limits = await self._limits_of(user.id)
 
         used = await self.usage_repo.total_for_user(user.id, year_month)
         rows = await self.usage_repo.by_bot_for_user(user.id, year_month)

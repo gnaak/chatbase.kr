@@ -40,20 +40,6 @@ const formatDateTime = (iso: string | null) =>
 
 const planLabel = (plan: string | null) => (plan ? plan.toUpperCase() : EMPTY);
 
-/**
- * 구독 플랜과 실제 권한(`user.plan`)이 어긋난 이유를 문장으로 만든다.
- *
- * 아이콘만 띄워두면 무슨 문제인지 알 수 없어서, 호버 문구로 상황과
- * 그게 왜 문제인지까지 같이 넘긴다.
- */
-const mismatchReason = (row: AdminSubscription) => {
-  const actual = planLabel(row.user_plan);
-  if (!row.plan) {
-    return `구독이 없는데 실제 권한은 ${actual}입니다. 플랜 수동 부여나 해지 뒤처리 누락일 수 있습니다.`;
-  }
-  return `구독은 ${planLabel(row.plan)}인데 실제 권한은 ${actual}입니다. 기능 게이팅은 실제 권한만 보므로, 지금은 받은 돈과 열어준 기능이 어긋난 상태입니다.`;
-};
-
 type Tone = "green" | "amber" | "red" | "gray";
 
 const toneClass: Record<Tone, string> = {
@@ -151,10 +137,6 @@ const AdminPayments = () => {
     [paymentItems, payPage],
   );
 
-  const mismatchCount = (subscriptions ?? []).filter(
-    (s) => s.plan_mismatch,
-  ).length;
-
   const subscriptionColumns: Column[] = useMemo(
     () => [
       {
@@ -215,17 +197,6 @@ const AdminPayments = () => {
                 title="다음 결제일부터 적용될 플랜"
               >
                 → {planLabel(r.scheduled_plan)}
-              </span>
-            )}
-            {/* 게이팅은 user.plan만 본다. 어긋난 건 결제와 권한이 따로 노는 상태라
-                아이콘만 두지 않고 실제 권한 값을 옆에 붙여 바로 읽히게 한다. */}
-            {r.plan_mismatch && (
-              <span
-                className="inline-flex items-center gap-0.5 shrink-0 text-[10px] text-point-red cursor-help"
-                title={mismatchReason(r)}
-              >
-                <TriangleAlert className="w-3 h-3" />
-                권한 {planLabel(r.user_plan)}
               </span>
             )}
           </div>
@@ -471,19 +442,9 @@ const AdminPayments = () => {
           icon={<TriangleAlert className="w-4 h-4" />}
           label="청구 실패"
           value={summary?.past_due_count ?? 0}
-          note={
-            summary
-              ? `최근 30일 실패 ${summary.failed_30d}건${
-                  mismatchCount > 0 ? ` · 플랜 불일치 ${mismatchCount}명` : ""
-                }`
-              : undefined
-          }
+          note={summary ? `최근 30일 실패 ${summary.failed_30d}건` : undefined}
           loading={summaryLoading}
-          tone={
-            (summary?.past_due_count ?? 0) > 0 || mismatchCount > 0
-              ? "danger"
-              : "default"
-          }
+          tone={(summary?.past_due_count ?? 0) > 0 ? "danger" : "default"}
         />
       </div>
 

@@ -9,6 +9,7 @@ import react from "@vitejs/plugin-react";
  * 각자 자기 `/`를 가지므로 로컬에서도 도메인이 나뉜 것처럼 동작한다.
  */
 export default defineConfig({
+  plugins: [react()],
   server: {
     port: 3000,
   },

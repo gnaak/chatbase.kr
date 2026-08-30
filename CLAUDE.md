@@ -1,13 +1,21 @@
 # chatbase.kr — CLAUDE.md
 
-`frontend/`(React), `backend/`(FastAPI) 한 레포.
+한 레포에 앱 셋.
 
-**상품이 둘이다.** `chatbase.kr`(챗봇)과 `llm.chatbase.kr`(AEO/GEO)이며
-서로를 전제하지 않는다 — AEO만 쓰는 고객이 따로 있다.
-계정·결제·어드민은 공유하고, 구독은 `(user_id, product)`로 상품마다 따로 잡는다.
-프론트는 진입점 둘(`index.html` / `llm.html`)로 갈리고 백엔드는 하나다.
+```
+backend/    FastAPI — 하나. 두 상품이 같이 쓴다
+chatbase/   React — chatbase.kr (챗봇)      :3000
+llm/        React — llm.chatbase.kr (AEO)   :3001
+```
 
-세부 규칙은 `frontend/CLAUDE.md`, `backend/CLAUDE.md` 참고.
+**상품이 둘이고 서로를 전제하지 않는다.** AEO만 쓰는 고객이 따로 있다.
+계정·결제·어드민은 백엔드에서 공유하고, 구독은 `(user_id, product)`로 상품마다 따로 잡는다.
+
+프론트 두 앱은 **코드도 `node_modules`도 공유하지 않는다.** 각자 완전히 독립이라
+`npm install`도 `npm run dev`도 각 폴더에서 따로 한다.
+대신 디자인 시스템·인증 훅이 양쪽에 복사돼 있으므로, 고칠 때 양쪽을 같이 본다.
+
+세부 규칙은 `chatbase/CLAUDE.md`, `llm/CLAUDE.md`, `backend/CLAUDE.md` 참고.
 
 ## 기술 스택
 

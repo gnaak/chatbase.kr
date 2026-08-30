@@ -55,9 +55,12 @@ const Support = () => {
 
   return (
     <>
+      {/* description에서 "1:1로 문의하면"을 뺐다 — 이 화면에 들어온 시점에 이미
+          아는 정보고, 모바일에서는 "새 문의" 버튼과 자리를 다퉈 잘려 나갔다.
+          남길 값어치가 있는 건 "메일로도 온다" 하나뿐이다. */}
       <Topbar
         title="문의"
-        description="1:1로 문의하면 답변을 이 화면과 메일로 함께 보내드립니다."
+        description="답변은 이 화면과 메일로 함께 드립니다."
         actions={
           !composing && (
             <Button
@@ -146,7 +149,9 @@ const EmptyState = ({ onCreate }: { onCreate: () => void }) => (
       아직 문의 내역이 없습니다
     </h2>
     <p className="text-[13px] text-text-sub max-w-sm mb-6">
-      궁금한 점이 있으면 언제든 물어보세요. 영업일 기준 5일 이내에 답변 드립니다.
+      궁금한 점이 있으면 언제든 물어보세요.
+      <br />
+      영업일 기준 5일 이내에 답변 드립니다.
     </p>
     <Button pill leftIcon={<Plus className="w-4 h-4" />} onClick={onCreate}>
       첫 문의 남기기

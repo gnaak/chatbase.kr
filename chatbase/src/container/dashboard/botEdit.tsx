@@ -850,9 +850,13 @@ const BotEditSkeleton = () => (
         </div>
       </div>
 
-      {/* 미리보기 패널도 자리를 잡아둔다 — 나중에 튀어나오면 그게 또 깜빡임이다. */}
-      <div className="hidden lg:block absolute bottom-6 right-6 w-[480px] h-[760px] z-40 pointer-events-none">
-        <Skeleton className="w-full h-full rounded-comfy" />
+      {/* 미리보기는 **닫힌 상태**로 시작한다 — ChatPreview 의 isOpen 기본값이 false라
+          실제로 그려지는 건 우측 하단 48px 버블 하나뿐이다.
+          예전에는 여기에 480×760 패널 자리를 잡아뒀는데, 로딩이 끝나는 순간 큰 회색
+          판이 작은 버블로 쪼그라들어 오히려 더 크게 튀었다. 스켈레톤은 "다음에 올
+          것"과 같은 크기여야 한다. */}
+      <div className="hidden lg:block absolute bottom-6 right-6 z-40 pointer-events-none">
+        <Skeleton className="w-12 h-12 rounded-full" />
       </div>
     </div>
   </>

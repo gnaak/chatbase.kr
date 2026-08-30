@@ -92,6 +92,35 @@ const jsonLdScript = (data) => {
   return `<script type="application/ld+json">${json}</script>`;
 };
 
+/**
+ * 프리렌더한 본문을 "그 라우트가 아닐 때" 지우는 인라인 가드.
+ *
+ * ## 왜 필요한가
+ *
+ * nginx 는 SPA 폴백으로 **모든 경로에 dist/index.html 을 돌려준다.** 그런데 그 파일에는
+ * 랜딩 본문이 통째로 구워져 있어서, `/dashboard` 로 새로고침하면 랜딩이 한 번 그려졌다가
+ * 리액트가 갈아치운다. 사용자 눈에는 번쩍임으로 보인다. 프리렌더를 붙이기 전에는
+ * `#root` 가 비어 있어서 없던 증상이다.
+ *
+ * ## 왜 이 자리에서 도는가
+ *
+ * `#root` 바로 뒤 인라인 스크립트라 파싱 도중 즉시 실행된다. 진입점은
+ * `<script type="module">` 이라 자동 defer 이므로 항상 이보다 늦는다.
+ * 즉 리액트는 언제나 빈 root 에서 시작한다(createRoot 라 어차피 비우지만,
+ * 그 전에 한 번 그려지는 것이 문제였다).
+ *
+ * ## 크롤러
+ *
+ * GPTBot·ClaudeBot 은 JS 를 안 돌리므로 이 스크립트도 안 돈다 → 본문을 그대로 읽는다.
+ * 프리렌더의 목적은 그대로 유지된다. 경로가 맞으면 지우지도 않는다.
+ */
+const hydrationGuard = (path) =>
+  "<script>(function(){" +
+  'var r=document.getElementById("root");' +
+  'var p=location.pathname.replace(/\\/+$/,"")||"/";' +
+  `if(r&&p!==${JSON.stringify(path)})r.textContent="";` +
+  "})();</script>";
+
 /** 본문에 실제로 글자가 몇 개 들어갔는지 — 이 숫자가 0이면 고친 게 아니다 */
 const bodyTextLength = (html) => {
   const body = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)?.[1] ?? "";
@@ -161,7 +190,10 @@ try {
     const url = `${ORIGIN}${route.path}`;
 
     let html = template;
-    html = html.replace('<div id="root"></div>', `<div id="root">${rendered}</div>`);
+    html = html.replace(
+      '<div id="root"></div>',
+      `<div id="root">${rendered}</div>\n    ${hydrationGuard(route.path)}`,
+    );
     html = setTitle(html, route.title);
     html = setCanonical(html, url);
     html = setMeta(html, "name", "description", route.description);

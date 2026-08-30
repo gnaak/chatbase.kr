@@ -524,14 +524,16 @@ const BotEdit = () => {
 
             <Field
               label="모르는 질문 답변"
-              description="학습 내용에 없는 질문을 받았을 때 보낼 메시지예요. 비워두면 일반 지식으로 최대한 답변해요."
+              description="학습 내용에 없는 질문을 받았을 때 보낼 메시지예요. 비워두면 대신 웹 검색으로 답을 찾는데, 응답이 3~10초까지 느려지고 카카오톡은 시간 초과가 납니다."
               count={form.fallback.length}
               max={500}
             >
-              <Input
+              <Textarea
+                rows={3}
                 value={form.fallback}
                 onChange={(e) => update("fallback", e.target.value)}
-                placeholder="죄송해요, 해당 내용은 제가 답변드리기 어려워요. 1588-0000으로 전화 주시거나 help@abc.com 으로 문의해주세요."
+                placeholder={`죄송해요, 해당 내용은 제가 답변드리기 어려워요.
+1588-0000으로 전화 주시거나 help@abc.com 으로 문의해주세요.`}
                 maxLength={500}
               />
             </Field>

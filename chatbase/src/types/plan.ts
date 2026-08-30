@@ -17,6 +17,23 @@
 /** Free 플랜 월 대화 한도(방문자 질문 1건 = 1건). 백엔드 게이팅도 이 값을 기준으로 맞춘다. */
 export const FREE_MONTHLY_MESSAGES = 100;
 
+/**
+ * 결제 베타 잠금 — 화면에서 유료 결제 경로를 가린다.
+ *
+ * 토스 키가 아직 테스트 키다. 열어두면 카드가 등록되고 구독까지 만들어지는데
+ * 실제로 돈은 움직이지 않는다. 고객은 결제했다고 믿고 우리는 못 받는 상태가 되어,
+ * 나중에 "그거 결제 안 됐습니다"라고 말해야 한다. 결제를 아예 막는 것보다 나쁘다.
+ *
+ * ⚠️ 실 키로 바꾸는 날 이 값을 false로 되돌린다. 그러면 아래가 한 번에 풀린다:
+ *   - 랜딩 요금표     component/landing/pricing.tsx    "출시 예정" 표시
+ *   - 결제 화면       container/dashboard/billing.tsx  플랜 변경 · 카드 등록 버튼
+ *   - 카카오톡 화면   container/dashboard/kakao.tsx    업그레이드 안내 문구
+ *
+ * 화면만 잠근다. `/api/payment/*`는 그대로 열려 있어 직접 호출하면 테스트 결제가
+ * 만들어진다 — 돈이 오가지 않아 지금은 방치하기로 했다. 상세는 TODO.md.
+ */
+export const BILLING_BETA = true;
+
 export interface PlanFeature {
   label: string;
   /** 해당 플랜에서 제공되지 않는 항목 — 회색 + 빗금 아이콘으로 표시 */

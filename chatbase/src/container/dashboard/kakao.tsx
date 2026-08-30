@@ -6,6 +6,7 @@ import Card from "@/ui/card";
 import Button from "@/ui/button";
 import KakaoConnect from "@/component/bot/kakaoConnect";
 import { useGet } from "@/hooks/common/useAPI";
+import { BILLING_BETA } from "@/types/plan";
 import type { UsageSummary } from "@/types/usage";
 
 interface BotDto {
@@ -62,7 +63,9 @@ const Kakao = () => {
                   <div className="text-[13px] font-medium text-text-main">
                     {interrupted
                       ? "카카오톡 채널 연동이 중단되었습니다"
-                      : "카카오톡 채널 연동은 PREMIUM 플랜 기능입니다"}
+                      : BILLING_BETA
+                        ? "베타 기간에는 신청하시면 열어드립니다"
+                        : "카카오톡 채널 연동은 PREMIUM 플랜 기능입니다"}
                   </div>
                   <p className="text-[12px] text-text-sub mt-0.5 leading-relaxed">
                     {interrupted ? (
@@ -74,6 +77,8 @@ const Kakao = () => {
                         방문자에게는 대신 fallback 메시지가 나갑니다. PREMIUM으로
                         올리면 재설정 없이 바로 다시 동작합니다.
                       </>
+                    ) : BILLING_BETA ? (
+                      "카카오톡 채널에서도 같은 챗봇이 답합니다. 유료 플랜이 아직 준비 중이라, 1:1 문의로 알려주시면 계정에 바로 열어드립니다."
                     ) : (
                       "플랜을 올리면 카카오톡 채널에서도 같은 챗봇이 답합니다."
                     )}
@@ -82,9 +87,16 @@ const Kakao = () => {
               </div>
               {/* flex-wrap으로 아래 줄에 떨어질 때 justify-between이 단독 아이템을
                   왼쪽에 붙여버린다. ml-auto로 어느 줄에 놓이든 오른쪽 끝에 세운다. */}
-              <Link to="/dashboard/billing" className="shrink-0 ml-auto">
+              <Link
+                to={BILLING_BETA ? "/dashboard/support" : "/dashboard/billing"}
+                className="shrink-0 ml-auto"
+              >
                 <Button size="sm" pill variant="primary">
-                  {interrupted ? "PREMIUM으로 올리기" : "플랜 보기"}
+                  {BILLING_BETA
+                    ? "신청하기"
+                    : interrupted
+                      ? "PREMIUM으로 올리기"
+                      : "플랜 보기"}
                 </Button>
               </Link>
             </Card>

@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Check, Minus, Sparkles } from "lucide-react";
 import Button from "@/ui/button";
-import { ENTERPRISE, PLANS } from "@/types/plan";
+import { BILLING_BETA, ENTERPRISE, PLANS } from "@/types/plan";
 
 const Pricing = () => {
   return (
@@ -18,6 +18,11 @@ const Pricing = () => {
             무료로 내 사이트에 붙여 먼저 써보세요. 모델 사용료는 본인 키로 직접
             결제되니, 유료 플랜은 대화가 몇 건이든 추가 과금이 없습니다.
           </p>
+          {BILLING_BETA && (
+            <p className="mt-4 inline-flex items-center px-3.5 h-7 rounded-full bg-info-bg text-info text-[12px] font-medium">
+              유료 플랜은 준비 중입니다 — 지금은 무료 플랜으로 시작하실 수 있어요
+            </p>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -35,11 +40,17 @@ const Pricing = () => {
                 <span className="text-[14px] font-semibold tracking-tight text-text-main">
                   {plan.name}
                 </span>
-                {plan.featured && (
+                {/* 베타 동안 유료 카드는 "추천" 대신 "출시 예정"을 세운다.
+                    지금 살 수 없는 것을 추천하면 CTA를 누른 사람이 막힌다. */}
+                {BILLING_BETA && plan.name !== "FREE" ? (
+                  <span className="inline-flex items-center px-2 h-5 rounded-full bg-bg-sub text-text-sub text-[10px] font-medium">
+                    출시 예정
+                  </span>
+                ) : plan.featured ? (
                   <span className="inline-flex items-center px-2 h-5 rounded-full bg-info-bg text-info text-[10px] font-medium">
                     추천
                   </span>
-                )}
+                ) : null}
               </div>
 
               <div className="flex items-baseline gap-1.5 mt-2.5">
@@ -93,7 +104,11 @@ const Pricing = () => {
                   full
                   variant={plan.featured ? "primary" : "secondary"}
                 >
-                  {plan.cta}
+                  {/* 유료 카드도 가입으로 보낸다. 결제는 막혀 있지만 가입 자체가
+                      지금 우리가 받아야 하는 행동이다. */}
+                  {BILLING_BETA && plan.name !== "FREE"
+                    ? "무료로 먼저 써보기"
+                    : plan.cta}
                 </Button>
               </Link>
             </div>

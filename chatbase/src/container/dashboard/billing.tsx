@@ -18,7 +18,13 @@ import UpgradeModal from "@/component/billing/upgradeModal";
 import Skeleton from "@/ui/skeleton";
 import { useGet, usePost } from "@/hooks/common/useAPI";
 import { useToast } from "@/hooks/common/useToast";
-import { ENTERPRISE, PLANS, planLosses, type Plan } from "@/types/plan";
+import {
+  BILLING_BETA,
+  ENTERPRISE,
+  PLANS,
+  planLosses,
+  type Plan,
+} from "@/types/plan";
 import { planToPlanName, type UsageSummary } from "@/types/usage";
 import {
   describeMethod,
@@ -308,6 +314,25 @@ const Billing = () => {
 
       <div className="flex-1 overflow-y-auto px-8 md:px-12 py-8">
         <div className="flex flex-col gap-6 max-w-4xl mx-auto">
+          {BILLING_BETA && (
+            <Card variant="outline" className="p-5">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-DEFAULT bg-bg-sub shadow-border flex items-center justify-center shrink-0">
+                  <Mail className="w-4 h-4 text-text-sub" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[13px] font-medium text-text-main">
+                    유료 플랜은 준비 중입니다
+                  </div>
+                  <p className="text-[12px] text-text-sub mt-0.5 leading-relaxed">
+                    정식 출시되면 가입하신 메일로 알려드릴게요. 그전까지 결제는 받지
+                    않습니다. 지금 더 필요한 기능이 있으시면 왼쪽 1:1 문의로 알려주세요
+                    — 베타 기간에는 열어드립니다.
+                  </p>
+                </div>
+              </div>
+            </Card>
+          )}
           {/* 현재 플랜 — 플랜을 모르는 동안 FREE로 그려두면 유료 사용자에게 플랜이
               바뀌는 깜빡임으로 보인다. 값이 올 때까지는 스켈레톤을 유지한다. */}
           <Card variant="elevated" className="p-6">
@@ -549,7 +574,12 @@ const Billing = () => {
                         pill
                         full
                         variant={idx > currentIdx ? "primary" : "secondary"}
-                        disabled={isCurrent || idx === 0 || isScheduled}
+                        disabled={
+                          (BILLING_BETA && idx > 0) ||
+                          isCurrent ||
+                          idx === 0 ||
+                          isScheduled
+                        }
                         onClick={() =>
                           // 상향은 지금 결제하고 바로 올린다.
                           // 하향은 결제 없이 다음 결제일에 반영되도록 예약한다.
@@ -558,13 +588,15 @@ const Billing = () => {
                             : setDowngradeTarget(plan)
                         }
                       >
-                        {isCurrent
-                          ? "이용 중"
-                          : isScheduled
-                            ? "변경 예정"
-                            : idx > currentIdx
-                              ? "이 플랜으로 올리기"
-                              : "이 플랜으로 내리기"}
+                        {BILLING_BETA && idx > 0
+                          ? "준비 중"
+                          : isCurrent
+                            ? "이용 중"
+                            : isScheduled
+                              ? "변경 예정"
+                              : idx > currentIdx
+                                ? "이 플랜으로 올리기"
+                                : "이 플랜으로 내리기"}
                       </Button>
                     )}
                   </div>
@@ -607,7 +639,7 @@ const Billing = () => {
                 pill
                 variant="secondary"
                 leftIcon={<Plus className="w-3.5 h-3.5" />}
-                disabled={busy || !canRegisterCard}
+                disabled={BILLING_BETA || busy || !canRegisterCard}
                 onClick={() => void openCardRegistration()}
               >
                 카드 등록

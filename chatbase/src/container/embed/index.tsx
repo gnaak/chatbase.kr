@@ -237,7 +237,7 @@ const EmbedChat = () => {
   const windowClass = [
     "flex flex-col bg-bg-card overflow-hidden",
     isWidgetMode || isStandalone
-      ? "w-full h-screen"
+      ? "w-full h-[100svh]"
       : "w-[360px] h-[560px] rounded-comfy shadow-[0_8px_32px_rgba(0,0,0,0.18)] animate-fade-slide",
   ].join(" ");
 
@@ -264,12 +264,6 @@ const EmbedChat = () => {
           </IconBtn>
         )}
       </header>
-
-      {bot?.multilingual && (
-        <div className="shrink-0 flex justify-end px-3.5 py-1.5 border-b border-line bg-bg-card">
-          <LangPill value={lang} onChange={setLang} />
-        </div>
-      )}
 
       <div className="flex-1 px-3.5 py-3.5 space-y-2.5 bg-bg-sub/40">
         <div className="flex items-start gap-2">
@@ -317,8 +311,13 @@ const EmbedChat = () => {
           )}
         </div>
       </header>
+      {bot?.multilingual && (
+        <div className="shrink-0 flex justify-end px-3.5 py-1.5 border-b border-line bg-bg-card">
+          <LangPill value={lang} onChange={setLang} />
+        </div>
+      )}
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3.5 py-3.5 space-y-2.5 bg-bg-sub/40">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-contain px-3.5 py-3.5 space-y-2.5 bg-bg-sub/40">
         {messages.map((msg) => {
           if (!msg.content && msg.id >= 0) return null;
           return msg.role === "bot" ? (
@@ -361,7 +360,15 @@ const EmbedChat = () => {
         </div>
       )}
 
-      <form onSubmit={handleSend} className="shrink-0 flex items-center gap-2 px-3 py-2.5 border-t border-line bg-bg-card">
+      <form
+        onSubmit={handleSend}
+        className="shrink-0 flex items-center gap-2 px-3 py-2.5 border-t border-line bg-bg-card"
+        style={{
+          // 홈 인디케이터가 있는 기기에서 입력창이 가리지 않게.
+          // viewport-fit=cover 를 쓰는 이상 이건 같이 와야 한다.
+          paddingBottom: "calc(0.625rem + env(safe-area-inset-bottom))",
+        }}
+      >
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -406,7 +413,7 @@ const EmbedChat = () => {
    */
   if (isStandalone) {
     return (
-      <div className="min-h-screen flex justify-center bg-bg-card font-sans">
+      <div className="min-h-[100svh] flex justify-center bg-bg-card font-sans">
         <div className="w-full max-w-[480px] shadow-border">
           {botLoading ? loadingWindow : chatWindow}
         </div>

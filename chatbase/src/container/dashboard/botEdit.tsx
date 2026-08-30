@@ -680,6 +680,18 @@ A. 서울 본사 매장은 영업시간 내 방문 픽업이 가능합니다.`}
             </Section>
           )}
 
+          {/* QR 은 임베드 코드와 성격이 다르다 — 저건 개발자가 사이트에 붙이는
+              코드고, 이건 사장님이 인쇄해서 카운터에 두는 물건이다.
+              사이트가 아예 없어도 되는 경로라 탭에 섞지 않고 따로 세운다. */}
+          {!isNew && (
+            <Section
+              title="QR 코드"
+              description="사이트가 없어도 됩니다. 인쇄해서 카운터·테이블에 두세요."
+            >
+              <QrPanel botId={slug!} />
+            </Section>
+          )}
+
           {/* 카카오톡 채널 연결 보류 — 오픈빌더 온보딩이 무거워 화면을 내려뒀다.
               되살릴 때는 /dashboard/kakao(container/dashboard/kakao.tsx)를 먼저 켜고
               아래 블록의 주석을 해제한다. PROGRESS.md '(보류) 카카오톡 연동 온보딩' 참고.
@@ -989,7 +1001,6 @@ const Row = ({
 const EMBED_TABS = [
   { key: "script", label: "Script", hint: "우측 하단에 채팅 버블이 자동 생성됩니다. </body> 직전에 붙여넣으세요." },
   { key: "iframe", label: "iframe", hint: "원하는 위치에 직접 배치할 때 사용합니다. width·height를 자유롭게 조절하세요." },
-  { key: "qr", label: "QR", hint: "사이트가 없어도 됩니다. 인쇄해서 붙여두기만 하면 됩니다." },
 ] as const;
 
 const qrUrl = (botId: string) => `${EMBED_ORIGIN}/embed/${botId}`;
@@ -1056,7 +1067,7 @@ const QrPanel = ({ botId }: { botId: string }) => {
 };
 
 const EmbedTabs = ({ botId }: { botId: string }) => {
-  const [active, setActive] = useState<"script" | "iframe" | "qr">("script");
+  const [active, setActive] = useState<"script" | "iframe">("script");
   const code = active === "script" ? buildScript(botId) : buildIframe(botId);
   const hint = EMBED_TABS.find((t) => t.key === active)!.hint;
 
@@ -1080,11 +1091,7 @@ const EmbedTabs = ({ botId }: { botId: string }) => {
         ))}
       </div>
       <p className="text-[12px] text-text-sub leading-relaxed">{hint}</p>
-      {active === "qr" ? (
-        <QrPanel botId={botId} />
-      ) : (
-        <CodeBlock code={code} language="html" />
-      )}
+      <CodeBlock code={code} language="html" />
     </div>
   );
 };

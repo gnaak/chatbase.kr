@@ -105,7 +105,7 @@ const SupportForm = () => {
   return (
     <SupportLayout
       title="문의하기"
-      description="서비스에 대해 궁금한 점을 남겨주세요. 보통 영업일 기준 하루 안에 답변드립니다."
+      description="서비스에 대해 궁금한 점을 남겨주세요. 영업일 기준 5일 이내에 답변 드립니다."
       actions={
         user && (
           <Link

@@ -49,6 +49,10 @@ const Support = () => {
     LIST_KEY,
   );
 
+  const isEmpty = !isLoading && (!inquiries || inquiries.length === 0);
+  // 폼을 펼친 상태는 내용이 길어서 중앙 정렬하면 위가 잘린다.
+  const isCentered = isEmpty && !composing;
+
   return (
     <>
       <Topbar
@@ -68,77 +72,87 @@ const Support = () => {
         }
       />
 
-      <div className="flex-1 overflow-y-auto px-8 md:px-12 py-8">
-        <div className="flex flex-col gap-4 max-w-3xl mx-auto">
-          {composing && <NewInquiryForm onClose={() => setComposing(false)} />}
+      <div
+        className={`flex-1 overflow-y-auto px-8 md:px-12 py-8${
+          isCentered ? " flex items-center justify-center" : ""
+        }`}
+      >
+        {isCentered ? (
+          <EmptyState onCreate={() => setComposing(true)} />
+        ) : (
+          <div className="flex flex-col gap-4 max-w-3xl mx-auto">
+            {composing && (
+              <NewInquiryForm onClose={() => setComposing(false)} />
+            )}
 
-          {isLoading ? (
-            <div className="flex flex-col gap-3">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className="h-[76px] rounded-comfy" />
-              ))}
-            </div>
-          ) : !inquiries || inquiries.length === 0 ? (
-            !composing && (
-              <Card className="flex flex-col items-center gap-3 py-14 px-6 text-center">
-                <MessagesSquare className="w-6 h-6 text-text-disabled" />
-                <div>
-                  <p className="text-[14px] font-medium text-text-main">
-                    아직 문의 내역이 없습니다
-                  </p>
-                  <p className="text-[13px] text-text-sub mt-1">
-                    궁금한 점이 있으면 언제든 물어보세요. 보통 영업일 기준 하루 안에
-                    답변드립니다.
-                  </p>
-                </div>
-                <Button size="sm" pill onClick={() => setComposing(true)}>
-                  문의하기
-                </Button>
-              </Card>
-            )
-          ) : (
-            <div className="flex flex-col gap-2">
-              {inquiries.map((item) => (
-                <Card
-                  key={item.id}
-                  interactive
-                  onClick={() => navigate(`/dashboard/support/${item.id}`)}
-                  className="flex items-center gap-3 px-4 py-3.5"
-                >
-                  <span
-                    className={[
-                      "shrink-0 w-1.5 h-1.5 rounded-full",
-                      STATUS_DOT[item.status],
-                    ].join(" ")}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[13px] font-medium text-text-main truncate">
-                        {item.subject}
-                      </span>
-                      {/* 마지막 글이 관리자면 아직 안 읽었을 가능성이 높다. */}
-                      {item.last_sender === "admin" && (
-                        <span className="shrink-0 text-[10px] font-medium px-1.5 h-4 inline-flex items-center rounded-full bg-success-bg text-point-green">
-                          답변
+            {isLoading ? (
+              <div className="flex flex-col gap-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-[76px] rounded-comfy" />
+                ))}
+              </div>
+            ) : isEmpty ? null : (
+              <div className="flex flex-col gap-2">
+                {(inquiries ?? []).map((item) => (
+                  <Card
+                    key={item.id}
+                    interactive
+                    onClick={() => navigate(`/dashboard/support/${item.id}`)}
+                    className="flex items-center gap-3 px-4 py-3.5"
+                  >
+                    <span
+                      className={[
+                        "shrink-0 w-1.5 h-1.5 rounded-full",
+                        STATUS_DOT[item.status],
+                      ].join(" ")}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[13px] font-medium text-text-main truncate">
+                          {item.subject}
                         </span>
-                      )}
+                        {/* 마지막 글이 관리자면 아직 안 읽었을 가능성이 높다. */}
+                        {item.last_sender === "admin" && (
+                          <span className="shrink-0 text-[10px] font-medium px-1.5 h-4 inline-flex items-center rounded-full bg-success-bg text-point-green">
+                            답변
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-text-sub mt-0.5 truncate">
+                        {CATEGORY_LABEL[item.category]} ·{" "}
+                        {STATUS_LABEL[item.status]} · 글 {item.message_count}개
+                        · {formatStamp(item.last_message_at ?? item.updated_at)}
+                      </div>
                     </div>
-                    <div className="text-[11px] text-text-sub mt-0.5 truncate">
-                      {CATEGORY_LABEL[item.category]} ·{" "}
-                      {STATUS_LABEL[item.status]} · 글 {item.message_count}개 ·{" "}
-                      {formatStamp(item.last_message_at ?? item.updated_at)}
-                    </div>
-                  </div>
-                  <ChevronRight className="shrink-0 w-4 h-4 text-text-disabled" />
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
+                    <ChevronRight className="shrink-0 w-4 h-4 text-text-disabled" />
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </>
   );
 };
+
+/** 챗봇 빈 화면(`home.tsx`의 EmptyState)과 같은 골격·간격을 쓴다. */
+const EmptyState = ({ onCreate }: { onCreate: () => void }) => (
+  <div className="flex flex-col items-center justify-center text-center">
+    <div className="w-12 h-12 rounded-DEFAULT bg-bg-sub shadow-border flex items-center justify-center mb-5">
+      <MessagesSquare className="w-5 h-5 text-text-sub" />
+    </div>
+    <h2 className="text-[18px] font-semibold tracking-tight text-text-main mb-1.5">
+      아직 문의 내역이 없습니다
+    </h2>
+    <p className="text-[13px] text-text-sub max-w-sm mb-6">
+      궁금한 점이 있으면 언제든 물어보세요. 영업일 기준 5일 이내에 답변 드립니다.
+    </p>
+    <Button pill leftIcon={<Plus className="w-4 h-4" />} onClick={onCreate}>
+      첫 문의 남기기
+    </Button>
+  </div>
+);
 
 interface NewInquiryFormProps {
   onClose: () => void;
@@ -234,7 +248,7 @@ const NewInquiryForm = ({ onClose }: NewInquiryFormProps) => {
       </Field>
 
       <div className="flex items-center justify-end gap-2">
-        <Button variant="ghost" size="sm" onClick={onClose}>
+        <Button variant="ghost" size="sm" pill onClick={onClose}>
           취소
         </Button>
         <Button size="sm" pill disabled={!canSubmit} onClick={handleSubmit}>

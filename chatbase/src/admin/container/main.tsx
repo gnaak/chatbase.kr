@@ -45,7 +45,7 @@ interface ModelDto {
 
 /** 유입 출처 한 줄. 서버가 결제 → 키 등록 → 가입 순으로 정렬해서 준다. */
 interface AcquisitionRow {
-  /** UTM이 없는 가입은 서버가 "(직접)" 으로 묶어 보낸다. */
+  /** UTM이 없는 가입은 서버가 "-" 로 묶어 보낸다. */
   source: string;
   medium: string;
   campaign: string;
@@ -376,14 +376,18 @@ const AdminMain = () => {
                 <div className="overflow-x-auto">
                   <table className="w-full text-[12px]">
                     <thead>
+                      {/* 여백·정렬은 admin 의 Table 컴포넌트(px-3 py-2.5)와 맞춘다.
+                          여기는 Panel 안에 직접 쓴 표라 그 규칙이 자동으로 안 붙는다.
+                          글자 열은 왼쪽, 숫자 열은 가운데 — 자릿수가 한두 자리라
+                          오른쪽 정렬해봐야 붙어 보이기만 한다. */}
                       <tr className="text-text-sub border-b border-line">
-                        <th className="text-left font-medium py-1.5">출처</th>
-                        <th className="text-left font-medium py-1.5">매체</th>
-                        <th className="text-left font-medium py-1.5">캠페인</th>
-                        <th className="text-right font-medium py-1.5">가입</th>
-                        <th className="text-right font-medium py-1.5">탈퇴</th>
-                        <th className="text-right font-medium py-1.5">키 등록</th>
-                        <th className="text-right font-medium py-1.5">유료</th>
+                        <th className="text-left font-medium px-3 py-2.5">출처</th>
+                        <th className="text-left font-medium px-3 py-2.5">매체</th>
+                        <th className="text-left font-medium px-3 py-2.5">캠페인</th>
+                        <th className="text-center font-medium px-3 py-2.5">가입</th>
+                        <th className="text-center font-medium px-3 py-2.5">탈퇴</th>
+                        <th className="text-center font-medium px-3 py-2.5">키 등록</th>
+                        <th className="text-center font-medium px-3 py-2.5">유료</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -392,23 +396,25 @@ const AdminMain = () => {
                           key={`${r.source}|${r.medium}|${r.campaign}`}
                           className="border-b border-line last:border-0 hover:bg-bg-hover transition-colors"
                         >
-                          <td className="py-1.5 text-text-main">{r.source}</td>
-                          <td className="py-1.5 text-text-sub">
-                            {r.medium || "—"}
+                          <td className="px-3 py-2.5 text-text-main">
+                            {r.source}
                           </td>
-                          <td className="py-1.5 text-text-sub">
-                            {r.campaign || "—"}
+                          <td className="px-3 py-2.5 text-text-sub">
+                            {r.medium || "-"}
                           </td>
-                          <td className="py-1.5 text-right font-mono text-text-main">
+                          <td className="px-3 py-2.5 text-text-sub">
+                            {r.campaign || "-"}
+                          </td>
+                          <td className="px-3 py-2.5 text-center font-mono text-text-main">
                             {r.signups}
                           </td>
-                          <td className="py-1.5 text-right font-mono text-text-disabled">
-                            {r.withdrawn || "—"}
+                          <td className="px-3 py-2.5 text-center font-mono text-text-disabled">
+                            {r.withdrawn || "-"}
                           </td>
-                          <td className="py-1.5 text-right font-mono text-text-sub">
+                          <td className="px-3 py-2.5 text-center font-mono text-text-sub">
                             {r.keyed}
                           </td>
-                          <td className="py-1.5 text-right font-mono text-text-main">
+                          <td className="px-3 py-2.5 text-center font-mono text-text-main">
                             {r.paid}
                           </td>
                         </tr>

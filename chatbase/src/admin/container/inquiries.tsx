@@ -33,10 +33,10 @@ type StatusFilter = InquiryStatus | "all";
 const DEFAULT_FILTER: StatusFilter = "open";
 
 const FILTERS: { value: StatusFilter; label: string }[] = [
+  { value: "all", label: "전체" },
   { value: "open", label: STATUS_LABEL.open },
   { value: "answered", label: STATUS_LABEL.answered },
   { value: "closed", label: STATUS_LABEL.closed },
-  { value: "all", label: "전체" },
 ];
 
 /** 이메일과 전화 중 있는 것만. 둘 중 하나만 남기는 문의가 있다. */

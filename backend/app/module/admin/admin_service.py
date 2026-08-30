@@ -187,7 +187,7 @@ class AdminService:
         그 뒤 퍼널(가입·키 등록·결제)은 우리 DB에만 있어서, 둘을 잇는 값이
         `tb_users.utm_*` 이다. "어느 카페가 돈이 됐나"에 답하는 유일한 곳이다.
 
-        UTM이 없는 가입은 `(직접)`으로 묶는다. **그 줄이 크다는 것 자체가 신호다**
+        UTM이 없는 가입은 `-`로 묶는다. **그 줄이 크다는 것 자체가 신호다**
         — 측정 안 되는 유입이 그만큼 많다는 뜻이라, 링크에 꼬리표를 안 달고
         홍보했거나 검색·직접 유입이 많다는 얘기가 된다.
 
@@ -235,7 +235,7 @@ class AdminService:
             row = buckets.setdefault(
                 key,
                 {
-                    "source": source or "(직접)",
+                    "source": source or "-",
                     "medium": medium or "",
                     "campaign": campaign or "",
                     "signups": 0,

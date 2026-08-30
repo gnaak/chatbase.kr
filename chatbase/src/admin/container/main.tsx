@@ -50,6 +50,8 @@ interface AcquisitionRow {
   medium: string;
   campaign: string;
   signups: number;
+  /** 그중 탈퇴한 수. 탈퇴하면 키·구독이 정리되어 keyed·paid 에서는 이미 빠져 있다. */
+  withdrawn: number;
   keyed: number;
   paid: number;
 }
@@ -379,6 +381,7 @@ const AdminMain = () => {
                         <th className="text-left font-medium py-1.5">매체</th>
                         <th className="text-left font-medium py-1.5">캠페인</th>
                         <th className="text-right font-medium py-1.5">가입</th>
+                        <th className="text-right font-medium py-1.5">탈퇴</th>
                         <th className="text-right font-medium py-1.5">키 등록</th>
                         <th className="text-right font-medium py-1.5">유료</th>
                       </tr>
@@ -398,6 +401,9 @@ const AdminMain = () => {
                           </td>
                           <td className="py-1.5 text-right font-mono text-text-main">
                             {r.signups}
+                          </td>
+                          <td className="py-1.5 text-right font-mono text-text-disabled">
+                            {r.withdrawn || "—"}
                           </td>
                           <td className="py-1.5 text-right font-mono text-text-sub">
                             {r.keyed}

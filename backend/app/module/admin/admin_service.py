@@ -204,6 +204,7 @@ class AdminService:
                     User.utm_source,
                     User.utm_medium,
                     User.utm_campaign,
+                    User.active,
                 )
             )
         ).all()
@@ -224,8 +225,12 @@ class AdminService:
             .all()
         )
 
+        # 탈퇴자를 빼지 않고 따로 센다. 유입 성과는 "몇 명을 데려왔나"라서
+        # 탈퇴자도 그 채널의 실적이다. 다만 탈퇴하면 키·구독이 정리되어
+        # keyed·paid 에서는 자동으로 빠지므로, 세지 않으면
+        # "가입 12인데 키 등록 5"가 이탈 때문인지 마찰 때문인지 구분이 안 된다.
         buckets: dict[tuple, dict] = {}
-        for user_id, source, medium, campaign in users:
+        for user_id, source, medium, campaign, active in users:
             key = (source or "", medium or "", campaign or "")
             row = buckets.setdefault(
                 key,
@@ -234,11 +239,16 @@ class AdminService:
                     "medium": medium or "",
                     "campaign": campaign or "",
                     "signups": 0,
+                    "withdrawn": 0,
                     "keyed": 0,
                     "paid": 0,
                 },
             )
             row["signups"] += 1
+            # active가 nullable이라 NULL은 탈퇴로 보지 않는다
+            # (DB에 직접 넣은 행이 NULL일 수 있다 — auth_service.login 주석과 같은 이유).
+            if active is False:
+                row["withdrawn"] += 1
             if user_id in keyed:
                 row["keyed"] += 1
             if user_id in paid:

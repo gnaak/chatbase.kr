@@ -37,8 +37,20 @@ interface StreamRequest {
 
 const EmbedChat = () => {
   const { botId } = useParams();
+  const params = new URLSearchParams(window.location.search);
   // widget.js가 iframe에 ?mode=widget을 붙여서 호출 → 버블 버튼 없이 채팅창만 표시
-  const isWidgetMode = new URLSearchParams(window.location.search).get("mode") === "widget";
+  const isWidgetMode = params.get("mode") === "widget";
+  /**
+   * ?badge=1 — 유료 플랜이라 배지가 꺼진 봇에서도 배지를 되살린다.
+   *
+   * 홍보용 데모봇이 이 상황이다. 봇을 여러 개 두려면 유료 플랜이어야 하는데
+   * 유료는 배지를 지우므로, 정작 사람을 데려와야 할 링크에 돌아올 곳이 없어진다.
+   *
+   * 인증 없이 열어둬도 되는 이유: 이 파라미터는 배지를 **켜기만** 한다.
+   * 끄는 건 여전히 플랜만 할 수 있어서, 알아내도 자기 링크에 우리 표시를
+   * 붙이는 것 외에 할 수 있는 게 없다.
+   */
+  const forceBadge = params.get("badge") === "1";
   /**
    * iframe 밖에서 이 주소를 직접 연 경우 — 카페·메일에 뿌리는 공유 링크가 여기다.
    * 닫아줄 부모가 없고 화면 폭도 우리가 정해야 해서 세 곳에서 갈린다:
@@ -318,7 +330,7 @@ const EmbedChat = () => {
           <Send className="w-4 h-4" />
         </button>
       </form>
-      {bot?.show_badge !== false && (
+      {(forceBadge || bot?.show_badge !== false) && (
         <div className="shrink-0 flex justify-center py-1.5 bg-bg-card">
           <a
             href="https://chatbase.kr"

@@ -117,11 +117,21 @@ class UserRepository:
             delete(BillingMethod).where(BillingMethod.user_id == user_id)
         )
         # 구독은 남기되 더 이상 청구되지 않도록 참조를 끊고 상태를 정리한다.
+        #
+        # plan을 반드시 비운다. 게이팅(`plan_lookup.plan_of`)이 status를 안 보고
+        # **plan 컬럼 하나만** 읽기 때문이다 — 값이 남아 있으면 탈퇴한 계정이
+        # 영원히 PREMIUM으로 읽히고, 어드민 플랜 분포에도 계속 잡힌다.
+        # next_billing_at을 비우는 순간 크론이 이 행을 다시 안 집으므로
+        # `_expire`가 대신 비워줄 기회도 없다. 여기서 끝내야 한다.
+        #
+        # 어떤 플랜을 얼마에 썼는지는 tb_payments의 각 행에 남아 있어서
+        # 기록 보관에는 영향이 없다.
         await self.db.execute(
             update(Subscription)
             .where(Subscription.user_id == user_id)
             .values(
                 status=SubscriptionStatus.CANCELED,
+                plan=None,
                 billing_method_id=None,
                 scheduled_plan=None,
                 next_billing_at=None,

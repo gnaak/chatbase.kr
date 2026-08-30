@@ -494,20 +494,39 @@ class PaymentService:
 
     # ── 해지 ────────────────────────────────────
     async def cancel_subscription(self, request):
-        """다음 청구를 중단한다. 이미 결제한 기간은 그대로 쓴다."""
+        """다음 청구를 중단한다. 이미 결제한 기간은 그대로 쓴다.
+
+        **PAST_DUE도 받는다.** 예전에는 ACTIVE만 받았는데, 그러면 결제가 실패해
+        PAST_DUE가 된 사람이 갇힌다 — 해지는 "해지할 구독이 없습니다"로 막히고,
+        탈퇴는 `UserService.withdraw`가 PAST_DUE를 차단해서 "결제 페이지에서 먼저
+        해지하세요"로 되돌린다. 그 사이에도 크론은 하루마다 재청구를 시도한다.
+        그만두겠다는 사람의 카드를 계속 긁는 셈이라 반드시 열려 있어야 한다.
+
+        다만 처리가 다르다. PAST_DUE는 **이번 주기 값을 못 받은 상태**라
+        "남은 기간"이 없다. 그래서 CANCELED로 두지 않고 즉시 만료시켜 FREE로
+        내린다. CANCELED로 두면 안 낸 기간을 계속 쓰게 된다.
+        """
         user_id = request.user_id
         sub = await self.payment_repo.find_subscription(user_id)
 
-        if not sub or sub.status != SubscriptionStatus.ACTIVE:
+        cancelable = (SubscriptionStatus.ACTIVE, SubscriptionStatus.PAST_DUE)
+        if not sub or sub.status not in cancelable:
             fail("해지할 구독이 없습니다.", "SUBSCRIPTION_NOT_FOUND", 404)
 
-        sub.status = SubscriptionStatus.CANCELED
-        sub.canceled_at = now_kst()
+        if sub.status == SubscriptionStatus.PAST_DUE:
+            await self._expire(sub, "canceled_while_past_due")
+            sub.canceled_at = now_kst()
+            message = "구독이 해지되었습니다. 미납 상태라 이용은 즉시 종료됩니다."
+        else:
+            sub.status = SubscriptionStatus.CANCELED
+            sub.canceled_at = now_kst()
+            message = "구독이 해지되었습니다. 남은 기간은 그대로 이용하실 수 있습니다."
+
         await self.payment_repo.db.commit()
 
         return success(
             data=_sub_to_dict(sub, await self._customer_key_of(user_id)),
-            message="구독이 해지되었습니다. 남은 기간은 그대로 이용하실 수 있습니다.",
+            message=message,
         )
 
     # ── 정기 청구 (cron에서 호출) ───────────────

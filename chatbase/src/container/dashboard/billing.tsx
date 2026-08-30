@@ -262,10 +262,16 @@ const Billing = () => {
   };
 
   const handleCancel = () => {
+    // useAPI 는 응답의 data 만 돌려주고 message 는 버린다. 그래서 문구를 여기서
+    // 고른다 — 미납 해지는 남은 기간이 없어서 "그대로 이용하실 수 있습니다"가
+    // 거짓말이 된다. mutate 뒤에는 상태가 갱신되므로 미리 잡아둔다.
+    const wasPastDue = subscription?.status === "past_due";
     cancelMutation.mutate(undefined, {
       onSuccess: () => {
         toast.success(
-          "구독이 해지되었습니다. 남은 기간은 그대로 이용하실 수 있습니다.",
+          wasPastDue
+            ? "구독이 해지되었습니다. 미납 상태라 이용이 즉시 종료됩니다."
+            : "구독이 해지되었습니다. 남은 기간은 그대로 이용하실 수 있습니다.",
         );
         refresh("subscription");
         setCancelOpen(false);
@@ -625,6 +631,13 @@ const Billing = () => {
                     해지됨 · {formatDate(subscription.next_billing_at)}까지 이용
                     가능합니다
                   </p>
+                ) : subscription?.status === "past_due" ? (
+                  // 결제가 실패한 상태. 이 갈래가 없으면 아래 권유 문구가 떠서
+                  // "카드가 안 긁혔다"는 사실 자체를 모른 채 지나간다.
+                  <p className="text-[12px] text-warning mt-0.5">
+                    결제에 실패했습니다 ·{" "}
+                    {formatDate(subscription.next_billing_at)}에 다시 시도합니다
+                  </p>
                 ) : (
                   // 위 두 갈래(다음 결제일 / 해지 안내)와 달리 이건 상태가 아니라
                   // 권유 문구다. 좁은 화면에서 "카드 등록" 버튼과 자리를 다툴
@@ -737,11 +750,16 @@ const Billing = () => {
               </div>
             )}
 
-            {subscription?.status === "active" && (
+            {/* past_due 도 해지할 수 있어야 한다. 여기를 active 로만 두면 결제가
+                실패한 사람이 갇힌다 — 탈퇴는 withdraw 가 past_due 를 막아 되돌리고,
+                그동안 크론은 하루마다 카드를 계속 긁는다. */}
+            {(subscription?.status === "active" ||
+              subscription?.status === "past_due") && (
               <div className="flex items-center justify-between gap-3 flex-wrap pt-3 mt-3 border-t border-line">
                 <p className="text-[11px] text-text-sub leading-relaxed">
-                  해지하셔도 {formatDate(subscription.next_billing_at)}까지는 그대로
-                  이용하실 수 있습니다.
+                  {subscription.status === "past_due"
+                    ? "미납 상태라 해지하시면 이용이 바로 종료됩니다."
+                    : `해지하셔도 ${formatDate(subscription.next_billing_at)}까지는 그대로 이용하실 수 있습니다.`}
                 </p>
                 <Button
                   size="sm"
@@ -910,14 +928,25 @@ const Billing = () => {
         icon={<CreditCard className="w-4 h-4" />}
         title="구독을 해지할까요?"
         description={
-          <>
-            다음 결제부터 청구되지 않아요.
-            <br />
-            <span className="text-text-main">
-              {formatDate(subscription?.next_billing_at ?? null)}
-            </span>
-            까지는 지금 플랜 그대로 이용하실 수 있어요.
-          </>
+          subscription?.status === "past_due" ? (
+            <>
+              재청구를 멈춥니다.
+              <br />
+              <span className="text-text-main">
+                이번 주기 결제가 완료되지 않아
+              </span>{" "}
+              해지 즉시 무료 플랜으로 전환됩니다.
+            </>
+          ) : (
+            <>
+              다음 결제부터 청구되지 않아요.
+              <br />
+              <span className="text-text-main">
+                {formatDate(subscription?.next_billing_at ?? null)}
+              </span>
+              까지는 지금 플랜 그대로 이용하실 수 있어요.
+            </>
+          )
         }
         variant="danger"
         confirmLabel="해지하기"

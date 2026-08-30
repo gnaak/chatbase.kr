@@ -10,6 +10,7 @@ import {
   MessageCircle,
   LogOut,
   BookOpen,
+  LifeBuoy,
 } from "lucide-react";
 import { useGet, usePost } from "@/hooks/common/useAPI";
 import Skeleton from "@/component/dashboard/ui/skeleton";
@@ -32,6 +33,7 @@ const navItems = [
   { to: "/dashboard/billing", label: "결제", icon: CreditCard },
   { to: "/dashboard/settings", label: "설정", icon: Settings },
   { to: "/dashboard/guide", label: "가이드", icon: BookOpen },
+  { to: "/dashboard/support", label: "문의", icon: LifeBuoy },
 ];
 
 const Sidebar = () => {

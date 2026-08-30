@@ -3,6 +3,7 @@
 from passlib.context import CryptContext
 
 from app.core.utils.response import fail
+from app.core.utils.utm import extract_utm
 from app.module.admin.admin_repository import AdminRepository
 from app.module.auth.auth_token import AuthToken
 from app.module.user.user_repository import UserRepository
@@ -33,7 +34,9 @@ class AuthService:
             fail("user already exists", "USER_ALREADY_EXISTS", 409)
         else:
             hashed_password = hash_password(password)
-            await self.user_repo.create_user(email, nickname, hashed_password)
+            await self.user_repo.create_user(
+                email, nickname, hashed_password, utm=extract_utm(body)
+            )
 
     # -- 일반 로그인
     async def login(self, request):

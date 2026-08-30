@@ -18,5 +18,12 @@ class User(Base):
     toss_customer_key = Column(String(64), nullable=True, unique=True, index=True)
     workspace_name = Column(String(50), nullable=True)
     workspace_slug = Column(String(50), unique=True, nullable=True)
+    #: 가입자를 데려온 채널. 가입 **시점에만** 알 수 있어 소급이 안 된다.
+    #: 직접 방문·검색 유입은 셋 다 NULL이고 그게 정상이다.
+    #: 값 규칙은 chatbase/SALES.md §6.
+    utm_source = Column(String(100), nullable=True, index=True)
+    utm_medium = Column(String(100), nullable=True)
+    utm_campaign = Column(String(100), nullable=True)
+
     created_at = Column(DateTime, default=now_kst)
     last_login_at = Column(DateTime(timezone=True))

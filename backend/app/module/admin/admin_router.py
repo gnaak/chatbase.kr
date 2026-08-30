@@ -67,6 +67,14 @@ async def list_users(p: ServiceProvider):
 
 
 # ── 결제 관리 (조회 전용) ──────────────────────
+@router.get("/acquisition")
+@with_provider
+@with_login("admin")
+async def acquisition(p: ServiceProvider):
+    """유입 출처별 가입 · 키 등록 · 유료 전환."""
+    return await p.admin_service.acquisition(p.request)
+
+
 @router.get("/billing/summary")
 @with_provider
 @with_login("admin")

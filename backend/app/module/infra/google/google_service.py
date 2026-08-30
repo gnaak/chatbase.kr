@@ -7,6 +7,7 @@ from fastapi import HTTPException
 
 from app.core.config.settings import settings
 from app.core.utils.response import fail
+from app.core.utils.utm import extract_utm
 from app.module.user.user_repository import UserRepository
 
 logger = logging.getLogger("uvicorn.error")
@@ -61,6 +62,10 @@ class GoogleService:
             name = userinfo.get("name")
             picture = userinfo.get("picture", "")
         
-        user = await self.user_repo.get_or_create_user(email, name, picture)
+        # OAuth는 리다이렉트를 거쳐 돌아오느라 주소의 utm_*이 날아간다.
+        # 프론트가 localStorage에 담아둔 값을 code와 함께 다시 실어 보낸다.
+        user = await self.user_repo.get_or_create_user(
+            email, name, picture, utm=extract_utm(body)
+        )
         
         return user 

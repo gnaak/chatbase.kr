@@ -179,6 +179,88 @@ class AdminService:
         ]
         return success(data=data)
 
+    # ── 유입 출처 ─────────────────────────────────
+    async def acquisition(self, request):
+        """유입 출처별 가입 → 키 등록 → 유료 전환.
+
+        **이 화면이 있는 이유**: GA4는 "cafe_apsa에서 34명 방문"까지만 안다.
+        그 뒤 퍼널(가입·키 등록·결제)은 우리 DB에만 있어서, 둘을 잇는 값이
+        `tb_users.utm_*` 이다. "어느 카페가 돈이 됐나"에 답하는 유일한 곳이다.
+
+        UTM이 없는 가입은 `(직접)`으로 묶는다. **그 줄이 크다는 것 자체가 신호다**
+        — 측정 안 되는 유입이 그만큼 많다는 뜻이라, 링크에 꼬리표를 안 달고
+        홍보했거나 검색·직접 유입이 많다는 얘기가 된다.
+
+        집계를 SQL 조인으로 짜지 않고 파이썬에서 묶는다. 세 축(가입·키·결제)이
+        서로 다른 테이블이라 조인하면 중복 행이 생기고, 지금 규모에서는
+        전부 읽어도 몇 백 행이다. 커지면 그때 바꾼다.
+        """
+        db = self.admin_repo.db
+
+        users = (
+            await db.execute(
+                select(
+                    User.id,
+                    User.utm_source,
+                    User.utm_medium,
+                    User.utm_campaign,
+                )
+            )
+        ).all()
+
+        # 키를 하나라도 등록한 사람 / 유료 구독이 살아 있는 사람.
+        keyed = set(
+            (await db.execute(select(ApiKey.user_id).distinct())).scalars().all()
+        )
+        paid = set(
+            (
+                await db.execute(
+                    select(Subscription.user_id)
+                    .where(Subscription.status == SubscriptionStatus.ACTIVE)
+                    .distinct()
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+        buckets: dict[tuple, dict] = {}
+        for user_id, source, medium, campaign in users:
+            key = (source or "", medium or "", campaign or "")
+            row = buckets.setdefault(
+                key,
+                {
+                    "source": source or "(직접)",
+                    "medium": medium or "",
+                    "campaign": campaign or "",
+                    "signups": 0,
+                    "keyed": 0,
+                    "paid": 0,
+                },
+            )
+            row["signups"] += 1
+            if user_id in keyed:
+                row["keyed"] += 1
+            if user_id in paid:
+                row["paid"] += 1
+
+        # 결제 → 키 등록 → 가입 순. 돈이 된 채널이 위로 온다.
+        rows = sorted(
+            buckets.values(),
+            key=lambda r: (r["paid"], r["keyed"], r["signups"]),
+            reverse=True,
+        )
+
+        return success(
+            data={
+                "rows": rows,
+                "total_signups": len(users),
+                "untracked_signups": sum(
+                    1 for u in users if not u[1]
+                ),
+            }
+        )
+
     # ── 결제 관리 (조회 전용) ──────────────────────
     async def _paid_totals_by_user(self) -> dict[int, dict]:
         """사용자별 누적 성공 결제액·건수."""

@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database.base import now_kst
 from app.core.utils.response import fail
+from app.core.utils.utm import utm_columns
 from app.module.api_key.api_key import ApiKey
 from app.module.bot.bot import Bot
 from app.module.inquiry.inquiry import Inquiry
@@ -26,18 +27,21 @@ class UserRepository:
         result = await self.db.execute(select(User).where(User.email == email))
         return result.scalar_one_or_none()
     
-    async def create_user(self, email, nickname, hashed_password):
+    async def create_user(self, email, nickname, hashed_password, utm=None):
         user = User(
             email=email,
             name=nickname,
             password=hashed_password,
-            last_login_at=now_kst()
+            last_login_at=now_kst(),
+            **utm_columns(utm),
         )
 
         self.db.add(user)
         await self.db.commit()
 
-    async def get_or_create_user(self, email: str, name: str, picture: str) -> User | None:
+    async def get_or_create_user(
+        self, email: str, name: str, picture: str, utm=None
+    ) -> User | None:
         result = await self.db.execute(select(User).filter(User.email == email))
         user = result.unique().scalar_one_or_none()
 
@@ -51,12 +55,15 @@ class UserRepository:
                 fail("비활성화된 계정입니다.", "INACTIVE_ACCOUNT", 403)
             user.last_login_at=now_kst()
         else:
+            # utm은 **새로 만들 때만** 넣는다. 기존 회원이 나중에 카페 링크를
+            # 타고 다시 로그인해도 최초 유입 출처를 덮어쓰지 않는다.
             user = User(
                 email=email,
                 name=name,
                 profile_image=picture,
                 created_at=now_kst(),
-                last_login_at=now_kst()
+                last_login_at=now_kst(),
+                **utm_columns(utm),
             )
 
             self.db.add(user)

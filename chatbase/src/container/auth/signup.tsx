@@ -9,8 +9,10 @@ import { usePost } from "@/hooks/common/useAPI";
 import { useAuth } from "@/hooks/common/useAuth";
 import { parseUserInfo } from "@/hooks/common/getCookie";
 import { LegalModalLink } from "@/component/landing/legalModal";
+import { readUtm, type Utm } from "@/hooks/common/utm";
 
-interface SignupBody {
+/** utm_* 은 있을 때만 실린다. 서버가 source 없는 요청은 그냥 무시한다. */
+interface SignupBody extends Utm {
   email: string;
   password: string;
   nickname: string;
@@ -40,7 +42,7 @@ const Signup = () => {
     e.preventDefault();
     setError(null);
     signupMutation.mutate(
-      { email, password, nickname: name },
+      { email, password, nickname: name, ...readUtm() },
       {
         onSuccess: () => {
           // 가입 직후 자동 로그인

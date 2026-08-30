@@ -43,6 +43,23 @@ interface ModelDto {
   is_active: boolean;
 }
 
+/** 유입 출처 한 줄. 서버가 결제 → 키 등록 → 가입 순으로 정렬해서 준다. */
+interface AcquisitionRow {
+  /** UTM이 없는 가입은 서버가 "(직접)" 으로 묶어 보낸다. */
+  source: string;
+  medium: string;
+  campaign: string;
+  signups: number;
+  keyed: number;
+  paid: number;
+}
+
+interface AcquisitionSummary {
+  rows: AcquisitionRow[];
+  total_signups: number;
+  untracked_signups: number;
+}
+
 /** 매출 추이에 보여줄 개월 수. */
 const TREND_MONTHS = 6;
 /** "다가오는 청구"로 볼 기간. 7일은 대개 비어서 2주로 잡는다. */
@@ -131,6 +148,8 @@ const AdminMain = () => {
     "api/admin/users",
     ["admin-users"],
   );
+  const { data: acquisition, isLoading: acqLoading } =
+    useGet<AcquisitionSummary>("api/admin/acquisition", ["admin-acquisition"]);
   const { data: models, isLoading: modelsLoading } = useGet<ModelDto[]>(
     "api/admin/models",
     ["admin-models"],
@@ -341,6 +360,71 @@ const AdminMain = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        {/* 퍼널의 시작이라 맨 앞에 둔다. 폭이 넓어 3칸을 다 쓴다. */}
+        <Panel
+          title="유입 출처"
+          subtitle="어느 채널이 결제까지 갔는가 · 가입 시점의 UTM 기준"
+          className="lg:col-span-3"
+        >
+          <Rows loading={acqLoading}>
+            {!acquisition || acquisition.rows.length === 0 ? (
+              <Empty>가입한 사용자가 없습니다.</Empty>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[12px]">
+                    <thead>
+                      <tr className="text-text-sub border-b border-line">
+                        <th className="text-left font-medium py-1.5">출처</th>
+                        <th className="text-left font-medium py-1.5">매체</th>
+                        <th className="text-left font-medium py-1.5">캠페인</th>
+                        <th className="text-right font-medium py-1.5">가입</th>
+                        <th className="text-right font-medium py-1.5">키 등록</th>
+                        <th className="text-right font-medium py-1.5">유료</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {acquisition.rows.map((r) => (
+                        <tr
+                          key={`${r.source}|${r.medium}|${r.campaign}`}
+                          className="border-b border-line last:border-0 hover:bg-bg-hover transition-colors"
+                        >
+                          <td className="py-1.5 text-text-main">{r.source}</td>
+                          <td className="py-1.5 text-text-sub">
+                            {r.medium || "—"}
+                          </td>
+                          <td className="py-1.5 text-text-sub">
+                            {r.campaign || "—"}
+                          </td>
+                          <td className="py-1.5 text-right font-mono text-text-main">
+                            {r.signups}
+                          </td>
+                          <td className="py-1.5 text-right font-mono text-text-sub">
+                            {r.keyed}
+                          </td>
+                          <td className="py-1.5 text-right font-mono text-text-main">
+                            {r.paid}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {acquisition.untracked_signups > 0 && (
+                  <p className="text-[11px] text-text-sub leading-relaxed">
+                    전체 {acquisition.total_signups}명 중{" "}
+                    <strong className="text-text-main">
+                      {acquisition.untracked_signups}명
+                    </strong>
+                    은 UTM 없이 가입했습니다. 직접 방문·검색이거나, 꼬리표를 안 단
+                    링크로 들어온 경우입니다.
+                  </p>
+                )}
+              </>
+            )}
+          </Rows>
+        </Panel>
+
         <Panel
           title="월별 매출"
           subtitle={

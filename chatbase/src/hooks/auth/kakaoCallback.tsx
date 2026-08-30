@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { usePost } from "../common/useAPI";
+import { readUtm } from "../common/utm";
 import { parseUserInfo } from "../common/getCookie";
 import { useAuth } from "../common/useAuth";
 
@@ -49,7 +50,13 @@ const KakaoCallBack = ({
   const kakaoLoginAction = async () => {
     if (!code) return;
     try {
-      const data = await kakaoLogin.mutateAsync({ code, device_info });
+      // 구글 콜백과 같은 이유로 utm_* 을 실어 보낸다 — 리다이렉트를 거치면
+      // 주소의 쿼리스트링이 날아가고 localStorage 만 남는다.
+      const data = await kakaoLogin.mutateAsync({
+        code,
+        device_info,
+        ...readUtm(),
+      });
       const updatedUser = parseUserInfo();
       setUser(updatedUser);
       onSuccess?.(data);

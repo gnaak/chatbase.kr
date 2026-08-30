@@ -95,7 +95,6 @@ interface BotForm {
   faqs: { q: string; a: string }[];
   multilingual: boolean;
   /** 언어별 첫 인사말. 한국어는 위 `greeting` 을 쓴다. */
-  greetings: Record<string, string>;
 }
 
 interface BotDto {
@@ -112,7 +111,6 @@ interface BotDto {
   active: boolean;
   faqs: { q: string; a: string }[] | null;
   multilingual?: boolean;
-  greetings?: Record<string, string> | null;
 }
 
 interface BotPayload {
@@ -127,7 +125,6 @@ interface BotPayload {
   model: string;
   faqs?: { q: string; a: string }[] | null;
   multilingual?: boolean;
-  greetings?: Record<string, string> | null;
   active?: boolean;
 }
 
@@ -143,21 +140,7 @@ const DEFAULT_FORM: BotForm = {
   model: "",
   faqs: [],
   multilingual: false,
-  greetings: {},
 };
-
-/**
- * 인사말을 따로 받는 언어들. 한국어는 기본 `greeting` 을 그대로 쓴다.
- *
- * 왜 인사말만 손으로 받나: 첫 화면은 방문자가 **아직 아무 말도 하기 전**이라
- * LLM 이 언어를 알 수 없다. 대화는 사용자가 쓴 말을 보고 맞추면 되지만,
- * QR 을 찍은 외국인이 처음 보는 이 한 줄만은 미리 준비돼 있어야 한다.
- */
-const GREETING_LANGS = [
-  { key: "en", label: "English", placeholder: "Hello! How can I help you?" },
-  { key: "ja", label: "日本語", placeholder: "こんにちは！ご用件をどうぞ。" },
-  { key: "zh", label: "中文", placeholder: "您好！有什么可以帮您？" },
-] as const;
 
 const dtoToForm = (dto: BotDto): BotForm => ({
   name: dto.name,
@@ -171,7 +154,6 @@ const dtoToForm = (dto: BotDto): BotForm => ({
   model: dto.model,
   faqs: dto.faqs ?? [],
   multilingual: dto.multilingual ?? false,
-  greetings: dto.greetings ?? {},
 });
 
 const formToPayload = (form: BotForm): BotPayload => ({
@@ -186,11 +168,6 @@ const formToPayload = (form: BotForm): BotPayload => ({
   model: form.model,
   faqs: form.faqs.length > 0 ? form.faqs : null,
   multilingual: form.multilingual,
-  // 빈 문자열은 보내지 않는다. 저장해두면 그 언어 방문자가 빈 인사를 받고,
-  // 기본 인사말로 떨어지지도 않는다(빈 문자열도 값이라 `||` 를 통과해버린다).
-  greetings: Object.fromEntries(
-    Object.entries(form.greetings).filter(([, v]) => (v || "").trim() !== ""),
-  ),
 });
 
 const EMBED_ORIGIN =
@@ -530,7 +507,7 @@ const BotEdit = () => {
 
             <Field
               label="다국어 응대"
-              description="켜면 방문자가 쓴 언어로 답변합니다. 학습 자료가 한국어여도 됩니다."
+              description="켜면 방문자가 쓴 언어로 답변합니다. FAQ는 영어·일본어·중국어로 자동 번역되어 저장됩니다."
             >
               <button
                 type="button"
@@ -550,35 +527,6 @@ const BotEdit = () => {
                 />
               </button>
             </Field>
-
-            {form.multilingual && (
-              <Field
-                label="언어별 인사 메시지"
-                description="첫 화면은 방문자가 아직 말을 걸기 전이라 언어를 알 수 없습니다. 이 한 줄만 미리 준비해두세요. 비워두면 위 인사 메시지가 그대로 나갑니다."
-              >
-                <div className="flex flex-col gap-3">
-                  {GREETING_LANGS.map((l) => (
-                    <div key={l.key} className="flex flex-col gap-1.5">
-                      <span className="text-[12px] font-medium text-text-sub">
-                        {l.label}
-                      </span>
-                      <Textarea
-                        rows={2}
-                        value={form.greetings[l.key] ?? ""}
-                        onChange={(e) =>
-                          update("greetings", {
-                            ...form.greetings,
-                            [l.key]: e.target.value,
-                          })
-                        }
-                        placeholder={l.placeholder}
-                        maxLength={500}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </Field>
-            )}
 
             <Field
               label="FAQ 버튼"
@@ -1052,52 +1000,33 @@ const Row = ({
 const EMBED_TABS = [
   { key: "script", label: "Script", hint: "우측 하단에 채팅 버블이 자동 생성됩니다. </body> 직전에 붙여넣으세요." },
   { key: "iframe", label: "iframe", hint: "원하는 위치에 직접 배치할 때 사용합니다. width·height를 자유롭게 조절하세요." },
-  { key: "qr", label: "QR", hint: "인쇄해서 카운터·테이블에 두세요. 사이트가 없어도 됩니다." },
+  { key: "qr", label: "QR", hint: "사이트가 없어도 됩니다. 인쇄해서 붙여두기만 하면 됩니다." },
 ] as const;
+
+const qrUrl = (botId: string) => `${EMBED_ORIGIN}/embed/${botId}`;
 
 /**
- * QR 목록.
+ * QR 한 장.
  *
- * 맨 앞 '자동'은 `lang` 을 안 붙인다 — 방문자 브라우저 언어를 따라간다.
- * 한 장만 붙일 거면 이게 맞다.
- *
- * 나머지 넷은 언어를 못 박는다. 국기 스티커와 같이 붙여두면 방문자가 자기 걸
- * 고르므로 감지 실패가 아예 없다. 호텔·식당처럼 붙여둘 자리가 여러 개인 곳에서
- * 이쪽이 더 확실하다.
+ * 언어를 QR에 싣지 않는다. 누가 찍을지 모르고, 찍은 사람이 채팅창에서 직접
+ * 고르는 게 확실하다. 언어별로 여러 장을 뽑으면 인쇄물만 늘고 방문자는
+ * 어느 걸 찍어야 하는지 한 번 더 고민한다.
  */
-const QR_TARGETS = [
-  { key: "", label: "자동", note: "브라우저 언어를 따라갑니다" },
-  { key: "ko", label: "한국어", note: "" },
-  { key: "en", label: "English", note: "" },
-  { key: "ja", label: "日本語", note: "" },
-  { key: "zh", label: "中文", note: "" },
-] as const;
-
-const qrUrl = (botId: string, lang: string) =>
-  `${EMBED_ORIGIN}/embed/${botId}${lang ? `?lang=${lang}` : ""}`;
-
 const QrPanel = ({ botId }: { botId: string }) => {
-  const [images, setImages] = useState<Record<string, string>>({});
+  const [image, setImage] = useState<string>("");
 
   useEffect(() => {
-    // 언마운트 뒤 setState 를 막는다. QR 5장 생성이 순간이긴 해도
-    // 탭을 빠르게 오가면 경고가 뜬다.
     let alive = true;
-    Promise.all(
-      QR_TARGETS.map(async (t) => {
-        const dataUrl = await QRCode.toDataURL(qrUrl(botId, t.key), {
-          width: 512,
-          margin: 2,
-          errorCorrectionLevel: "M",
-        });
-        return [t.key, dataUrl] as const;
-      }),
-    )
-      .then((pairs) => {
-        if (alive) setImages(Object.fromEntries(pairs));
+    QRCode.toDataURL(qrUrl(botId), {
+      width: 512,
+      margin: 2,
+      errorCorrectionLevel: "M",
+    })
+      .then((url) => {
+        if (alive) setImage(url);
       })
       .catch(() => {
-        /* 생성 실패해도 화면은 살아 있어야 한다. 빈 자리로 둔다. */
+        /* 생성 실패해도 화면은 살아 있어야 한다. */
       });
     return () => {
       alive = false;
@@ -1105,39 +1034,34 @@ const QrPanel = ({ botId }: { botId: string }) => {
   }, [botId]);
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {QR_TARGETS.map((t) => (
-          <div
-            key={t.key || "auto"}
-            className="flex flex-col items-center gap-2 p-3 rounded-DEFAULT bg-bg-sub shadow-border"
+    <div className="flex items-start gap-4">
+      <div className="shrink-0 w-[168px] flex flex-col items-center gap-2 p-3 rounded-DEFAULT bg-bg-sub shadow-border">
+        {image ? (
+          <img
+            src={image}
+            alt="챗봇 QR"
+            className="w-full aspect-square rounded-sm bg-white"
+          />
+        ) : (
+          <div className="w-full aspect-square rounded-sm bg-bg-card animate-pulse" />
+        )}
+        {image && (
+          <a
+            href={image}
+            download={`qr-${botId}.png`}
+            className="text-[11px] text-text-sub hover:text-text-main underline underline-offset-2"
           >
-            {images[t.key] ? (
-              <img
-                src={images[t.key]}
-                alt={`${t.label} QR`}
-                className="w-full aspect-square rounded-sm bg-white"
-              />
-            ) : (
-              <div className="w-full aspect-square rounded-sm bg-bg-card animate-pulse" />
-            )}
-            <span className="text-[12px] font-medium text-text-main">{t.label}</span>
-            {images[t.key] && (
-              <a
-                href={images[t.key]}
-                download={`qr-${botId}-${t.key || "auto"}.png`}
-                className="text-[11px] text-text-sub hover:text-text-main underline underline-offset-2"
-              >
-                PNG 저장
-              </a>
-            )}
-          </div>
-        ))}
+            PNG 저장
+          </a>
+        )}
       </div>
-      <p className="text-[12px] text-text-sub leading-relaxed">
-        언어별 QR은 그 언어로 첫 인사를 시작합니다. 답변 언어는 방문자가 실제로 쓴
-        말을 따라가므로, 일본어 QR로 들어와 영어로 물으면 영어로 답합니다.
-      </p>
+      <div className="min-w-0 flex-1 flex flex-col gap-2">
+        <CodeBlock code={qrUrl(botId)} language="html" />
+        <p className="text-[12px] text-text-sub leading-relaxed">
+          인쇄해서 카운터·테이블에 두세요. 방문자가 채팅창 우측 상단에서 언어를
+          고르면 그때부터 그 언어로 응대합니다.
+        </p>
+      </div>
     </div>
   );
 };

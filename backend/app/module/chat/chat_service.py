@@ -40,8 +40,20 @@ def _resolve_effective_model(bot_model: str, override: str | None) -> str:
         return bot_model
 
 
+#: 프롬프트에 적을 언어 이름. 'ko' 는 없다 — 원문이 한국어라 고정할 게 없고,
+#: 기본값이라 여기 있으면 한국인 방문자에게도 규칙이 하나 더 붙는다.
+_LANG_NAME = {
+    "en": "영어",
+    "ja": "일본어",
+    "zh": "중국어",
+}
+
+
 def _build_system_prompt(
-    bot, vector_store_id: str | None = None, multilingual: bool = False
+    bot,
+    vector_store_id: str | None = None,
+    multilingual: bool = False,
+    lang: str | None = None,
 ) -> str:
     """봇 system_prompt + 학습 텍스트 + (fallback 또는 web search) 규칙 합성.
 
@@ -65,13 +77,28 @@ def _build_system_prompt(
     # QR에 `?lang=` 을 실어도 그건 **첫 인사말만** 정한다. 대화는 사용자가 실제로
     # 쓴 언어를 따라가는 게 맞다 — 일본인이 영어로 물으면 영어로 답해야 한다.
     if multilingual:
-        parts.append(
-            "언어 규칙:\n"
-            "- 사용자가 사용한 언어와 같은 언어로 답변하세요.\n"
-            "- 참고 자료가 다른 언어로 쓰여 있어도 답변은 사용자 언어로 옮겨서 하세요.\n"
-            "- 고유명사(상호·메뉴명·지명)는 원문을 함께 적어주세요. "
-            "방문자가 현장에서 그 이름을 찾아야 하기 때문입니다."
-        )
+        # 방문자가 화면에서 언어를 골랐으면 **그 언어로 못 박는다.**
+        # 안 그러면 일본어를 골라놓고 영어로 한 마디 던졌을 때 영어로 답이 가고,
+        # 관광객 입장에서는 고른 게 무시된 것으로 보인다. 고르지 않았으면
+        # (ko 기본) 사용자가 쓴 말을 따라간다.
+        chosen = _LANG_NAME.get((lang or "").lower()) if lang else None
+        if chosen:
+            parts.append(
+                f"언어 규칙:\n"
+                f"- 방문자가 {chosen}를 선택했습니다. **항상 {chosen}로 답변하세요.**\n"
+                f"- 질문이 다른 언어로 들어와도 답변은 {chosen}로 하세요.\n"
+                "- 참고 자료가 다른 언어로 쓰여 있어도 옮겨서 답하세요.\n"
+                "- 고유명사(상호·메뉴명·지명)는 원문을 함께 적어주세요. "
+                "방문자가 현장에서 그 이름을 찾아야 하기 때문입니다."
+            )
+        else:
+            parts.append(
+                "언어 규칙:\n"
+                "- 사용자가 사용한 언어와 같은 언어로 답변하세요.\n"
+                "- 참고 자료가 다른 언어로 쓰여 있어도 답변은 사용자 언어로 옮겨서 하세요.\n"
+                "- 고유명사(상호·메뉴명·지명)는 원문을 함께 적어주세요. "
+                "방문자가 현장에서 그 이름을 찾아야 하기 때문입니다."
+            )
 
     # training_type이 "file"이면 텍스트 학습은 쓰지 않는다.
     # (모드를 바꿔도 예전 training_text가 DB에 남아 조용히 주입되는 것 방지)
@@ -214,6 +241,7 @@ class ChatService:
         body = await request.json()
         bot_slug = (body.get("bot_id") or "").strip()
         visitor_id = (body.get("visitor_id") or "").strip()
+        lang = (body.get("lang") or "").strip().lower()
         content = (body.get("content") or "").strip()
         session_id = body.get("session_id")
         model_override = body.get("model")
@@ -277,7 +305,10 @@ class ChatService:
             else None
         )
         system = _build_system_prompt(
-            bot, vec_id, await _multilingual_allowed(bot, self.usage_service)
+            bot,
+            vec_id,
+            await _multilingual_allowed(bot, self.usage_service),
+            lang,
         )
         try:
             answer = await self.llm_service.chat(
@@ -335,6 +366,7 @@ class ChatService:
         logger.debug("[stream] 제너레이터 진입")
         bot_slug = (body.get("bot_id") or "").strip()
         visitor_id = (body.get("visitor_id") or "").strip()
+        lang = (body.get("lang") or "").strip().lower()
         content = (body.get("content") or "").strip()
         session_id = body.get("session_id")
         model_override = body.get("model")
@@ -418,8 +450,11 @@ class ChatService:
                     else None
                 )
                 system = _build_system_prompt(
-            bot, vec_id, await _multilingual_allowed(bot, self.usage_service)
-        )
+                    bot,
+                    vec_id,
+                    await _multilingual_allowed(bot, usage_service),
+                    lang,
+                )
 
                 history = await chat_repo.find_messages(session.id)
                 api_messages = [

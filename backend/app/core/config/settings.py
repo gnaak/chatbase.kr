@@ -44,6 +44,10 @@ class RawEnv(BaseSettings):
     toss_api_client_key: Optional[str] = None
     toss_api_secret_key: Optional[str] = None
 
+    # DEEPL — FAQ 사전 번역용. 없으면 번역을 조용히 건너뛴다(봇 저장은 정상).
+    # 무료 키는 ':fx' 로 끝나고 엔드포인트가 다르다. 분기는 deepl_service 가 한다.
+    deepl_api_key: Optional[str] = None
+
     # KAKAO
     kakao_client_id: Optional[str] = None
     kakao_client_secret: Optional[str] = None
@@ -125,6 +129,10 @@ class Settings:
     @property
     def jwt_secret(self) -> str:
         return self.raw.jwt_secret
+
+    @property
+    def deepl_api_key(self):
+        return self.raw.deepl_api_key
 
     @property
     def hash_key(self) -> str:

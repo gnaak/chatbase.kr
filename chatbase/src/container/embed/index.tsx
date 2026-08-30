@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Bot, Send, RotateCcw, X, MessageCircle } from "lucide-react";
+import { Bot, Send, RotateCcw, X, MessageCircle, ChevronDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 // 홑 개행(\n)을 줄바꿈으로 렌더링. 없으면 마크다운 규칙상 공백으로 합쳐져
 // LLM 답변과 인사 메시지의 줄이 전부 붙어 나온다.
@@ -17,29 +17,29 @@ interface BotPublicDto {
   greeting: string | null;
   active: boolean;
   faqs: { q: string; a: string }[] | null;
-  /** 다국어 응대 여부. 켜져 있으면 LLM이 방문자가 쓴 언어로 답한다. */
+  /** 다국어 응대 여부. 꺼져 있으면 언어 선택 pill 자체를 띄우지 않는다. */
   multilingual?: boolean;
-  /** 언어별 첫 인사말. `{ en, ja, zh }`. 없는 언어는 `greeting`으로 떨어진다. */
-  greetings?: Record<string, string> | null;
+  /**
+   * FAQ 번역본 `{ en: [{q,a}], ja: ..., zh: ... }`.
+   *
+   * FAQ만 미리 번역해둔다 — 버튼은 언어를 고른 뒤에도 계속 보이고,
+   * 눌렀을 때 **LLM을 안 거치고 즉답으로** 나가기 때문이다. 런타임 번역을 붙이면
+   * 그 즉답 성질이 사라진다. 대화 응답은 LLM이 그때그때 맞춘다.
+   */
+  faqs_i18n?: Record<string, { q: string; a: string }[]> | null;
   /** 유료 플랜은 false. 응답 전이거나 필드가 없으면 표시하는 쪽으로 기운다. */
   show_badge?: boolean;
 }
 
-/**
- * 방문자 언어 한 글자로 줄이기. `ko-KR` → `ko`, `zh-TW` → `zh`.
- *
- * QR 이 `?lang=ja` 를 실어 오면 그걸 쓰고, 없으면 브라우저 설정을 본다.
- * 감지에 실패하면 `ko` 로 떨어진다 — 국내 손님이 다수라 그쪽이 안전하다.
- *
- * 대화 자체의 언어는 여기서 정하지 않는다. LLM 이 사용자가 실제로 쓴 말을 보고
- * 맞춘다(`chat_service._build_system_prompt`). 이 값이 정하는 건 **첫 인사말뿐**이다.
- */
-const resolveLang = (fromQuery: string | null): string => {
-  const raw = (fromQuery || navigator.language || "ko").toLowerCase();
-  const base = raw.split("-")[0];
-  return ["ko", "en", "ja", "zh"].includes(base) ? base : "ko";
-};
 
+
+/** 언어 선택 pill 목록. 원문이 한국어라 ko 가 기본값이다. */
+const LANGS = [
+  { key: "ko", flag: "🇰🇷", label: "한국어" },
+  { key: "en", flag: "🇺🇸", label: "English" },
+  { key: "ja", flag: "🇯🇵", label: "日本語" },
+  { key: "zh", flag: "🇨🇳", label: "中文" },
+] as const;
 
 interface ChatMessage {
   id: number;
@@ -53,13 +53,17 @@ interface StreamRequest {
   visitor_id: string;
   content: string;
   session_id: number | undefined;
+  /** 방문자가 고른 언어. 서버가 시스템 프롬프트에 못 박는다. */
+  lang: string;
 }
 
 const EmbedChat = () => {
   const { botId } = useParams();
   const params = new URLSearchParams(window.location.search);
-  // 한 번만 읽는다. 언어는 세션 중에 바뀌지 않으므로 상태로 들 이유가 없다.
-  const lang = resolveLang(params.get("lang"));
+  // 방문자가 고르는 값이다. QR 에는 언어를 싣지 않는다 — 누가 찍을지 모르고,
+  // 찍은 사람이 여기서 직접 고르는 편이 확실하다.
+  const [lang, setLang] = useState("ko");
+  const [langOpen, setLangOpen] = useState(false);
   // widget.js가 iframe에 ?mode=widget을 붙여서 호출 → 버블 버튼 없이 채팅창만 표시
   const isWidgetMode = params.get("mode") === "widget";
   /**
@@ -113,13 +117,18 @@ const EmbedChat = () => {
   );
   const { sendMessage } = useChatStream<StreamRequest>("api/chat/stream");
 
-  // 그 언어 인사말 → 없으면 기본(한국어) 인사말 → 그것도 없으면 인사 없음.
-  const greetingText = bot?.greetings?.[lang] || bot?.greeting || null;
+  // 인사말은 한국어 하나다. 언어를 고르기 **전에** 한 번 보이고, 고른 뒤에는
+  // 대화가 시작돼 다시 렌더되지 않는다 — 번역본을 만들어도 보여줄 자리가 없다.
+  const greetingText = bot?.greeting || null;
   useEffect(() => {
     if (greetingText) {
       setMessages([{ id: 0, role: "bot", content: greetingText, created_at: null }]);
     }
   }, [greetingText]);
+
+  // 고른 언어의 번역본 → 없으면 원문(한국어). 번역이 아직 안 돌았거나 DeepL
+  // 한도가 찼을 때도 버튼이 사라지면 안 된다.
+  const faqList = (lang !== "ko" && bot?.faqs_i18n?.[lang]) || bot?.faqs || [];
 
   const lastContent = messages[messages.length - 1]?.content ?? "";
   useEffect(() => {
@@ -181,7 +190,7 @@ const EmbedChat = () => {
     };
 
     try {
-      await sendMessage({ bot_id: botId, visitor_id: visitorId.current, content: text, session_id: sessionId }, handleChunk);
+      await sendMessage({ bot_id: botId, visitor_id: visitorId.current, content: text, session_id: sessionId, lang }, handleChunk);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "응답을 받지 못했습니다.";
       setError(msg);
@@ -264,6 +273,51 @@ const EmbedChat = () => {
         )}
       </header>
 
+      {bot?.multilingual && (
+        <div className="shrink-0 relative flex justify-end px-3.5 py-1.5 border-b border-line bg-bg-card">
+          <button
+            type="button"
+            onClick={() => setLangOpen((v) => !v)}
+            className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-bg-sub shadow-border text-[11px] text-text-main hover:bg-bg-hover transition-colors"
+          >
+            <span>{LANGS.find((l) => l.key === lang)?.flag}</span>
+            <span>{LANGS.find((l) => l.key === lang)?.label}</span>
+            <ChevronDown className="w-3 h-3 text-text-sub" />
+          </button>
+
+          {langOpen && (
+            <>
+              {/* 바깥을 눌러 닫는다. 좁은 위젯이라 포커스 트랩까지는 안 건다. */}
+              <div
+                className="fixed inset-0 z-10"
+                onClick={() => setLangOpen(false)}
+              />
+              <div className="absolute right-3.5 top-8 z-20 w-[132px] py-1 rounded-DEFAULT bg-bg-card shadow-card dark:shadow-card-dark">
+                {LANGS.map((l) => (
+                  <button
+                    key={l.key}
+                    type="button"
+                    onClick={() => {
+                      setLang(l.key);
+                      setLangOpen(false);
+                    }}
+                    className={[
+                      "w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-left transition-colors",
+                      l.key === lang
+                        ? "text-text-main bg-bg-sub"
+                        : "text-text-sub hover:bg-bg-sub",
+                    ].join(" ")}
+                  >
+                    <span>{l.flag}</span>
+                    <span>{l.label}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       <div className="flex-1 px-3.5 py-3.5 space-y-2.5 bg-bg-sub/40">
         <div className="flex items-start gap-2">
           <Bar className="w-7 h-7 rounded-full shrink-0" />
@@ -338,9 +392,9 @@ const EmbedChat = () => {
         {error && <p className="text-[11px] text-point-red text-center">{error}</p>}
       </div>
 
-      {bot?.faqs && bot.faqs.length > 0 && (
+      {faqList.length > 0 && (
         <div className="shrink-0 flex flex-wrap gap-1.5 px-3.5 py-2 border-t border-line bg-bg-card">
-          {bot.faqs.map((faq, i) => (
+          {faqList.map((faq, i) => (
             <button
               key={i}
               type="button"

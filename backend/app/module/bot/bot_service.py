@@ -1,3 +1,8 @@
+import asyncio
+import hashlib
+import json
+import logging
+
 import httpx
 from bs4 import BeautifulSoup
 
@@ -7,6 +12,7 @@ from app.module.api_key.api_key import Provider
 from app.module.api_key.api_key_service import ApiKeyService
 from app.module.bot.bot import Bot
 from app.module.bot.bot_file import BotFile
+from app.module.bot.bot_translation import TRANSLATION_LANGS
 from app.module.bot.bot_repository import BotRepository
 from app.module.infra.llm.llm_service import resolve_provider
 from app.module.infra.openai.vector_store_service import VectorStoreService
@@ -55,7 +61,6 @@ def _bot_to_dict(bot: Bot) -> dict:
         "has_vector_store": bool(bot.vector_store_id),
         "faqs": bot.faqs or [],
         "multilingual": bool(bot.multilingual),
-        "greetings": bot.greetings or {},
         "created_at": bot.created_at.isoformat() if bot.created_at else None,
         "updated_at": bot.updated_at.isoformat() if bot.updated_at else None,
     }
@@ -96,6 +101,60 @@ def _file_to_dict(f: BotFile) -> dict:
         "mime_type": f.mime_type,
         "uploaded_at": f.created_at.isoformat() if f.created_at else None,
     }
+
+
+logger = logging.getLogger(__name__)
+
+
+def faqs_hash(faqs) -> str:
+    """원문 FAQ의 지문. 이게 그대로면 다시 번역하지 않는다.
+
+    DeepL 무료는 월 50만 자다. 봇을 저장할 때마다 부르면 금방 태운다.
+    정렬된 JSON으로 직렬화해 키 순서가 흔들려도 같은 값이 나오게 한다.
+    """
+    return hashlib.sha256(
+        json.dumps(faqs or [], ensure_ascii=False, sort_keys=True).encode()
+    ).hexdigest()
+
+
+async def _translate_bot_faqs(bot_id: int) -> None:
+    """FAQ를 en/ja/zh로 번역해 저장한다. **백그라운드 전용.**
+
+    요청 반환 뒤에 도는 작업이라 요청 스코프 세션을 못 쓴다. 자체 세션을 연다
+    (`kakao_skill_service._answer_via_callback`와 같은 방식).
+
+    실패해도 조용히 끝낸다 — 번역이 없으면 원문(한국어) FAQ가 그대로 나가고,
+    번역 실패로 봇 저장이 되돌아가면 안 된다.
+    """
+    from app.core.database.base import SessionLocal
+    from app.module.bot.bot_repository import BotRepository
+    from app.module.infra.deepl import deepl_service
+
+    if not deepl_service.is_configured():
+        return
+
+    try:
+        async with SessionLocal() as db:
+            repo = BotRepository(db)
+            bot = await repo.find_by_id(bot_id)
+            if not bot or not bot.multilingual:
+                return
+
+            source = bot.faqs or []
+            digest = faqs_hash(source)
+
+            for lang in TRANSLATION_LANGS:
+                existing = await repo.find_translation(bot_id, lang)
+                if existing and existing.source_hash == digest:
+                    continue  # 원문 그대로 — 호출하지 않는다
+                translated = await deepl_service.translate_faqs(source, lang)
+                if translated is None:
+                    continue  # 한도 소진·오류. 다음 저장 때 다시 시도된다
+                await repo.upsert_translation(bot_id, lang, translated, digest)
+
+            await db.commit()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("faq translation failed bot_id=%s: %s", bot_id, exc)
 
 
 class BotService:
@@ -204,6 +263,18 @@ class BotService:
         # 인증 없이 열려 있고 CORS가 * 인 엔드포인트다. 플랜 이름을 그대로 내리면
         # 남의 봇 slug만 알아도 결제 상태가 노출되므로 불리언만 파생해서 준다.
         limits = await self._plan_limits(bot.user_id)
+
+        # FAQ 번역본. 방문자가 언어를 고르면 프론트가 여기서 꺼내 쓴다.
+        #
+        # 언어별로 따로 부르지 않고 한 번에 내린다 — FAQ 몇 줄이라 크지 않고,
+        # 언어를 바꿀 때마다 왕복하면 버튼이 늦게 바뀌어 티가 난다.
+        # 다국어가 꺼져 있으면 빈 객체다(있어도 쓸 데가 없다).
+        faqs_i18n: dict[str, list] = {}
+        if bot.multilingual:
+            for row in await self.bot_repo.find_translations(bot.id):
+                if row.faqs:
+                    faqs_i18n[row.lang] = row.faqs
+
         response = success(
             data={
                 "id": bot.slug,
@@ -217,7 +288,7 @@ class BotService:
                 # 하기 전이라 서버가 언어를 알 수 없고, QR 의 `?lang=` 은 프론트에만
                 # 있다. 몇 백 바이트라 왕복을 한 번 더 하는 것보다 싸다.
                 "multilingual": bool(bot.multilingual),
-                "greetings": bot.greetings or {},
+                "faqs_i18n": faqs_i18n,
                 "show_badge": not limits.remove_badge,
             }
         )
@@ -276,12 +347,18 @@ class BotService:
             model=model,
             faqs=body.get("faqs"),
             multilingual=bool(body.get("multilingual", False)),
-            greetings=body.get("greetings"),
             active=body.get("active", True),
         )
         await self.bot_repo.add(bot)
         await self.bot_repo.db.commit()
         await self.bot_repo.db.refresh(bot)
+        # FAQ 번역은 커밋 뒤 백그라운드로 돌린다.
+        #
+        # 저장 응답을 붙잡아두면 안 된다 — DeepL 왕복이 언어 3개면 수 초다.
+        # 원문이 안 바뀌었으면 `_translate_bot_faqs` 안에서 해시로 걸러 아예
+        # 호출하지 않으므로, 매번 부르는 비용은 사실상 0이다.
+        if bot.multilingual:
+            asyncio.create_task(_translate_bot_faqs(bot.id))
         return success(data=_bot_to_dict(bot))
 
     async def update_bot(self, request):
@@ -305,7 +382,6 @@ class BotService:
             "model",
             "faqs",
             "multilingual",
-            "greetings",
             "active",
         ):
             if field in body:
@@ -327,6 +403,13 @@ class BotService:
 
         await self.bot_repo.db.commit()
         await self.bot_repo.db.refresh(bot)
+        # FAQ 번역은 커밋 뒤 백그라운드로 돌린다.
+        #
+        # 저장 응답을 붙잡아두면 안 된다 — DeepL 왕복이 언어 3개면 수 초다.
+        # 원문이 안 바뀌었으면 `_translate_bot_faqs` 안에서 해시로 걸러 아예
+        # 호출하지 않으므로, 매번 부르는 비용은 사실상 0이다.
+        if bot.multilingual:
+            asyncio.create_task(_translate_bot_faqs(bot.id))
         return success(data=_bot_to_dict(bot))
 
     async def delete_bot(self, request):

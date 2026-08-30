@@ -4,6 +4,7 @@ from sqlalchemy.orm import load_only
 
 from app.module.bot.bot import Bot
 from app.module.bot.bot_file import BotFile
+from app.module.bot.bot_translation import BotTranslation
 
 
 class BotRepository:
@@ -101,3 +102,35 @@ class BotRepository:
 
     async def delete_file(self, file: BotFile) -> None:
         await self.db.delete(file)
+
+    # ── BotTranslation (FAQ 번역본) ──────────────
+    async def find_translations(self, bot_id: int) -> list[BotTranslation]:
+        result = await self.db.execute(
+            select(BotTranslation).where(BotTranslation.bot_id == bot_id)
+        )
+        return list(result.scalars().all())
+
+    async def find_translation(self, bot_id: int, lang: str) -> BotTranslation | None:
+        result = await self.db.execute(
+            select(BotTranslation).where(
+                BotTranslation.bot_id == bot_id,
+                BotTranslation.lang == lang,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def upsert_translation(
+        self, bot_id: int, lang: str, faqs, source_hash: str
+    ) -> None:
+        """있으면 갱신, 없으면 생성. (bot_id, lang) 유니크라 한 쪽만 남는다."""
+        row = await self.find_translation(bot_id, lang)
+        if row:
+            row.faqs = faqs
+            row.source_hash = source_hash
+        else:
+            self.db.add(
+                BotTranslation(
+                    bot_id=bot_id, lang=lang, faqs=faqs, source_hash=source_hash
+                )
+            )
+        await self.db.flush()

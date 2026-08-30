@@ -20,6 +20,7 @@ from app.module.admin.admin import Admin
 from app.module.user.user import User
 from app.module.bot.bot import Bot
 from app.module.bot.bot_file import BotFile
+from app.module.bot.bot_translation import BotTranslation
 from app.module.api_key.api_key import ApiKey
 from app.module.chat.chat_session import ChatSession
 from app.module.chat.chat_message import ChatMessage

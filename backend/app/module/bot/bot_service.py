@@ -59,6 +59,29 @@ def _bot_to_dict(bot: Bot) -> dict:
     }
 
 
+def _bot_to_summary(bot: Bot) -> dict:
+    """목록 응답. 상세(_bot_to_dict)와 달리 무거운 필드를 싣지 않는다.
+
+    빠진 것: logo · widget_icon(둘 다 base64 MEDIUMTEXT) · training_text ·
+    faqs · fallback · training_type · has_vector_store.
+    목록을 쓰는 화면(홈·대화로그·카카오·통계) 중 이 필드를 읽는 곳은 없다.
+    봇을 눌러 들어가면 botEdit이 GET /api/bot/{slug}로 전체를 따로 받는다.
+
+    ⚠️ 필드를 늘리려면 bot_repository.find_by_user_summary의 load_only에도
+    같이 넣어야 한다. 한쪽만 늘리면 async 지연 로딩으로 요청이 터진다.
+    """
+    return {
+        "id": bot.slug,
+        "name": bot.name,
+        "model": bot.model,
+        "system_prompt": bot.system_prompt,
+        "greeting": bot.greeting,
+        "active": bot.active,
+        "created_at": bot.created_at.isoformat() if bot.created_at else None,
+        "updated_at": bot.updated_at.isoformat() if bot.updated_at else None,
+    }
+
+
 def _normalize_training_type(value: str | None) -> str:
     return "file" if value == "file" else "text"
 
@@ -177,8 +200,8 @@ class BotService:
 
     async def list_bots(self, request):
         user_id = request.user_id
-        bots = await self.bot_repo.find_by_user(user_id)
-        return success(data=[_bot_to_dict(b) for b in bots])
+        bots = await self.bot_repo.find_by_user_summary(user_id)
+        return success(data=[_bot_to_summary(b) for b in bots])
 
     async def get_bot(self, request):
         user_id = request.user_id

@@ -8,7 +8,8 @@
   변경: `set_default_method`가 구독이 가리키는 카드를 바꾼다. 토스 호출은 없다 —
         다음 청구 때 다른 billingKey를 쓰는 것이 전부다.
 
-플랜 게이팅은 전부 `user.plan` 한 컬럼만 본다(`core/utils/plan.py`).
+플랜 게이팅은 전부 구독을 본다(`payment/plan_lookup.py`). 상품마다 구독이
+따로 있으므로 사용자 테이블의 컬럼 하나로는 표현할 수 없다.
 결제가 하는 일은 그 값을 바꾸는 것뿐이다.
 """
 
@@ -425,8 +426,6 @@ class PaymentService:
         sub.next_billing_at = _add_month(now)
         sub.canceled_at = None
 
-        user.plan = plan.value
-
         await self.payment_repo.db.commit()
         logger.info("subscription activated user_id=%s plan=%s", user_id, plan.value)
 
@@ -521,11 +520,7 @@ class PaymentService:
         return resolve_plan(sub.scheduled_plan or sub.plan)
 
     async def _expire(self, sub: Subscription, reason: str) -> None:
-        """구독을 끝낸다. 플랜은 Free로 내려간다."""
-        user = await self.user_repo.get_user_by_id(sub.user_id)
-        if user:
-            user.plan = Plan.FREE.value
-
+        """구독을 끝낸다. plan을 비우면 게이팅이 곧바로 FREE로 읽는다."""
         sub.status = SubscriptionStatus.NONE
         sub.plan = None
         sub.scheduled_plan = None
@@ -624,8 +619,6 @@ class PaymentService:
         sub.billing_method_id = method.id
         sub.retry_count = 0
         sub.next_billing_at = _add_month(now)
-        if user:
-            user.plan = plan.value
 
         logger.info(
             "recurring charge done user_id=%s plan=%s amount=%s",

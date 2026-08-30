@@ -392,7 +392,7 @@ const AdminMain = () => {
           )}
         </Panel>
 
-        <Panel title="플랜 분포" subtitle="게이팅 기준 권한(user.plan)">
+        <Panel title="플랜 분포" subtitle="챗봇 구독 기준">
           <Rows loading={billingLoading}>
             {planTotal === 0 ? (
               <Empty>사용자가 없습니다.</Empty>

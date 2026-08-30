@@ -544,6 +544,9 @@ class ChatService:
             bot_repo = BotRepository(db)
             api_key_repo = ApiKeyRepository(db)
             api_key_service = ApiKeyService(api_key_repo)
+            # 자체 세션 경로라 주입된 self.usage_service 를 쓸 수 없다.
+            # 다국어 플랜 게이팅에 필요하다.
+            usage_service = usage_service_for(db)
 
             try:
                 bot = await bot_repo.find_by_slug(bot_slug)
@@ -698,6 +701,7 @@ class ChatService:
         async with SessionLocal() as db:
             api_key_repo = ApiKeyRepository(db)
             api_key_service = ApiKeyService(api_key_repo)
+            usage_service = usage_service_for(db)
 
             try:
                 preview_bot = SimpleNamespace(

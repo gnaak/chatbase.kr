@@ -24,7 +24,7 @@ aeo/        React — aeo.chatbase.kr (AEO)   :3001
 | 위치 | 문서 |
 |------|------|
 | 루트 | `CLAUDE.md`(이 문서) · `DESIGN.md`(디자인 시스템 — 두 앱 공용) |
-| `chatbase/` | `PROJECT.md` `NEED.md` `TODO.md` `SALES.md` `PROGRESS.md` `chatbase-knowledge.txt` |
+| `chatbase/` | `PROJECT.md` `NEED.md` `TODO.md` `SALES.md` `OUTREACH.md` `PROGRESS.md` `chatbase-knowledge.txt` |
 | `aeo/` | `PROJECT.md`(AEO가 뭔지 + 상품 정의) `TODO.md` |
 
 ## 기술 스택

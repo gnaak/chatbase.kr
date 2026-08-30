@@ -84,7 +84,9 @@ const Stats = () => {
 
   const handleAnalyze = () => {
     topicsMutation.mutate(
-      { bot_id: botId || undefined, days: Number(days) },
+      // days는 기간 선택(rangeKey)에서 파생된다. 위 요약 쿼리와 같은 값을 써야
+      // "화면에 보이는 기간"과 "분석한 기간"이 어긋나지 않는다.
+      { bot_id: botId || undefined, days: range.days },
       {
         onSuccess: (res) => setTopics(res),
         onError: (err) => toast.error(err.message || "분석에 실패했습니다."),

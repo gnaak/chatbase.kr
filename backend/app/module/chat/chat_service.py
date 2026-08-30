@@ -533,6 +533,7 @@ class ChatService:
         bot_slug = (body.get("bot_id") or "").strip()
         content = (body.get("content") or "").strip()
         session_id = body.get("session_id")
+        lang = (body.get("lang") or "").strip().lower()
 
         if not (bot_slug and content):
             yield _sse("error", {"message": "bot_id, content가 필요합니다."})
@@ -591,6 +592,11 @@ class ChatService:
                 # 폼 override를 적용한 가벼운 가짜 bot
                 preview_bot = SimpleNamespace(
                     user_id=bot.user_id,
+                    # 저장 전 폼 값이 온다. 켜자마자 확인할 수 있어야 해서
+                    # DB 값(bot.multilingual)보다 body 를 우선한다.
+                    multilingual=bool(
+                        body.get("multilingual", bot.multilingual)
+                    ),
                     model=(body.get("model") or "").strip() or bot.model,
                     system_prompt=body.get("system_prompt")
                     if "system_prompt" in body
@@ -618,7 +624,14 @@ class ChatService:
                     if provider == Provider.OPENAI
                     else None
                 )
-                system = _build_system_prompt(preview_bot, vec_id)
+                # 미리보기도 플랜을 본다. 안 그러면 FREE 계정이 여기서
+                # 다국어를 무제한으로 쓰고, 게이팅이 반쪽이 된다.
+                system = _build_system_prompt(
+                    preview_bot,
+                    vec_id,
+                    await _multilingual_allowed(preview_bot, usage_service),
+                    lang,
+                )
                 history = await chat_repo.find_messages(session.id)
                 api_messages = [
                     {
@@ -676,6 +689,7 @@ class ChatService:
         """
         content = (body.get("content") or "").strip()
         model = (body.get("model") or "").strip()
+        lang = (body.get("lang") or "").strip().lower()
 
         if not (content and model):
             yield _sse("error", {"message": "content, model이 필요합니다."})
@@ -688,6 +702,7 @@ class ChatService:
             try:
                 preview_bot = SimpleNamespace(
                     user_id=user_id,
+                    multilingual=bool(body.get("multilingual", False)),
                     model=model,
                     system_prompt=body.get("system_prompt"),
                     training_text=body.get("training_text"),
@@ -702,7 +717,12 @@ class ChatService:
                     await api_key_service.get_decrypted_key(user_id, provider)
                 ) or ""
 
-                system = _build_system_prompt(preview_bot, None)
+                system = _build_system_prompt(
+                    preview_bot,
+                    None,
+                    await _multilingual_allowed(preview_bot, usage_service),
+                    lang,
+                )
 
                 raw_history = body.get("history") or []
                 api_messages = [

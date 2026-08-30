@@ -3,6 +3,7 @@ import { Send, Bot, RotateCcw, X, MessageCircle } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import { useChatStream } from "@/hooks/common/useAPI";
+import LangPill from "@/component/bot/langPill";
 import { remarkGfmKo } from "@/utils/format/markdown";
 
 interface PreviewStreamRequest {
@@ -14,6 +15,10 @@ interface PreviewStreamRequest {
   training_text?: string;
   training_type?: TrainingType;
   fallback?: string;
+  /** 저장 전 폼 값. 서버가 이 봇을 다국어로 취급할지 결정한다. */
+  multilingual?: boolean;
+  /** 미리보기에서 고른 언어. 서버가 시스템 프롬프트에 못 박는다. */
+  lang?: string;
 }
 
 interface QuickStreamRequest {
@@ -41,6 +46,8 @@ interface ChatPreviewProps {
   trainingData?: string;
   trainingType?: TrainingType;
   faqs?: Faq[];
+  /** 다국어 응대 여부. 저장 전 폼 값이 그대로 온다 — 켜자마자 확인할 수 있어야 한다. */
+  multilingual?: boolean;
 }
 
 interface PreviewMessage {
@@ -60,6 +67,7 @@ const ChatPreview = ({
   trainingData,
   trainingType,
   faqs,
+  multilingual,
 }: ChatPreviewProps) => {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -78,6 +86,7 @@ const ChatPreview = ({
             trainingData={trainingData}
             trainingType={trainingType}
             faqs={faqs}
+            multilingual={multilingual}
             onClose={() => setIsOpen(false)}
           />
         )}
@@ -118,6 +127,7 @@ const ChatWindow = ({
   trainingData,
   trainingType,
   faqs,
+  multilingual,
   onClose,
 }: ChatWindowProps) => {
   const initialMessages: PreviewMessage[] = [
@@ -126,6 +136,9 @@ const ChatWindow = ({
   const [messages, setMessages] = useState<PreviewMessage[]>(initialMessages);
   const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
+  // 미리보기에서도 고른 언어가 실제 요청에 실려야 한다. 안 그러면 pill 이
+  // 장식이 되고, 주인은 저장해서 임베드를 열어봐야만 동작을 확인할 수 있다.
+  const [lang, setLang] = useState("ko");
   const sessionIdRef = useRef<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -243,6 +256,7 @@ const ChatWindow = ({
             ...(trainingData !== undefined ? { training_text: trainingData } : {}),
             ...(trainingType ? { training_type: trainingType } : {}),
             fallback: fallback ?? "",
+            ...(multilingual ? { multilingual: true, lang } : {}),
           },
           handleChunk,
         );
@@ -292,7 +306,8 @@ const ChatWindow = ({
             {pending ? "응답 중..." : slug ? "온라인" : "미리보기"}
           </div>
         </div>
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-1.5">
+          {multilingual && <LangPill value={lang} onChange={setLang} />}
           <IconBtn label="대화 초기화" onClick={handleReset}>
             <RotateCcw className="w-3.5 h-3.5" />
           </IconBtn>

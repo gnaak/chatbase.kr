@@ -22,6 +22,7 @@ import Select, { SelectOption } from "@/ui/select";
 import Skeleton from "@/ui/skeleton";
 import LogoUpload from "@/ui/logoUpload";
 import CodeBlock from "@/ui/codeBlock";
+import Toggle from "@/ui/toggle";
 import QRCode from "qrcode";
 import ChatPreview from "@/component/bot/chatPreview";
 import FileLearning from "@/component/bot/fileLearning";
@@ -94,7 +95,6 @@ interface BotForm {
   model: string;
   faqs: { q: string; a: string }[];
   multilingual: boolean;
-  /** 언어별 첫 인사말. 한국어는 위 `greeting` 을 쓴다. */
 }
 
 interface BotDto {
@@ -509,23 +509,11 @@ const BotEdit = () => {
               label="다국어 응대"
               description="켜면 방문자가 쓴 언어로 답변합니다. FAQ는 영어·일본어·중국어로 자동 번역되어 저장됩니다."
             >
-              <button
-                type="button"
-                role="switch"
-                aria-checked={form.multilingual}
-                onClick={() => update("multilingual", !form.multilingual)}
-                className={[
-                  "relative w-11 h-6 rounded-full transition-colors shadow-border",
-                  form.multilingual ? "bg-main" : "bg-bg-sub",
-                ].join(" ")}
-              >
-                <span
-                  className={[
-                    "absolute top-0.5 w-5 h-5 rounded-full bg-bg-card transition-transform shadow-border",
-                    form.multilingual ? "translate-x-[22px]" : "translate-x-0.5",
-                  ].join(" ")}
-                />
-              </button>
+              <Toggle
+                checked={form.multilingual}
+                onChange={(next) => update("multilingual", next)}
+                label="다국어 응대"
+              />
             </Field>
 
             <Field
@@ -786,6 +774,7 @@ A. 서울 본사 매장은 영업시간 내 방문 픽업이 가능합니다.`}
               trainingData={form.trainingData}
               trainingType={form.trainingType}
               faqs={form.faqs}
+              multilingual={form.multilingual}
             />
           </div>
         </div>

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Bot, Send, RotateCcw, X, MessageCircle, ChevronDown } from "lucide-react";
+import { Bot, Send, RotateCcw, X, MessageCircle } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 // 홑 개행(\n)을 줄바꿈으로 렌더링. 없으면 마크다운 규칙상 공백으로 합쳐져
 // LLM 답변과 인사 메시지의 줄이 전부 붙어 나온다.
@@ -8,6 +8,7 @@ import remarkBreaks from "remark-breaks";
 import { useChatStream, useGet } from "@/hooks/common/useAPI";
 import { getVisitorId } from "@/hooks/common/visitorId";
 import { remarkGfmKo } from "@/utils/format/markdown";
+import LangPill from "@/component/bot/langPill";
 
 interface BotPublicDto {
   id: string;
@@ -33,14 +34,6 @@ interface BotPublicDto {
 
 
 
-/** 언어 선택 pill 목록. 원문이 한국어라 ko 가 기본값이다. */
-const LANGS = [
-  { key: "ko", flag: "🇰🇷", label: "한국어" },
-  { key: "en", flag: "🇺🇸", label: "English" },
-  { key: "ja", flag: "🇯🇵", label: "日本語" },
-  { key: "zh", flag: "🇨🇳", label: "中文" },
-] as const;
-
 interface ChatMessage {
   id: number;
   role: "user" | "bot";
@@ -63,7 +56,6 @@ const EmbedChat = () => {
   // 방문자가 고르는 값이다. QR 에는 언어를 싣지 않는다 — 누가 찍을지 모르고,
   // 찍은 사람이 여기서 직접 고르는 편이 확실하다.
   const [lang, setLang] = useState("ko");
-  const [langOpen, setLangOpen] = useState(false);
   // widget.js가 iframe에 ?mode=widget을 붙여서 호출 → 버블 버튼 없이 채팅창만 표시
   const isWidgetMode = params.get("mode") === "widget";
   /**
@@ -274,47 +266,8 @@ const EmbedChat = () => {
       </header>
 
       {bot?.multilingual && (
-        <div className="shrink-0 relative flex justify-end px-3.5 py-1.5 border-b border-line bg-bg-card">
-          <button
-            type="button"
-            onClick={() => setLangOpen((v) => !v)}
-            className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-bg-sub shadow-border text-[11px] text-text-main hover:bg-bg-hover transition-colors"
-          >
-            <span>{LANGS.find((l) => l.key === lang)?.flag}</span>
-            <span>{LANGS.find((l) => l.key === lang)?.label}</span>
-            <ChevronDown className="w-3 h-3 text-text-sub" />
-          </button>
-
-          {langOpen && (
-            <>
-              {/* 바깥을 눌러 닫는다. 좁은 위젯이라 포커스 트랩까지는 안 건다. */}
-              <div
-                className="fixed inset-0 z-10"
-                onClick={() => setLangOpen(false)}
-              />
-              <div className="absolute right-3.5 top-8 z-20 w-[132px] py-1 rounded-DEFAULT bg-bg-card shadow-card dark:shadow-card-dark">
-                {LANGS.map((l) => (
-                  <button
-                    key={l.key}
-                    type="button"
-                    onClick={() => {
-                      setLang(l.key);
-                      setLangOpen(false);
-                    }}
-                    className={[
-                      "w-full flex items-center gap-2 px-3 py-1.5 text-[12px] text-left transition-colors",
-                      l.key === lang
-                        ? "text-text-main bg-bg-sub"
-                        : "text-text-sub hover:bg-bg-sub",
-                    ].join(" ")}
-                  >
-                    <span>{l.flag}</span>
-                    <span>{l.label}</span>
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
+        <div className="shrink-0 flex justify-end px-3.5 py-1.5 border-b border-line bg-bg-card">
+          <LangPill value={lang} onChange={setLang} />
         </div>
       )}
 

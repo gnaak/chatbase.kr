@@ -53,11 +53,18 @@ interface SessionDetailDto {
  * 표의 칸 나눔과 좌우 여백. 헤더와 각 행이 **반드시 같은 값을 써야** 세로줄이 맞는다.
  * 한쪽만 고치면 헤더와 내용이 어긋난 표가 되므로 한 상수로 묶어둔다.
  *
- * 방문자 ID는 `v_8f3a...` 같은 난수라 읽을 일이 거의 없다. 넓게 잡아둘 이유가
- * 없어서 줄이고, 그만큼을 실제로 읽는 "마지막 대화"에 넘겼다.
+ * 칸: 챗봇 / 마지막 대화 / 채널 / 재방문 / 시각
+ *
+ * 원래 `방문자` 칸에 `v_8f3a2b1c` 같은 난수를 그대로 띄웠는데, 그 값으로는
+ * 누군지도 알 수 없고 40줄을 눈으로 대조해 같은 값을 찾는 사람도 없다.
+ * 토큰을 버리고 거기서 **뽑아낼 수 있는 신호**(채널·재방문)로 바꿨다.
+ * 원본 ID는 필요할 때 모달 헤더에서 본다.
  */
-const COLS = "md:grid-cols-[148px_minmax(0,1fr)_124px_76px]";
+const COLS = "md:grid-cols-[140px_minmax(0,1fr)_72px_72px_76px]";
 const ROW_PADDING = "px-5 md:px-6";
+
+/** 카카오 유입 세션의 visitor_id 접두사. 백엔드 `KAKAO_PREFIX`와 같아야 한다. */
+const KAKAO_PREFIX = "kakao:";
 
 const formatRelative = (iso: string | null): string => {
   if (!iso) return "";
@@ -118,6 +125,24 @@ const Conversations = () => {
     return map;
   }, [bots]);
 
+  /**
+   * 방문자별 세션 수 — "재방문" 칸의 근거.
+   *
+   * `filteredSessions`가 아니라 `sessions`로 센다. 검색어를 넣었다고 해서
+   * 그 사람이 실제로 온 횟수가 줄어드는 건 아니다. 검색 결과에 한 줄만 남았는데
+   * "1회"로 바뀌면 그건 틀린 숫자다.
+   *
+   * 봇 필터는 조회 URL 자체가 달라지므로 자연히 반영된다 — 특정 봇을 고르면
+   * "이 챗봇에 몇 번 왔나"가 된다.
+   */
+  const visitCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    (sessions ?? []).forEach((s) => {
+      counts.set(s.visitor_id, (counts.get(s.visitor_id) ?? 0) + 1);
+    });
+    return counts;
+  }, [sessions]);
+
   const filteredSessions = useMemo(() => {
     if (!sessions) return [];
     if (!search.trim()) return sessions;
@@ -172,7 +197,8 @@ const Conversations = () => {
             >
               <span>챗봇</span>
               <span>마지막 대화</span>
-              <span>방문자</span>
+              <span className="text-center">채널</span>
+              <span className="text-center">재방문</span>
               <span className="text-right">시각</span>
             </div>
 
@@ -186,6 +212,7 @@ const Conversations = () => {
                   key={s.id}
                   session={s}
                   botName={botNameMap.get(s.bot_id) ?? "봇"}
+                  visits={visitCounts.get(s.visitor_id) ?? 1}
                   onClick={() => setSelectedId(s.id)}
                 />
               ))
@@ -212,58 +239,81 @@ const Conversations = () => {
  * 마크업은 하나고 `md:order-*`로 순서만 바꾼다. 모바일/데스크톱용 마크업을
  * 두 벌 두면 한쪽에만 칸을 추가하는 사고가 난다.
  *
- *   모바일 (2칸)              데스크톱 (4칸)
- *   ┌──────────┬────────┐    ┌────┬────────┬──────┬────┐
- *   │ 봇       │  시각  │    │ 봇 │ 마지막 │ 방문 │시각│
- *   ├──────────┴────────┤    └────┴────────┴──────┴────┘
- *   │ 마지막 대화        │
- *   │ 방문자             │
- *   └───────────────────┘
+ *   모바일 (2칸)                데스크톱 (5칸)
+ *   ┌──────────────┬────────┐   ┌────┬────────┬────┬──────┬────┐
+ *   │ 봇           │  시각  │   │ 봇 │ 마지막 │채널│재방문│시각│
+ *   ├──────────────┴────────┤   └────┴────────┴────┴──────┴────┘
+ *   │ 마지막 대화            │
+ *   │ 위젯 · 3회             │
+ *   └───────────────────────┘
+ *
+ * 채널·재방문은 모바일에서 한 줄에 나란히 붙어야 자연스럽고, 데스크톱에서는
+ * 각자 칸을 차지해야 한다. 그래서 둘을 감싼 span에 `md:contents`를 준다 —
+ * 넓은 화면에서는 그 상자가 사라지고 자식들이 바로 그리드 칸이 된다.
  */
 const SessionRow = ({
   session,
   botName,
+  visits,
   onClick,
 }: {
   session: SessionDto;
   botName: string;
+  /** 이 방문자의 총 세션 수. 1이면 첫 방문. */
+  visits: number;
   onClick: () => void;
-}) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className={[
-      "w-full text-left py-3 md:py-3.5 border-b border-line last:border-b-0",
-      "hover:bg-bg-hover transition-colors",
-      "grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 md:gap-y-0 items-center",
-      ROW_PADDING,
-      COLS,
-    ].join(" ")}
-  >
-    <span className="md:order-1 flex items-center gap-2 min-w-0">
-      <span className="w-5 h-5 rounded-full bg-bg-sub flex items-center justify-center shrink-0">
-        <Bot className="w-3 h-3 text-text-sub" />
+}) => {
+  const isKakao = session.visitor_id.startsWith(KAKAO_PREFIX);
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "w-full text-left py-3 md:py-3.5 border-b border-line last:border-b-0",
+        "hover:bg-bg-hover transition-colors",
+        "grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 md:gap-y-0 items-center",
+        ROW_PADDING,
+        COLS,
+      ].join(" ")}
+    >
+      <span className="md:order-1 flex items-center gap-2 min-w-0">
+        <span className="w-5 h-5 rounded-full bg-bg-sub flex items-center justify-center shrink-0">
+          <Bot className="w-3 h-3 text-text-sub" />
+        </span>
+        <span className="text-[13px] font-medium text-text-main truncate">
+          {botName}
+        </span>
       </span>
-      <span className="text-[13px] font-medium text-text-main truncate">
-        {botName}
+
+      {/* 모바일에서는 첫 줄 오른쪽, 데스크톱에서는 마지막 칸.
+          tabular-nums로 자릿수를 고정해야 "3분 전 / 12분 전"이 오른쪽에서 흔들리지 않는다. */}
+      <span className="md:order-5 shrink-0 text-[11px] tabular-nums text-text-sub text-right">
+        {formatRelative(session.last_message_at)}
       </span>
-    </span>
 
-    {/* 모바일에서는 첫 줄 오른쪽, 데스크톱에서는 마지막 칸.
-        tabular-nums로 자릿수를 고정해야 "3분 전 / 12분 전"이 오른쪽에서 흔들리지 않는다. */}
-    <span className="md:order-4 shrink-0 text-[11px] tabular-nums text-text-sub text-right">
-      {formatRelative(session.last_message_at)}
-    </span>
+      <p className="col-span-2 md:col-span-1 md:order-2 text-[13px] text-text-main leading-relaxed line-clamp-2 md:line-clamp-1">
+        {session.preview ?? "(메시지 없음)"}
+      </p>
 
-    <p className="col-span-2 md:col-span-1 md:order-2 text-[13px] text-text-main leading-relaxed line-clamp-2 md:line-clamp-1">
-      {session.preview ?? "(메시지 없음)"}
-    </p>
-
-    <span className="col-span-2 md:col-span-1 md:order-3 font-mono text-[11px] text-text-disabled truncate">
-      {session.visitor_id}
-    </span>
-  </button>
-);
+      <span className="col-span-2 flex items-center gap-1.5 md:contents">
+        <span className="md:order-3 md:text-center text-[11px] text-text-sub">
+          {isKakao ? "카카오" : "위젯"}
+        </span>
+        <span className="md:order-4 md:text-center text-[11px]">
+          {visits > 1 ? (
+            <span className="inline-flex items-center px-1.5 h-[18px] rounded-full bg-bg-sub text-text-main font-medium tabular-nums">
+              {visits}회
+            </span>
+          ) : (
+            // 첫 방문에 "1회"를 적으면 재방문한 행이 눈에 안 띈다. 자리만 지킨다.
+            <span className="text-text-disabled">—</span>
+          )}
+        </span>
+      </span>
+    </button>
+  );
+};
 
 /**
  * 대화 전문 모달.
@@ -483,9 +533,12 @@ const SessionTableSkeleton = () => (
           <Skeleton className="w-5 h-5 rounded-full shrink-0" />
           <Skeleton className="h-3 w-20" />
         </div>
-        <Skeleton className="md:order-4 h-2.5 w-10 ml-auto" />
+        <Skeleton className="md:order-5 h-2.5 w-10 ml-auto" />
         <Skeleton className="col-span-2 md:col-span-1 md:order-2 h-[17px] w-full" />
-        <Skeleton className="col-span-2 md:col-span-1 md:order-3 h-2.5 w-28" />
+        <div className="col-span-2 flex items-center gap-1.5 md:contents">
+          <Skeleton className="md:order-3 h-2.5 w-8 md:mx-auto" />
+          <Skeleton className="md:order-4 h-2.5 w-8 md:mx-auto" />
+        </div>
       </div>
     ))}
   </>

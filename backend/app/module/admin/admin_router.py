@@ -88,3 +88,35 @@ async def list_subscriptions(p: ServiceProvider):
 async def list_payments(p: ServiceProvider):
     """?limit=200 (최대 1000). 실패 건도 함께 내려온다."""
     return await p.admin_service.list_payments(p.request)
+
+
+# ── 1:1 문의 관리 ──────────────────────────────
+@router.get("/inquiries")
+@with_provider
+@with_login("admin")
+async def list_inquiries(p: ServiceProvider):
+    """?status=open|answered|closed|all &q=검색어 &limit=50 &offset=0"""
+    return await p.inquiry_service.admin_list(p.request)
+
+
+@router.get("/inquiries/{id}")
+@with_provider
+@with_login("admin")
+async def get_inquiry(p: ServiceProvider):
+    return await p.inquiry_service.admin_detail(p.request)
+
+
+@router.post("/inquiries/{id}/reply")
+@with_provider
+@with_login("admin")
+async def reply_inquiry(p: ServiceProvider):
+    """body: {content, close?} — 답변을 스레드에 남기고 문의자에게 메일을 보낸다."""
+    return await p.inquiry_service.admin_reply(p.request)
+
+
+@router.patch("/inquiries/{id}/status")
+@with_provider
+@with_login("admin")
+async def update_inquiry_status(p: ServiceProvider):
+    """body: {status}"""
+    return await p.inquiry_service.admin_update_status(p.request)

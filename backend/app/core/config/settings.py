@@ -56,6 +56,18 @@ class RawEnv(BaseSettings):
     local_google_redirect_uri: Optional[str] = None
     prod_google_redirect_uri: Optional[str] = None
 
+    # APP URL — 메일에 담는 문의 스레드 링크(`/support/{token}`) 생성용.
+    local_app_url: str = "http://localhost:3000"
+    prod_app_url: str = "https://chatbase.kr"
+
+    # MAIL
+    # 발송 인프라(SES/SMTP + SPF·DKIM·DMARC)가 아직 없다. TODO.md 2번이 끝나기
+    # 전까지 mail_enabled는 false로 두고, 발송 지점은 로그만 남긴다.
+    mail_enabled: bool = False
+    mail_from: str = "chatbase.kr <hello@chatbase.kr>"
+    #: 신규 문의 알림을 받을 운영자 주소.
+    mail_admin_to: str = "hello@chatbase.kr"
+
     model_config = SettingsConfigDict(
         env_file=os.path.join(
             os.path.dirname(__file__), "..", "..", "..", ".env"
@@ -168,6 +180,23 @@ class Settings:
     @property
     def google_redirect_uri(self) -> str:
         return getattr(self.raw, f"{self.env}_google_redirect_uri")
+
+    # APP URL / MAIL
+    @property
+    def app_url(self) -> str:
+        return getattr(self.raw, f"{self.env}_app_url").rstrip("/")
+
+    @property
+    def mail_enabled(self) -> bool:
+        return self.raw.mail_enabled
+
+    @property
+    def mail_from(self) -> str:
+        return self.raw.mail_from
+
+    @property
+    def mail_admin_to(self) -> str:
+        return self.raw.mail_admin_to
 
 
 # 전역 인스턴스

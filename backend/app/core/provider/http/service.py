@@ -39,6 +39,9 @@ class ServiceProvider:
         self._usage_service = None
         self._stats_repo = None
         self._stats_service = None
+        self._inquiry_repo = None
+        self._inquiry_service = None
+        self._mail_service = None
 
     # ── 기존 도메인 ─────────────────────────
     @property
@@ -260,6 +263,31 @@ class ServiceProvider:
                 toss_service=self.toss_service,
             )
         return self._payment_service
+
+    @property
+    def mail_service(self):
+        if not self._mail_service:
+            from app.module.infra.mail.mail_service import MailService
+            self._mail_service = MailService()
+        return self._mail_service
+
+    @property
+    def inquiry_repo(self):
+        if not self._inquiry_repo:
+            from app.module.inquiry.inquiry_repository import InquiryRepository
+            self._inquiry_repo = InquiryRepository(self.db)
+        return self._inquiry_repo
+
+    @property
+    def inquiry_service(self):
+        if not self._inquiry_service:
+            from app.module.inquiry.inquiry_service import InquiryService
+            self._inquiry_service = InquiryService(
+                inquiry_repo=self.inquiry_repo,
+                user_repo=self.user_repo,
+                mail_service=self.mail_service,
+            )
+        return self._inquiry_service
 
     @property
     def llm_service(self):

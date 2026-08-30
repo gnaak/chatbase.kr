@@ -13,6 +13,7 @@ from app.module.llm_model import llm_model_router
 from app.module.usage import usage_router
 from app.module.payment import payment_router
 from app.module.stats import stats_router
+from app.module.inquiry import inquiry_router
 
 # --- 모델 등록 (SQLAlchemy 관계 인식용) ---
 from app.module.admin.admin import Admin
@@ -25,6 +26,7 @@ from app.module.chat.chat_message import ChatMessage
 from app.module.llm_model.llm_model import LLMModel
 from app.module.usage.usage import UsageMonthly
 from app.module.payment.payment import BillingMethod, Payment, Subscription
+from app.module.inquiry.inquiry import Inquiry, InquiryMessage
 
 
 def setup_routers(app: FastAPI):
@@ -41,3 +43,4 @@ def setup_routers(app: FastAPI):
     app.include_router(payment_router.router, prefix="/api/payment")
     # stats는 모델이 없다(집계 전용). 새 테이블이 없으므로 모델 등록도 없다.
     app.include_router(stats_router.router, prefix="/api/stats")
+    app.include_router(inquiry_router.router, prefix="/api/inquiry")

@@ -1,8 +1,100 @@
 # chatbase.kr — robots.txt
+#
+# ⚠️ 이 파일만으로는 부족하다. Cloudflare가 자기 robots.txt를 이 위에 얹고,
+#    WAF에서 AI 봇을 실제 403으로 끊는다. 대시보드에서 두 개를 꺼야 이 파일이 산다:
+#      1) Bots  →  "AI 스크레이퍼 및 크롤러 차단" 토글 OFF
+#      2) Bots  →  "관리형 robots.txt" OFF
+#    확인:  curl -A "OAI-SearchBot/1.0" https://chatbase.kr/ -o /dev/null -w "%{http_code}"
+#
+# 방침은 셋으로 나뉜다 (aeo/PROJECT.md §2):
+#   검색·인용  → 허용. 이게 AEO 그 자체다
+#   학습       → 허용. 랜딩은 공개 마케팅 텍스트고, 브랜드가 알려지는 게 이득이다
+#   무단 수집  → 차단. 얻는 게 없다
 
+# 콘텐츠 시그널 — Cloudflare 관리형이 ai-train=no로 박아두던 자리를 우리가 명시한다
+User-agent: *
+Content-Signal: search=yes, ai-input=yes, ai-train=yes
+
+# ── 검색·인용 (반드시 허용) ─────────────────────
+# ChatGPT 검색 결과에 뜨려면 OAI-SearchBot, 사용자가 URL을 직접 줄 때는 ChatGPT-User
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Claude-SearchBot
+Allow: /
+
+User-agent: Claude-User
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Perplexity-User
+Allow: /
+
+# Gemini 앱의 그라운딩·학습 사용 여부를 결정하는 토큰. 막으면 Gemini에서 우리가 사라진다
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+# ── 일반 검색엔진 ───────────────────────────────
+User-agent: Googlebot
+Allow: /
+
+User-agent: bingbot
+Allow: /
+
+# 네이버 · 다음
+User-agent: Yeti
+Allow: /
+
+User-agent: Daumoa
+Allow: /
+
+# ── 학습 (허용) ─────────────────────────────────
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+# ── 무단 수집 (차단) ────────────────────────────
+User-agent: CCBot
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+User-agent: meta-externalagent
+Disallow: /
+
+User-agent: Amazonbot
+Disallow: /
+
+User-agent: Diffbot
+Disallow: /
+
+User-agent: omgili
+Disallow: /
+
+User-agent: ImagesiftBot
+Disallow: /
+
+# ── 전체 공통 ───────────────────────────────────
 User-agent: *
 Allow: /
 Allow: /widget.js
+Allow: /privacy
+Allow: /terms
+Allow: /support
 
 # 운영용 비공개 영역
 Disallow: /dashboard
@@ -10,12 +102,12 @@ Disallow: /admin
 Disallow: /api/
 Disallow: /google/login
 Disallow: /kakao/login
+Disallow: /test
 
 # 임베드 페이지는 검색엔진에 단독 노출될 필요 없음
 Disallow: /embed/
 
-# 명시적 크롤링 허용 (예: 마케팅 페이지)
-Allow: /privacy
-Allow: /terms
+# 문의 스레드는 토큰이 URL에 있다. 색인되면 남의 문의가 검색된다
+Disallow: /support/
 
 Sitemap: https://chatbase.kr/sitemap.xml

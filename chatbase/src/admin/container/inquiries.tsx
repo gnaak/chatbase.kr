@@ -10,6 +10,7 @@ import InputBox from "@/admin/component/ui/form/inputbox";
 import TextareaBox from "@/admin/component/ui/form/textareaBox";
 import Button from "@/admin/component/ui/form/button";
 import Skeleton from "@/admin/component/ui/skeleton";
+import { formatDateTime } from "@/utils/format/date";
 import InquiryThread from "@/admin/component/inquiry/thread";
 import { useGet, usePatch, usePost } from "@/hooks/common/useAPI";
 import { useToast } from "@/hooks/common/useToast";
@@ -42,12 +43,16 @@ const FILTERS: { value: StatusFilter; label: string }[] = [
 const contactText = (i: { email?: string | null; phone?: string | null }) =>
   [i.email, i.phone].filter(Boolean).join(" · ") || "-";
 
+/**
+ * 목록용 시각. `toLocaleString("ko-KR")`은 "2026. 8. 30. 14:23:11"처럼 월·일을
+ * 채우지 않아 값마다 폭이 달라진다. 가운데 정렬한 열에서는 그게 그대로 들쭉날쭉함이
+ * 되므로, 자리수가 고정된 formatDateTime(YYYY-MM-DD HH:mm)을 쓴다.
+ * 초는 목록에서 볼 일이 없어 뺀다 — 상세를 열면 나온다.
+ */
 const formatStamp = (iso: string | null) => {
   if (!iso) return "-";
   const d = new Date(iso);
-  return isNaN(d.getTime())
-    ? "-"
-    : d.toLocaleString("ko-KR", { hour12: false });
+  return isNaN(d.getTime()) ? "-" : formatDateTime(d);
 };
 
 const AdminInquiries = () => {
@@ -130,41 +135,45 @@ const AdminInquiries = () => {
         key: "subject",
         header: "제목",
         align: "left",
+        // 마지막 글 미리보기(r.preview)는 걷어냈다. 목록에서 필요한 건 "무엇이
+        // 들어왔나"까지고, 내용은 어차피 상세를 열어야 읽힌다. 대신 행이 한 줄로
+        // 내려가 한 화면에 두 배 가까이 들어온다.
         render: (r: InquiryListItem) => (
-          <div className="min-w-0">
-            <div className="text-[13px] text-text-main truncate">
-              {r.subject}
-            </div>
-            {r.preview && (
-              <div className="text-[11px] text-text-sub truncate">
-                {r.last_sender === "admin" ? "답변: " : ""}
-                {r.preview}
-              </div>
-            )}
+          <div
+            className="text-[13px] text-text-main truncate"
+            title={r.subject}
+          >
+            {r.subject}
           </div>
         ),
       },
       {
         key: "name",
         header: "작성자",
-        width: "200px",
+        width: "132px",
         align: "left",
         render: (r: InquiryListItem) => (
-          <div className="min-w-0">
-            <div className="text-[12px] text-text-main truncate">
-              {r.name}
-              {!r.user_id && (
-                <span className="ml-1 text-[10px] text-text-disabled">
-                  비회원
-                </span>
-              )}
-            </div>
-            <div
-              className="font-mono text-[11px] text-text-sub truncate"
-              title={contactText(r)}
-            >
-              {contactText(r)}
-            </div>
+          <div className="text-[12px] text-text-main truncate" title={r.name}>
+            {r.name}
+            {!r.user_id && (
+              <span className="ml-1 text-[10px] text-text-disabled">비회원</span>
+            )}
+          </div>
+        ),
+      },
+      {
+        // 이름 아래 붙어 있던 줄을 따로 뺐다. 답장할 주소를 눈으로 훑는 일이
+        // 잦은데, 같은 칸에 있으면 이름 길이에 따라 시작 위치가 들쭉날쭉했다.
+        key: "email",
+        header: "연락처",
+        width: "196px",
+        align: "left",
+        render: (r: InquiryListItem) => (
+          <div
+            className="font-mono text-[11px] text-text-sub truncate"
+            title={contactText(r)}
+          >
+            {contactText(r)}
           </div>
         ),
       },
@@ -183,7 +192,7 @@ const AdminInquiries = () => {
         width: "160px",
         align: "center",
         render: (r: InquiryListItem) => (
-          <span className="text-[11px] text-text-sub">
+          <span className="font-mono text-[11px] text-text-sub">
             {formatStamp(r.last_message_at ?? r.updated_at)}
           </span>
         ),

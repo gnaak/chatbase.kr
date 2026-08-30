@@ -3,8 +3,8 @@ import { useCallback, useRef } from "react";
 import type { AuthType } from "./getCookie";
 
 // baseURL 설정
-export const hostname = window.location.hostname;
-
+// window.location.hostname 을 모듈 스코프에서 읽던 export 가 있었다. 아무 데서도 쓰지
+// 않으면서 프리렌더(Node)에서만 죽었다. 되살릴 일이 있으면 함수로 감싼다.
 export const baseURL = import.meta.env.VITE_APP_PUBLIC_BASE_URL;
 
 // 공통 응답 타입
@@ -36,9 +36,14 @@ export interface BaseResponse<T> {
  * await refreshToken();
  */
 export const useRefreshToken = (authType?: AuthType) => {
+  // 렌더 중에 읽히므로 프리렌더(Node)에서도 지나간다. 거기엔 경로가 없으니 "user".
+  // 나머지 window 접근(세션 만료 시 리다이렉트)은 콜백 안이라 서버에서 안 돈다.
   const resolved: AuthType =
     authType ??
-    (window.location.pathname.startsWith("/admin") ? "admin" : "user");
+    (typeof window !== "undefined" &&
+    window.location.pathname.startsWith("/admin")
+      ? "admin"
+      : "user");
 
   const refreshUrl =
     resolved === "admin"

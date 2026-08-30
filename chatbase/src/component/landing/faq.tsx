@@ -3,7 +3,7 @@ import { useState, ReactNode } from "react";
 import { ExternalLink, Plus } from "lucide-react";
 import Button from "@/ui/button";
 
-interface FaqItem {
+export interface FaqItem {
   q: string;
   a: ReactNode;
 }
@@ -18,7 +18,14 @@ const API_KEY_LINKS = [
   { label: "Google 키 발급", href: "https://aistudio.google.com/app/apikey" },
 ];
 
-const ITEMS: FaqItem[] = [
+/**
+ * 화면과 `FAQPage` JSON-LD가 같이 쓴다 — `src/prerender.tsx`가 여기서 읽어
+ * 빌드 시점에 구조화 데이터를 만든다. 답변 JSX는 태그를 벗겨 평문으로 변환된다.
+ *
+ * 그래서 이 배열이 곧 "AI가 우리에 대해 아는 것"의 원본이다. 값·조건·고유명사를
+ * 뭉뚱그리지 않는다 — "저렴합니다"는 어디에도 인용되지 않지만 "월 19,000원"은 인용된다.
+ */
+export const FAQ_ITEMS: FaqItem[] = [
   {
     q: "BYOK가 뭐예요? 왜 API 키를 직접 등록해야 하나요?",
     a: (
@@ -186,7 +193,7 @@ const Faq = () => {
         </div>
 
         <div className="max-w-3xl mx-auto rounded-comfy bg-bg-card shadow-border overflow-hidden">
-          {ITEMS.map((item, i) => {
+          {FAQ_ITEMS.map((item, i) => {
             const isOpen = i === openIdx;
             return (
               <div
@@ -211,11 +218,20 @@ const Faq = () => {
                     ].join(" ")}
                   />
                 </button>
-                {isOpen && (
-                  <div className="px-5 md:px-6 pb-5 text-[14px] leading-relaxed text-text-sub animate-fade-slide">
-                    {item.a}
-                  </div>
-                )}
+                {/*
+                  닫혀 있어도 **DOM 에는 남긴다.** 조건부 마운트로 지우면 크롤러가
+                  받는 HTML 에 질문만 있고 답이 없다 — FAQ 답변이 이 사이트에서
+                  인용 가치가 가장 높은 문단인데 통째로 사라진다.
+                  `display:none` 이라 애니메이션은 보일 때 그대로 재생된다.
+                */}
+                <div
+                  className={[
+                    "px-5 md:px-6 pb-5 text-[14px] leading-relaxed text-text-sub",
+                    isOpen ? "animate-fade-slide" : "hidden",
+                  ].join(" ")}
+                >
+                  {item.a}
+                </div>
               </div>
             );
           })}

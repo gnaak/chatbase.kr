@@ -1,23 +1,32 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+  공개 라우트만 넣는다. /dashboard·/admin·/embed/·/support/:token 은 robots.txt에서 막았다.
+  scripts/prerender.mjs 가 여기 있는 URL을 정적 HTML로 뽑는다 — 목록이 어긋나면
+  sitemap에는 있는데 크롤러에겐 빈 페이지인 상태가 된다. 라우트를 추가하면 양쪽을 같이 고친다.
+-->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://chatbase.kr/</loc>
+    <lastmod>2026-08-30</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://chatbase.kr/privacy</loc>
+    <loc>https://chatbase.kr/support</loc>
+    <lastmod>2026-08-30</lastmod>
     <changefreq>monthly</changefreq>
-    <priority>0.3</priority>
+    <priority>0.5</priority>
   </url>
   <url>
     <loc>https://chatbase.kr/terms</loc>
-    <changefreq>monthly</changefreq>
+    <lastmod>2026-08-30</lastmod>
+    <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
-    <loc>https://chatbase.kr/support</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.5</priority>
+    <loc>https://chatbase.kr/privacy</loc>
+    <lastmod>2026-08-30</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
   </url>
 </urlset>

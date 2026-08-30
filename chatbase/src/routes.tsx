@@ -1,5 +1,5 @@
 import { Route } from "react-router-dom";
-import Landing from "@/container/landing";
+import publicRoutes from "@/publicRoutes";
 import Guide from "@/container/guide";
 import Test from "@/container/test";
 import EmbedChat from "@/container/embed";
@@ -21,9 +21,6 @@ import Google from "@/container/client/auth/google";
 import Kakao from "@/container/client/auth/kakao";
 import Login from "@/container/auth/login";
 import Signup from "@/container/auth/signup";
-import Terms from "@/container/legal/terms";
-import Privacy from "@/container/legal/privacy";
-import SupportForm from "@/container/support";
 import SupportThread from "@/container/support/thread";
 import { PublicOnlyRoute } from "@/hooks/auth/protectedRoute";
 
@@ -36,7 +33,9 @@ import { PublicOnlyRoute } from "@/hooks/auth/protectedRoute";
  */
 const chatbaseRoutes = () => (
   <>
-    <Route path="/" element={<Landing />} />
+    {/* 공개·크롤 대상 라우트. 프리렌더가 이 목록만 따로 import 한다 — `@/publicRoutes` 주석 참고 */}
+    {publicRoutes()}
+
     <Route path="/embed/:botId" element={<EmbedChat />} />
     <Route path="/test" element={<Test />} />
 
@@ -59,10 +58,7 @@ const chatbaseRoutes = () => (
       </Route>
     </Route>
 
-    {/* 계정 · 약관 · 문의 */}
-    <Route path="/terms" element={<Terms />} />
-    <Route path="/privacy" element={<Privacy />} />
-    <Route path="/support" element={<SupportForm />} />
+    {/* 문의 스레드 — 로그인 없이 열리지만 URL 의 토큰 때문에 색인은 막았다(robots.txt) */}
     <Route path="/support/:token" element={<SupportThread />} />
 
     {/* 비로그인 전용: 이미 로그인된 사용자는 /dashboard로 */}

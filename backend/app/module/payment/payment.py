@@ -9,9 +9,11 @@ from sqlalchemy import (
     Integer,
     LargeBinary,
     String,
+    UniqueConstraint,
 )
 
 from app.core.database.base import Base, now_kst
+from app.core.utils.plan import Product
 
 
 class SubscriptionStatus(str, enum.Enum):
@@ -83,25 +85,33 @@ class BillingMethod(Base):
 
 
 class Subscription(Base):
-    """사용자별 구독 상태. 사용자당 한 행.
+    """사용자 x 상품 구독 상태. 상품마다 한 행.
 
-    카드를 등록하기 전에도 `customer_key`를 잡아두기 위해 먼저 생성되며,
-    그때 status는 NONE이다.
+    챗봇을 안 써도 AEO만 구독할 수 있다 - 두 상품은 서로를 전제하지 않는다.
+    상품이 늘어나도 행이 하나 더 생길 뿐 스키마는 그대로다.
+
+    구매자 식별자(`toss_customer_key`)는 여기 없다. 그건 사람당 하나라
+    `tb_users`에 있다 - billingKey가 거기 묶여 있어서 상품별로 나누면
+    같은 카드를 상품 수만큼 다시 등록해야 한다.
     """
 
     __tablename__ = "tb_subscriptions"
+    __table_args__ = (
+        UniqueConstraint("user_id", "product", name="uq_subscription_user_product"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True, index=True)
     user_id = Column(
         Integer,
         ForeignKey("tb_users.id", ondelete="CASCADE"),
         nullable=False,
-        unique=True,
         index=True,
     )
-
-    #: 토스에 넘기는 구매자 식별자. user.id를 그대로 노출하지 않기 위해 따로 만든다.
-    customer_key = Column(String(64), nullable=False, unique=True, index=True)
+    product = Column(
+        Enum(Product, name="subscription_product", native_enum=False, length=20),
+        nullable=False,
+        default=Product.CHATBOT,
+    )
 
     plan = Column(String(10), nullable=True)  # 구독 중인 유료 플랜
     #: 다음 결제일에 적용할 플랜(하향 예약).
@@ -152,6 +162,12 @@ class Payment(Base):
     order_id = Column(String(64), nullable=False, unique=True, index=True)
     payment_key = Column(String(200), nullable=True, index=True)
 
+    #: 어느 상품의 결제인가. 매출을 상품별로 갈라 보려면 결제에도 있어야 한다.
+    product = Column(
+        Enum(Product, name="payment_product", native_enum=False, length=20),
+        nullable=False,
+        default=Product.CHATBOT,
+    )
     plan = Column(String(10), nullable=False)
     amount = Column(Integer, nullable=False)
     status = Column(

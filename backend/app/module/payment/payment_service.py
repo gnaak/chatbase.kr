@@ -23,6 +23,7 @@ from app.core.utils.plan import (
     PAID_PLANS,
     Plan,
     price_for,
+    Product,
     resolve_plan,
     tier_of,
 )
@@ -104,9 +105,11 @@ def _parse_issued(issued: dict) -> dict:
     }
 
 
-def _sub_to_dict(sub: Subscription) -> dict:
+def _sub_to_dict(sub: Subscription, customer_key: str | None = None) -> dict:
+    """customer_key는 사람 단위(tb_users)라 구독 행에 없다. 호출부가 넘긴다."""
     return {
-        "customer_key": sub.customer_key,
+        "product": sub.product.value if sub.product else Product.CHATBOT.value,
+        "customer_key": customer_key,
         "status": sub.status.value if sub.status else SubscriptionStatus.NONE.value,
         "plan": sub.plan,
         "scheduled_plan": sub.scheduled_plan,
@@ -145,17 +148,42 @@ class PaymentService:
         self.toss = toss_service
 
     # ── 내부 헬퍼 ───────────────────────────────
-    async def _ensure_subscription(self, user_id: int) -> Subscription:
-        """구독 행을 보장한다. 카드 등록 전에도 customer_key가 필요하다."""
-        sub = await self.payment_repo.find_subscription(user_id)
+    async def _ensure_subscription(
+        self, user_id: int, product: Product = Product.CHATBOT
+    ) -> Subscription:
+        """해당 상품의 구독 행을 보장한다. 없으면 status=NONE으로 만든다."""
+        sub = await self.payment_repo.find_subscription(user_id, product)
         if sub:
             return sub
         sub = Subscription(
             user_id=user_id,
-            customer_key=f"cus_{secrets.token_urlsafe(16)}",
+            product=product,
             status=SubscriptionStatus.NONE,
         )
         return await self.payment_repo.add_subscription(sub)
+
+    async def _customer_key_of(self, user_id: int) -> str | None:
+        """응답의 customer_key 자리를 채운다.
+
+        프론트가 구독 응답에서 이 값을 읽어 토스 카드 등록창을 연다
+        (`billing.tsx`의 canRegisterCard). 어떤 구독 응답에서는 비고 어떤
+        응답에서는 차 있으면, 캐시가 덮이는 순간 카드 등록 버튼이 죽는다.
+        그래서 구독을 돌려주는 모든 곳에서 같이 채운다.
+        """
+        user = await self.user_repo.get_user_by_id(user_id)
+        return user.toss_customer_key if user else None
+
+    async def _ensure_customer_key(self, user) -> str:
+        """토스 구매자 식별자를 보장한다. 사람당 하나이므로 tb_users에 둔다.
+
+        상품별로 나누면 billingKey가 customerKey에 묶여 있어서 같은 카드를
+        상품 수만큼 다시 등록해야 한다. user.id를 그대로 쓰지 않는 이유는
+        내부 식별자를 외부(토스)에 노출하지 않기 위해서다.
+        """
+        if not user.toss_customer_key:
+            user.toss_customer_key = f"cus_{secrets.token_urlsafe(16)}"
+            await self.payment_repo.db.flush()
+        return user.toss_customer_key
 
     @staticmethod
     def _parse_paid_plan(raw: str | None) -> Plan:
@@ -179,9 +207,11 @@ class PaymentService:
         )
 
     async def get_subscription(self, request):
+        user = await self.user_repo.get_user_by_id(request.user_id)
         sub = await self._ensure_subscription(request.user_id)
+        customer_key = await self._ensure_customer_key(user)
         await self.payment_repo.db.commit()
-        return success(data=_sub_to_dict(sub))
+        return success(data=_sub_to_dict(sub, customer_key))
 
     async def list_methods(self, request):
         methods = await self.payment_repo.find_methods_by_user(request.user_id)
@@ -206,9 +236,12 @@ class PaymentService:
         if not auth_key or not customer_key:
             fail("카드 등록 정보가 올바르지 않습니다.", "INVALID_BILLING_AUTH")
 
-        sub = await self._ensure_subscription(user_id)
+        # 카드는 사람에게 붙는다(상품별이 아니다). 그래서 구독 행이 없어도 등록된다.
+        user = await self.user_repo.get_user_by_id(user_id)
+        if not user:
+            fail("사용자를 찾을 수 없습니다.", "USER_NOT_FOUND", 404)
         # 남의 customerKey로 카드를 붙이지 못하게 한다.
-        if customer_key != sub.customer_key:
+        if customer_key != await self._ensure_customer_key(user):
             fail("카드 등록 정보가 올바르지 않습니다.", "CUSTOMER_KEY_MISMATCH", 403)
 
         try:
@@ -344,7 +377,7 @@ class PaymentService:
         try:
             charged = await self.toss.charge(
                 billing_key=decrypt(method.encrypted_billing_key),
-                customer_key=sub.customer_key,
+                customer_key=user.toss_customer_key,
                 amount=amount,
                 order_id=order_id,
                 order_name=order_name,
@@ -398,7 +431,10 @@ class PaymentService:
         logger.info("subscription activated user_id=%s plan=%s", user_id, plan.value)
 
         return success(
-            data={"subscription": _sub_to_dict(sub), "plan": plan.value},
+            data={
+                "subscription": _sub_to_dict(sub, user.toss_customer_key),
+                "plan": plan.value,
+            },
             message="결제가 완료되었습니다.",
         )
 
@@ -419,12 +455,17 @@ class PaymentService:
         if not sub or sub.status != SubscriptionStatus.ACTIVE:
             fail("이용 중인 구독이 없습니다.", "SUBSCRIPTION_NOT_FOUND", 404)
 
+        customer_key = await self._customer_key_of(user_id)
+
         # plan을 비워 보내면 예약 취소.
         raw_plan = body.get("plan")
         if not raw_plan:
             sub.scheduled_plan = None
             await self.payment_repo.db.commit()
-            return success(data=_sub_to_dict(sub), message="플랜 변경 예약을 취소했습니다.")
+            return success(
+                data=_sub_to_dict(sub, customer_key),
+                message="플랜 변경 예약을 취소했습니다.",
+            )
 
         target = self._parse_paid_plan(raw_plan)
         current = resolve_plan(sub.plan)
@@ -432,7 +473,10 @@ class PaymentService:
         if target == current:
             sub.scheduled_plan = None
             await self.payment_repo.db.commit()
-            return success(data=_sub_to_dict(sub), message="플랜 변경 예약을 취소했습니다.")
+            return success(
+                data=_sub_to_dict(sub, customer_key),
+                message="플랜 변경 예약을 취소했습니다.",
+            )
 
         if tier_of(target) > tier_of(current):
             # 상향은 지금 결제하고 바로 올려주는 게 맞다 — 기다릴 이유가 없다.
@@ -445,7 +489,7 @@ class PaymentService:
         await self.payment_repo.db.commit()
 
         return success(
-            data=_sub_to_dict(sub),
+            data=_sub_to_dict(sub, customer_key),
             message="다음 결제일부터 변경된 플랜으로 청구됩니다.",
         )
 
@@ -463,7 +507,7 @@ class PaymentService:
         await self.payment_repo.db.commit()
 
         return success(
-            data=_sub_to_dict(sub),
+            data=_sub_to_dict(sub, await self._customer_key_of(user_id)),
             message="구독이 해지되었습니다. 남은 기간은 그대로 이용하실 수 있습니다.",
         )
 
@@ -522,7 +566,7 @@ class PaymentService:
         try:
             charged = await self.toss.charge(
                 billing_key=decrypt(method.encrypted_billing_key),
-                customer_key=sub.customer_key,
+                customer_key=user.toss_customer_key,
                 amount=amount,
                 order_id=order_id,
                 order_name=f"chatbase.kr {plan.value.upper()} 1개월",

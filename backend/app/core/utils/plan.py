@@ -13,7 +13,34 @@ import enum
 from dataclasses import dataclass
 
 
+class Product(str, enum.Enum):
+    """구독 대상 상품.
+
+    상품이 늘어나면 값 하나만 추가한다. 스키마는 그대로다 —
+    `tb_subscriptions`가 (user_id, product)로 유니크라 한 사람이 상품마다
+    구독을 따로 가질 수 있고, 어느 상품도 다른 상품을 전제하지 않는다.
+    """
+
+    CHATBOT = "chatbot"
+    #: llm.chatbase.kr — AEO/GEO
+    AEO = "aeo"
+
+
+#: 값이 이상하면 챗봇으로 떨어뜨린다. 기존 데이터가 전부 챗봇이라 그게 안전하다.
+def resolve_product(raw: str | None) -> Product:
+    try:
+        return Product((raw or "").strip().lower())
+    except ValueError:
+        return Product.CHATBOT
+
+
 class Plan(str, enum.Enum):
+    """**챗봇 상품의** 플랜. AEO는 자기 플랜 표를 따로 갖는다.
+
+    지금 `PLAN_LIMITS`·`PLAN_PRICES`는 전부 챗봇 기준이다. AEO를 붙일 때
+    상품별 표로 나눈다 — 지금 미리 나누면 쓰지도 않는 추상이 하나 는다.
+    """
+
     FREE = "free"
     STANDARD = "standard"
     PREMIUM = "premium"

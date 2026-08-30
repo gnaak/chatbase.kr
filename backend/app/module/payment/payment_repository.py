@@ -1,6 +1,7 @@
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.utils.plan import Product
 from app.module.payment.payment import (
     BillingMethod,
     Payment,
@@ -14,11 +15,25 @@ class PaymentRepository:
         self.db = db
 
     # ── 구독 ────────────────────────────────────
-    async def find_subscription(self, user_id: int) -> Subscription | None:
+    async def find_subscription(
+        self, user_id: int, product: Product = Product.CHATBOT
+    ) -> Subscription | None:
         result = await self.db.execute(
-            select(Subscription).where(Subscription.user_id == user_id)
+            select(Subscription).where(
+                Subscription.user_id == user_id,
+                Subscription.product == product,
+            )
         )
         return result.scalar_one_or_none()
+
+    async def find_subscriptions_by_user(self, user_id: int) -> list[Subscription]:
+        """이 사람이 구독 중인 모든 상품. 어드민 화면과 탈퇴 처리에 쓴다."""
+        result = await self.db.execute(
+            select(Subscription)
+            .where(Subscription.user_id == user_id)
+            .order_by(Subscription.product)
+        )
+        return list(result.scalars().all())
 
     async def find_due_subscriptions(self, now) -> list[Subscription]:
         """청구일이 지난 구독. 해지 예정 건도 포함한다 — 그 날 만료시켜야 한다.

@@ -31,7 +31,13 @@ export interface AdminBillingSummary {
   past_due_count: number;
   /** 결제 프로필만 만들어진 상태(카드 등록 화면까지 온 사용자). */
   none_count: number;
-  /** `user.plan` 기준 사용자 수. { free, standard, premium } */
+  /**
+   * 플랜별 사용자 수. 서버가 `PLAN_ORDER`를 돌며 채우므로 **플랜이 늘면 키도 는다**
+   * (`{ free, standard, premium, global }`). 화면에서 키를 손으로 나열하지 말 것 —
+   * `payments.tsx`의 `PAID_PLAN_KEYS`가 요금표(`types/plan.ts`)에서 끌어온다.
+   *
+   * ENTERPRISE는 없다. 플랜이 아니라 구축(SI) 상품이라 구독 행이 만들어지지 않는다.
+   */
   plan_counts: Record<string, number>;
   revenue_this_month: number;
   revenue_total: number;

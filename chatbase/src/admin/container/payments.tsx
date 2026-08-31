@@ -13,6 +13,7 @@ import StatCard from "@/admin/component/ui/statCard";
 import { useGet } from "@/hooks/common/useAPI";
 import { formatCurrencyKRW } from "@/utils/format/number";
 import { describeMethod } from "@/types/payment";
+import { PLANS } from "@/types/plan";
 import {
   PAYMENT_FETCH_LIMIT,
   PAYMENT_STATUS_LABEL,
@@ -39,6 +40,33 @@ const formatDateTime = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString("ko-KR", { hour12: false }) : EMPTY;
 
 const planLabel = (plan: string | null) => (plan ? plan.toUpperCase() : EMPTY);
+
+/**
+ * 플랜 분포를 `PLANS`에서 끌어온다. **여기에 플랜 이름을 다시 적지 않는다.**
+ *
+ * 전에는 `standard + premium`으로 박혀 있어서 GLOBAL 구독자가 "유료 사용자"에서
+ * 통째로 빠졌다 — 하필 가장 비싼 99,000원짜리다. 백엔드는 `PLAN_ORDER` 기준으로
+ * 제대로 세서 내려보내고 있었고, 화면만 그중 둘을 골라 읽고 있었다.
+ *
+ * 그래서 목록을 손으로 적는 대신 `PLANS`(요금표 SOT)를 돌린다. 다섯 번째 플랜이
+ * 생기면 카드에 추가하는 순간 이 통계도 같이 따라온다.
+ *
+ * ENTERPRISE는 여기 없다 — 플랜이 아니라 구축(SI) 상품이라 `tb_subscriptions`에
+ * 행 자체가 없다. 문의(`category=partnership`)로 들어오므로 세려면 다른 지표다.
+ */
+const PAID_PLAN_KEYS = PLANS.map((p) => p.name.toLowerCase()).filter(
+  (key) => key !== "free",
+);
+
+const sumPaid = (counts: Record<string, number> | undefined) =>
+  PAID_PLAN_KEYS.reduce((acc, key) => acc + (counts?.[key] ?? 0), 0);
+
+/** "STANDARD 3 · PREMIUM 1 · GLOBAL 2 · FREE 41" */
+const planBreakdown = (counts: Record<string, number>) =>
+  [
+    ...PAID_PLAN_KEYS.map((key) => `${key.toUpperCase()} ${counts[key] ?? 0}`),
+    `FREE ${counts.free ?? 0}`,
+  ].join(" · ");
 
 type Tone = "green" | "amber" | "red" | "gray";
 
@@ -424,17 +452,8 @@ const AdminPayments = () => {
         <StatCard
           icon={<Users className="w-4 h-4" />}
           label="유료 사용자"
-          value={
-            (summary?.plan_counts.standard ?? 0) +
-            (summary?.plan_counts.premium ?? 0)
-          }
-          note={
-            summary
-              ? `STANDARD ${summary.plan_counts.standard ?? 0} · PREMIUM ${
-                  summary.plan_counts.premium ?? 0
-                } · FREE ${summary.plan_counts.free ?? 0}`
-              : undefined
-          }
+          value={sumPaid(summary?.plan_counts)}
+          note={summary ? planBreakdown(summary.plan_counts) : undefined}
           loading={summaryLoading}
         />
         {/* 청구 실패는 방치하면 그대로 이탈이라 항상 눈에 걸리게 둔다. */}

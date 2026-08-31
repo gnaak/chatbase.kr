@@ -18,6 +18,7 @@ import StatCard from "@/admin/component/ui/statCard";
 import Skeleton from "@/admin/component/ui/skeleton";
 import { useGet } from "@/hooks/common/useAPI";
 import { formatCurrencyKRW } from "@/utils/format/number";
+import { PLANS } from "@/types/plan";
 import {
   PAYMENT_FETCH_LIMIT,
   PAYMENT_STATUS_LABEL,
@@ -68,12 +69,39 @@ const TREND_MONTHS = 6;
 const UPCOMING_DAYS = 14;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** 플랜은 등급이 있는 값이라 색도 한 색조의 농도로만 구분한다(FREE 옅음 → PREMIUM 진함). */
-const PLAN_TIERS = [
-  { key: "free", label: "FREE", fill: "bg-point-blue/20" },
-  { key: "standard", label: "STANDARD", fill: "bg-point-blue/55" },
-  { key: "premium", label: "PREMIUM", fill: "bg-point-blue" },
+/**
+ * 플랜은 등급이 있는 값이라 색도 한 색조의 농도로만 구분한다(FREE 옅음 → 상위 진함).
+ *
+ * Tailwind 는 클래스 이름을 **소스에서 문자열 그대로** 찾아 뽑기 때문에
+ * `bg-point-blue/${n}` 처럼 조립하면 CSS 가 생성되지 않는다. 그래서 농도는
+ * 리터럴 배열로 두고 **순서만** 플랜에서 가져온다.
+ */
+const TIER_FILLS = [
+  "bg-point-blue/20",
+  "bg-point-blue/45",
+  "bg-point-blue/70",
+  "bg-point-blue",
 ];
+
+/**
+ * 플랜 목록을 요금표(`types/plan.ts`)에서 끌어온다. **여기에 이름을 다시 적지 않는다.**
+ *
+ * 전에는 free·standard·premium 셋이 손으로 박혀 있어서 **GLOBAL 이 분포에서
+ * 통째로 빠졌다** — 막대에도 범례에도 안 나오고, `planTotal`(분모)에서도 빠져
+ * 유료 비율까지 틀렸다. 백엔드는 `PLAN_ORDER` 기준으로 제대로 세서 내려보내고
+ * 있었고 화면만 그중 셋을 골라 읽었다.
+ *
+ * `PLANS` 는 요금표 순서(FREE → 상위)라 농도 순서와 그대로 맞는다.
+ * 다섯 번째가 생기면 마지막 농도를 같이 쓴다 — 색이 겹칠지언정 **누락되지는 않는다.**
+ */
+const PLAN_TIERS = PLANS.map((p, i) => ({
+  key: p.name.toLowerCase(),
+  label: p.name,
+  fill: TIER_FILLS[i] ?? TIER_FILLS[TIER_FILLS.length - 1],
+}));
+
+/** FREE 를 뺀 나머지 전부. 플랜이 늘어도 따라온다. */
+const PAID_PLAN_KEYS = PLAN_TIERS.map((t) => t.key).filter((k) => k !== "free");
 
 const formatMonthDay = (iso: string | null) =>
   iso
@@ -196,7 +224,7 @@ const AdminMain = () => {
     ? PLAN_TIERS.reduce((s, t) => s + (billing.plan_counts[t.key] ?? 0), 0)
     : 0;
   const paidUsers = billing
-    ? (billing.plan_counts.standard ?? 0) + (billing.plan_counts.premium ?? 0)
+    ? PAID_PLAN_KEYS.reduce((s, k) => s + (billing.plan_counts[k] ?? 0), 0)
     : 0;
   const paidRatio = planTotal > 0 ? (paidUsers / planTotal) * 100 : 0;
 

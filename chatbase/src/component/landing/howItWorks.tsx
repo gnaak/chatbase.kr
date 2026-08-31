@@ -22,7 +22,7 @@ const STEPS = [
     num: "03",
     title: "응대 시작",
     description:
-      "우측 하단 버블을 누르면 챗봇이 올려주신 자료를 바탕으로 답합니다. 어떤 질문이 들어왔는지는 대시보드에서 모두 확인할 수 있습니다.",
+      "챗봇이 올려주신 자료를 바탕으로 답합니다. 외국인 손님은 채팅창에서 언어를 고르면 그 언어로 이어집니다. 어떤 질문이 들어왔는지는 대시보드에서 모두 확인할 수 있습니다.",
   },
 ];
 
@@ -38,7 +38,7 @@ const HowItWorks = () => {
             3단계, 30초 안에.
           </h2>
           <p className="mt-3 text-[15px] text-text-sub max-w-xl mx-auto leading-relaxed">
-            복잡한 설정도, 별도 인프라도 필요 없습니다.
+            복잡한 설정도, 별도 인프라도, 홈페이지도 필요 없습니다.
           </p>
         </div>
 
@@ -61,6 +61,17 @@ const HowItWorks = () => {
             </div>
           ))}
         </div>
+
+        {/* QR 은 02번 카드 안에 넣지 않는다. 거기만 혼자 길어져서 세 칸이 같은
+            높이로 읽히는 리듬이 깨진다. 그리고 순서로도 이쪽이 맞다 —
+            3단계를 다 읽은 뒤에 "그런데 홈페이지가 없다면"이 오는 것. */}
+        <p className="mt-6 text-center text-[13px] text-text-sub leading-relaxed">
+          홈페이지가 없으신가요?{" "}
+          <span className="text-text-main">
+            QR을 인쇄해 카운터·테이블에 두세요.
+          </span>{" "}
+          손님이 찍으면 같은 챗봇이 열립니다.
+        </p>
       </div>
     </section>
   );

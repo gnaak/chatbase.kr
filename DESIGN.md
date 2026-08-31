@@ -49,7 +49,9 @@ What distinguishes Vercel from other monochrome design systems is its shadow-as-
 - **Gray 50** (`#fafafa`): Subtle surface tint, inner shadow highlight.
 
 ### Surface & Overlay
-- **Overlay Backdrop** (`hsla(0, 0%, 98%, 1)`): `--ds-overlay-backdrop-color`, modal/dialog backdrop.
+- **Overlay Backdrop** (`--overlay`, 라이트·다크 모두 `0 0 0`): 모달/다이얼로그 스크림. `bg-overlay/60`으로 쓴다.
+  원래는 Vercel을 따라 흰 backdrop(`hsla(0,0%,98%,1)`)이었으나, `--bg`·`--bg-card`가 둘 다 순백이라
+  라이트 모드에서 모달이 배경과 구분되지 않아 검정으로 바꿨다. **흰 backdrop으로 되돌리지 말 것.**
 - **Selection Text** (`hsla(0, 0%, 95%, 1)`): `--geist-selection-text-color`, text selection highlight.
 - **Badge Blue Bg** (`#ebf5ff`): Pill badge background, tinted blue surface.
 - **Badge Blue Text** (`#0068d6`): Pill badge text, darker blue for readability.

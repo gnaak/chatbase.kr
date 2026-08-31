@@ -1,4 +1,9 @@
 import { LegalModalLink } from "@/component/landing/legalModal";
+import {
+  BUSINESS_INFO_ROWS,
+  FTC_LOOKUP_URL,
+  SHOW_BUSINESS_INFO,
+} from "@/constants/company";
 
 const Footer = () => {
   const year = new Date().getFullYear();
@@ -38,6 +43,35 @@ const Footer = () => {
           </div>
         </div>
       </div>
+
+      {/* 사업자정보 row — 전자상거래법 제10조상 초기 화면 표시 의무.
+          토스페이먼츠 빌링키 심사에서도 이 표기를 본다.
+          통신판매업 신고 수리 전까지는 SHOW_BUSINESS_INFO로 꺼둔다. */}
+      {SHOW_BUSINESS_INFO && (
+        <div className="border-t border-line">
+          <div className="max-w-7xl mx-auto px-6 md:px-8 py-6">
+            <dl className="flex flex-wrap gap-x-5 gap-y-1.5 text-[11px] leading-relaxed text-text-sub">
+              {BUSINESS_INFO_ROWS.map(({ label, value }) => (
+                <div key={label} className="flex items-center gap-1.5">
+                  <dt>{label}</dt>
+                  <dd className="text-text-main">{value}</dd>
+                </div>
+              ))}
+            </dl>
+
+            {FTC_LOOKUP_URL && (
+              <a
+                href={FTC_LOOKUP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block mt-2 text-[11px] text-text-sub underline underline-offset-2 hover:text-text-main transition-colors"
+              >
+                사업자정보 확인
+              </a>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 저작권 row — 보더가 페이지 끝까지 */}
       <div className="border-t border-line">

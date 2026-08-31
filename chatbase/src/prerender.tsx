@@ -55,7 +55,7 @@ export const ROUTES: PrerenderRoute[] = [
     out: "index.html",
     title: "chatbase.kr — 5분이면 끝나는 AI 챗봇",
     description:
-      "내 사이트에 한 줄로 붙이는 AI 챗봇. OpenAI / Anthropic / Gemini 키 직접 등록(BYOK)으로 사용량 그대로, 마진 0원. 한국 SMB를 위한 가장 단순한 챗봇 SaaS.",
+      "홈페이지에는 코드 한 줄, 매장에는 QR 한 장으로 내거는 AI 챗봇. 홈페이지가 없어도 되고, 외국인 손님에게는 한·영·일·중으로 답합니다. OpenAI / Anthropic / Gemini 키 직접 등록(BYOK)이라 대화가 늘어도 구독료는 그대로.",
   },
   {
     path: "/support",
@@ -140,7 +140,7 @@ const organization = {
   logo: `${ORIGIN}/og-image.png`,
   image: `${ORIGIN}/og-image.png`,
   description:
-    "홈페이지에 코드 한 줄로 붙이는 AI 챗봇 SaaS. OpenAI · Anthropic · Google API 키를 회원이 직접 등록하는 BYOK 방식이라 모델 사용료가 제공자에게 직접 결제되고, 대화량이 늘어도 구독료는 그대로입니다.",
+    "홈페이지에 코드 한 줄로 붙이거나 QR 코드로 내거는 AI 챗봇 SaaS. 홈페이지가 없는 매장·숙소도 인쇄한 QR 한 장으로 시작할 수 있고, 외국인 방문자에게는 한국어·영어·일본어·중국어로 응대합니다. OpenAI · Anthropic · Google API 키를 회원이 직접 등록하는 BYOK 방식이라 모델 사용료가 제공자에게 직접 결제되고, 대화량이 늘어도 구독료는 그대로입니다.",
   areaServed: { "@type": "Country", name: "대한민국" },
   knowsLanguage: ["ko", "en"],
   contactPoint: [
@@ -172,10 +172,19 @@ const softwareApplication = {
   url: ORIGIN,
   inLanguage: "ko",
   publisher: { "@id": `${ORIGIN}/#organization` },
+  /**
+   * ⚠️ 가격은 `PLANS`에서 자동으로 읽히지만 **이 배열은 손으로 쓴다.**
+   * 기능을 추가하고 여기를 빼먹으면 "AI가 아는 우리"에 신상품이 없는 상태가 된다.
+   * (실제로 QR·다국어가 한동안 빠져 있었다 — 카드는 팔고 있는데 이유는 없었다.)
+   */
   featureList: [
     "코드 한 줄 위젯 임베드 (script · iframe)",
+    "QR 코드 — 홈페이지 없이 인쇄물로 챗봇 배포",
+    "다국어 응대 — 한국어 · 영어 · 일본어 · 중국어",
+    "인사말 · 자주 묻는 질문 자동 번역 (DeepL)",
     "BYOK — OpenAI · Anthropic · Google API 키 직접 등록",
     "텍스트 · 파일 · 웹페이지 학습",
+    "자주 묻는 질문 즉답 버튼",
     "카카오톡 채널 연동 (오픈빌더 스킬 서버)",
     "대화 기록 조회 · 통계",
     "웹 검색 (전 플랜 공통)",

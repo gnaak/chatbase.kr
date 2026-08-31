@@ -15,8 +15,11 @@ const Pricing = () => {
             쓰는 만큼만, 부담 없이.
           </h2>
           <p className="mt-3 text-[15px] text-text-sub max-w-3xl mx-auto leading-relaxed">
-            무료로 내 사이트에 붙여 먼저 써보세요. 모델 사용료는 본인 키로 직접
-            결제되니, 유료 플랜은 대화가 몇 건이든 추가 과금이 없습니다.
+            사이트에 붙이셔도 되고, QR을 붙이셔도 됩니다. 무료로 먼저 써보세요.
+            <span className="block mt-1">
+              모델 사용료는 본인 키로 직접 결제되니, 유료 플랜은 대화가 몇 건이든
+              추가 과금이 없습니다.
+            </span>
           </p>
           {BILLING_BETA && (
             <p className="mt-4 inline-flex items-center px-3.5 h-7 rounded-full bg-info-bg text-info text-[12px] font-medium">
@@ -36,6 +39,13 @@ const Pricing = () => {
                   : "shadow-border",
               ].join(" ")}
             >
+              {/* 카드에서 맨 먼저 읽히는 줄. 가격보다 위에 둔다 —
+                  사람이 가격표에서 하는 일은 비교가 아니라 "어느 게 내 얘기인가"를
+                  찾는 것이고, 기능 목록에서 그걸 역산하게 두면 대부분 그 전에 닫는다. */}
+              <p className="text-[11px] font-medium text-text-sub mb-1.5">
+                {plan.bestFor}
+              </p>
+
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[14px] font-semibold tracking-tight text-text-main">
                   {plan.name}

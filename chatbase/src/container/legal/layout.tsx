@@ -1,6 +1,8 @@
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
+
+import { COMPANY } from "@/constants/company";
 
 interface LegalLayoutProps {
   title: string;
@@ -48,8 +50,11 @@ const LegalLayout = ({ title, effectiveDate, children }: LegalLayoutProps) => {
           <Link to="/support" className="hover:text-text-main">
             문의하기
           </Link>
-          <a href="mailto:hello@chatbase.kr" className="hover:text-text-main">
-            hello@chatbase.kr
+          <a
+            href={`mailto:${COMPANY.email}`}
+            className="hover:text-text-main"
+          >
+            {COMPANY.email}
           </a>
         </footer>
       </main>
@@ -57,32 +62,7 @@ const LegalLayout = ({ title, effectiveDate, children }: LegalLayoutProps) => {
   );
 };
 
-export const Section = ({
-  number,
-  title,
-  children,
-}: {
-  number: string;
-  title: string;
-  children: ReactNode;
-}) => (
-  <section className="mt-10 first:mt-0">
-    <h2 className="flex items-baseline gap-3 text-[18px] font-semibold tracking-tight text-text-main mb-3">
-      <span className="font-mono text-[12px] text-text-sub">{number}</span>
-      {title}
-    </h2>
-    <div className="text-[14px] text-text-main leading-[1.8] space-y-3">
-      {children}
-    </div>
-  </section>
-);
-
-export const SubList = ({ items }: { items: ReactNode[] }) => (
-  <ol className="list-decimal pl-5 space-y-1.5 text-text-sub">
-    {items.map((item, i) => (
-      <li key={i}>{item}</li>
-    ))}
-  </ol>
-);
+/* Section·SubList는 `container/legal/content.tsx`로 옮겼다.
+   본문과 같은 파일에 두어야 문서 한 벌만 유지된다. */
 
 export default LegalLayout;

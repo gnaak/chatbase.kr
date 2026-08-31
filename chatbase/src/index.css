@@ -67,7 +67,11 @@
     --info-bg: 235 245 255; /* #ebf5ff Vercel pill bg */
 
     /* ── Overlay / Surface ─────────────────── */
-    --overlay: 250 250 250; /* hsla(0,0%,98%,1) backdrop */
+    /* 원래 Vercel을 따라 흰 backdrop(250 250 250)이었는데, --bg와 --bg-card가
+       둘 다 순백이라 흰 페이지 위에 흰 스크림 위에 흰 카드가 겹쳐 모달이
+       떠 보이지 않았다. 어드민 모달들이 bg-black/40을 직접 쓰고 있어
+       화면마다 스크림이 달라 보이던 원인이기도 하다. */
+    --overlay: 0 0 0;
     --surface-raised: 255 255 255;
 
     /* ── Skeleton ──────────────────────────── */

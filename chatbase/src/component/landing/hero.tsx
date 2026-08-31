@@ -10,10 +10,14 @@ const Hero = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           {/* 좌측: 텍스트 + CTA (상단 정렬) */}
           <div className="flex flex-col items-start lg:self-start">
+            {/* 용도가 셋이라는 걸 첫 줄에서 알린다. 셋째(매장·숙소)가 QR로
+                열린 경로라, 홈페이지가 없는 사람이 여기서 걸러지지 않게 한다. */}
             <span className="inline-flex items-center gap-2 px-3 h-7 rounded-full bg-bg-sub shadow-border text-text-sub text-[12px] font-medium mb-6">
               고객 응대
               <span className="w-1 h-1 rounded-full bg-text-disabled" />
               사내 매뉴얼
+              <span className="w-1 h-1 rounded-full bg-text-disabled" />
+              매장 · 숙소 안내
             </span>
 
             <h1 className="text-[40px] md:text-[56px] font-semibold tracking-display leading-[1.05] text-text-main">
@@ -27,7 +31,7 @@ const Hero = () => {
               같은 사내 질문까지. 자료를 올려주시면 그 내용을 바탕으로 챗봇이
               친절하게 응대합니다.
               <span className="block mt-2 text-text-main">
-                코드 한 줄만 홈페이지에 붙이세요.
+                홈페이지에는 코드 한 줄, 매장에는 QR 한 장.
               </span>
             </p>
 
@@ -51,7 +55,7 @@ const Hero = () => {
             <p className="mt-5 text-[12px] text-text-sub flex flex-wrap items-center gap-x-3 gap-y-1">
               <span>신용카드 없이 시작</span>
               <span className="text-text-disabled">·</span>
-              <span>코드 한 줄로 설치</span>
+              <span>홈페이지 없어도 QR로</span>
               <span className="text-text-disabled">·</span>
               <span>대화가 늘어도 요금은 그대로</span>
             </p>

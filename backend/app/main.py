@@ -13,9 +13,46 @@ from app.module import *
 setup_logging()
 logger = get_logger(__name__)
 
+def _warm_llm_imports() -> None:
+    """LLM SDK 임포트를 기동 시점으로 당긴다.
+
+    ## 왜
+
+    `ServiceProvider`는 서비스를 지연 로드한다(`core/provider/http/service.py`).
+    좋은 설계지만, 그 결과 **OpenAI · Anthropic · google-genai SDK 임포트 비용을
+    첫 요청이 뒤집어쓴다.** 실측:
+
+        app.module.bot.bot_service          2404 ms
+          └ app.module.infra.llm.llm_service  2145 ms
+              └ openai                         738 ms   (openai.types.beta 만 146ms)
+
+    게다가 **파이썬 임포트 락이 이 구간을 직렬화한다.** 로그인 직후 대시보드가
+    네 요청을 동시에 쏘면 뒤엣것들이 앞의 임포트를 기다린다 — 실제로 그랬다:
+
+        GET /api/user/me   2897.0ms  ┐ 둘이 726ms 차이로 시작했는데
+        GET /api/bot/      2191.7ms  ┘ 같은 순간에 같이 끝났다
+        GET /api/api-key/    33.1ms  ← 임포트가 끝난 뒤라 정상 속도
+        GET /api/usage/      50.6ms
+
+    DB가 아니다. 같은 시점 실측으로 커넥션 생성 30ms, PK 조회 0.9ms였다.
+
+    ## 그래서
+
+    프로세스당 한 번 무는 비용이라 요청 경로에 두면 **배포 직후 첫 손님**이
+    3초를 기다린다. 위젯 대화라면 그 사람은 남의 사이트 방문자다.
+    기동은 얼마가 걸리든 상관없으므로 여기로 옮긴다.
+
+    ⚠️ 지연 로드 자체는 그대로 둔다. 여기서 미리 임포트해두면 `ServiceProvider`가
+    나중에 하는 `from ... import ...`가 `sys.modules` 캐시에 맞아 공짜가 된다.
+    """
+    import app.module.infra.llm.llm_service  # noqa: F401
+    import app.module.infra.openai.vector_store_service  # noqa: F401
+
+
 # 1. Lifespan 설정: 서버 시작과 종료 시 실행될 로직
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _warm_llm_imports()
     print("Chatbase backend started.")
 
     yield

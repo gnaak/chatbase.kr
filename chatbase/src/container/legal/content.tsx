@@ -1,4 +1,18 @@
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
+
+import { COMPANY, SHOW_BUSINESS_INFO } from "@/constants/company";
+
+/**
+ * 약관·개인정보처리방침 본문 — **여기가 단일 출처다.**
+ *
+ * 예전에는 route 페이지(terms.tsx·privacy.tsx)와 모달용이 각각 한 벌씩,
+ * 총 네 벌이 복붙돼 있었다. 법적 효력이 있는 문서가 화면마다 다르게 보이는 건
+ * 그 자체로 사고라서 한 벌로 합쳤다. **다시 복사해 두지 말 것.**
+ *
+ * 쓰는 곳
+ *   - `container/legal/terms.tsx` · `privacy.tsx` — /terms · /privacy 페이지
+ *   - `component/landing/legalModal.tsx` — 랜딩 푸터에서 여는 모달
+ */
 
 export const Section = ({
   number,
@@ -10,11 +24,11 @@ export const Section = ({
   children: ReactNode;
 }) => (
   <section className="mt-10 first:mt-0">
-    <h2 className="flex items-baseline gap-3 text-[16px] font-semibold tracking-tight text-text-main mb-3">
-      <span className="font-mono text-[11px] text-text-sub">{number}</span>
+    <h2 className="flex items-baseline gap-3 text-[18px] font-semibold tracking-tight text-text-main mb-3">
+      <span className="font-mono text-[12px] text-text-sub">{number}</span>
       {title}
     </h2>
-    <div className="text-[13px] text-text-main leading-[1.8] space-y-3">
+    <div className="text-[14px] text-text-main leading-[1.8] space-y-3">
       {children}
     </div>
   </section>
@@ -34,9 +48,9 @@ export const TermsContent = () => (
   <>
     <Section number="01" title="목적">
       <p>
-        본 약관은 chatbase.kr(이하 "회사")이 제공하는 챗봇 임베드 SaaS(이하
-        "서비스")의 이용 조건과 절차, 회원과 회사의 권리·의무 및 책임 사항을
-        규정합니다.
+        본 약관은 {COMPANY.name}(이하 "회사")이 운영하는 chatbase.kr에서 제공하는
+        챗봇 임베드 SaaS(이하 "서비스")의 이용 조건과 절차, 회원과 회사의
+        권리·의무 및 책임 사항을 규정합니다.
       </p>
     </Section>
 
@@ -47,6 +61,7 @@ export const TermsContent = () => (
           "챗봇: 회원이 작성한 시스템 프롬프트와 학습 데이터를 기반으로 응답하는 AI 어시스턴트",
           "BYOK(Bring Your Own Key): 회원이 외부 LLM 제공자(OpenAI / Anthropic / Google)에서 발급받은 API 키를 직접 등록·사용하는 방식",
           "임베드 위젯: 회원이 자기 사이트에 코드 한 줄로 추가하여 표시되는 채팅 UI",
+          "채널 연동: 회원의 챗봇을 카카오톡 채널 등 외부 메신저에 연결하여 응답하도록 하는 기능",
         ]}
       />
     </Section>
@@ -55,7 +70,9 @@ export const TermsContent = () => (
       <p>
         본 약관은 회원이 회원가입 시 동의함으로써 효력이 발생합니다. 회사는 관련
         법령을 위반하지 않는 범위에서 약관을 개정할 수 있으며, 개정 시 시행일
-        7일 전부터 서비스 내 공지 또는 이메일로 안내합니다.
+        7일 전부터 서비스 내 공지 또는 이메일로 안내합니다. 회원에게 불리한
+        내용으로 개정하는 경우에는 시행일 30일 전부터 안내하며, 회원이 개정
+        약관에 동의하지 않는 경우 이용계약을 해지할 수 있습니다.
       </p>
     </Section>
 
@@ -71,9 +88,10 @@ export const TermsContent = () => (
 
     <Section number="05" title="서비스 이용">
       <p>
-        회원은 본 서비스를 통해 챗봇을 생성·관리하고, 자기 사이트에 임베드할 수
-        있습니다. 회사는 안정적인 서비스 제공을 위해 노력하나, 점검·장애·외부
-        LLM 제공자 사정 등으로 일시 중단될 수 있습니다.
+        회원은 본 서비스를 통해 챗봇을 생성·관리하고, 자기 사이트에 임베드하거나
+        카카오톡 채널 등 외부 채널에 연결할 수 있습니다. 회사는 안정적인 서비스
+        제공을 위해 노력하나, 점검·장애·외부 LLM 제공자 사정 등으로 일시 중단될
+        수 있습니다.
       </p>
     </Section>
 
@@ -96,23 +114,40 @@ export const TermsContent = () => (
           "회원은 대시보드에서 언제든 해지할 수 있으며, 해지 시 이미 결제된 주기의 종료일까지 서비스를 이용할 수 있습니다.",
           "요금 또는 제공 범위가 변경되는 경우 시행일 30일 전까지 서비스 내 공지 또는 이메일로 안내합니다.",
           "회원이 LLM 제공자(OpenAI / Anthropic / Google)에 직접 지불하는 API 사용료는 서비스 이용료에 포함되지 않습니다.",
-          "환불은 관련 법령 및 회사가 게시한 환불 정책에 따릅니다.",
         ]}
       />
     </Section>
 
-    <Section number="08" title="회원의 의무">
+    {/* 전자상거래법 제17조 청약철회권은 강행규정이라 약관으로 배제할 수 없다.
+        디지털 서비스는 "제공이 개시된 경우" 철회를 제한할 수 있지만, 그러려면
+        7일 이내 통로는 열어둬야 한다. 조건(미사용 여부 등)을 달면 그 정의를 두고
+        다투게 되므로 기간만으로 자른다. */}
+    <Section number="08" title="청약철회 및 환불">
+      <SubList
+        items={[
+          "회원은 유료 플랜 결제일로부터 7일 이내에는 사유를 묻지 않고 청약을 철회할 수 있으며, 회사는 결제 금액 전액을 환불합니다.",
+          "결제일로부터 7일이 지난 경우에는 환불되지 않으며, 해지를 신청하면 이미 결제된 주기의 종료일까지 서비스를 이용한 뒤 다음 주기부터 자동 갱신이 중단됩니다.",
+          "회사의 귀책사유로 서비스가 정상 제공되지 않은 경우에는 위 기간과 관계없이 미이용 기간에 해당하는 금액을 환불합니다.",
+          "환불은 결제에 사용한 수단의 승인 취소 또는 환급 방식으로 처리하며, 요청 접수일로부터 영업일 기준 3~5일이 소요될 수 있습니다.",
+          "청약철회·환불 요청은 서비스 내 1:1 문의 또는 아래 문의 이메일로 접수합니다.",
+          "회원이 LLM 제공자에게 직접 지불한 API 사용료는 회사의 환불 대상이 아니며, 해당 제공자의 정책에 따릅니다.",
+        ]}
+      />
+    </Section>
+
+    <Section number="09" title="회원의 의무">
       <SubList
         items={[
           "회원은 관련 법령, 본 약관, 회사가 공지하는 운영 정책을 준수해야 합니다.",
           "회원은 자신의 챗봇이 생성하는 응답으로 인해 발생하는 모든 책임을 부담합니다.",
           "회원은 타인의 권리를 침해하거나, 음란·폭력·차별·범죄 조장 등 위법한 콘텐츠를 챗봇 학습 데이터로 사용하거나 챗봇이 생성하도록 유도해서는 안 됩니다.",
+          "회원은 자신의 챗봇이 수집·처리하는 방문자 개인정보에 대하여 개인정보 보호법상 개인정보처리자로서의 책임을 부담합니다.",
           "회원은 외부 LLM 제공자의 이용약관을 준수해야 합니다.",
         ]}
       />
     </Section>
 
-    <Section number="09" title="회사의 의무">
+    <Section number="10" title="회사의 의무">
       <SubList
         items={[
           "회사는 본 약관 및 관련 법령이 금지하는 행위를 하지 않으며, 안정적·지속적인 서비스 제공을 위해 노력합니다.",
@@ -122,15 +157,16 @@ export const TermsContent = () => (
       />
     </Section>
 
-    <Section number="10" title="서비스 변경 및 중단">
+    <Section number="11" title="서비스 변경 및 중단">
       <p>
         회사는 운영상·기술상 필요에 따라 서비스의 전부 또는 일부를 변경·중단할
         수 있으며, 중대한 변경의 경우 서비스 내 공지 또는 이메일로 사전 안내
-        합니다.
+        합니다. 유료 서비스를 중단하는 경우 잔여 이용 기간에 해당하는 금액을
+        환불합니다.
       </p>
     </Section>
 
-    <Section number="11" title="계약 해지 및 탈퇴">
+    <Section number="12" title="계약 해지 및 탈퇴">
       <p>
         회원은 언제든지 설정 페이지에서 계정을 삭제하여 탈퇴할 수 있습니다. 탈퇴
         시 회원의 모든 챗봇·대화 로그·등록된 API 키는 즉시 삭제되며 복구할 수
@@ -138,24 +174,49 @@ export const TermsContent = () => (
       </p>
     </Section>
 
-    <Section number="12" title="책임 제한">
+    <Section number="13" title="책임 제한">
       <SubList
         items={[
           "회사는 천재지변, 외부 LLM 제공자의 장애, 회원의 귀책사유로 인한 서비스 이용 장애에 대해 책임을 지지 않습니다.",
           "회사는 챗봇이 생성한 응답의 정확성·적법성·적합성에 대해 보증하지 않으며, 그로 인해 발생하는 손해에 대한 책임을 지지 않습니다.",
-          "회사의 책임은 관련 법령에서 허용하는 한도 내에서 제한됩니다.",
+          "회사의 책임은 관련 법령에서 허용하는 한도 내에서 제한됩니다. 다만 회사의 고의 또는 중대한 과실로 인한 손해에 대해서는 그러하지 않습니다.",
         ]}
       />
     </Section>
 
-    <Section number="13" title="분쟁 해결 및 준거법">
+    {/* 전속관할을 회사 소재지로 못박으면 약관규제법상 무효가 될 수 있어
+        법정 관할을 그대로 따르게 둔다. 개인사업자라 "본점"이라는 표현도 틀렸다. */}
+    <Section number="14" title="분쟁 해결 및 준거법">
       <p>
-        본 약관과 관련된 분쟁은 대한민국 법령에 따라 해석·적용되며, 분쟁 발생 시
-        회사 본점 소재지 관할 법원을 1심 관할로 합니다.
+        본 약관과 관련된 분쟁은 대한민국 법령에 따라 해석·적용되며, 분쟁이
+        발생한 경우 민사소송법이 정하는 관할 법원에 소를 제기할 수 있습니다.
       </p>
     </Section>
 
-    <Section number="14" title="문의">
+    <Section number="15" title="사업자 정보 및 문의">
+      {SHOW_BUSINESS_INFO ? (
+        <SubList
+          items={[
+            `상호: ${COMPANY.name}`,
+            `대표자: ${COMPANY.ceo}`,
+            `사업자등록번호: ${COMPANY.bizNumber}`,
+            ...(COMPANY.mailOrderNumber
+              ? [`통신판매업 신고번호: ${COMPANY.mailOrderNumber}`]
+              : []),
+            `주소: ${COMPANY.address}`,
+            `전화: ${COMPANY.tel}${COMPANY.telHours ? ` (${COMPANY.telHours})` : ""}`,
+            <>
+              이메일:{" "}
+              <a
+                href={`mailto:${COMPANY.email}`}
+                className="text-text-main hover:underline"
+              >
+                {COMPANY.email}
+              </a>
+            </>,
+          ]}
+        />
+      ) : null}
       <p>
         본 약관과 서비스에 대한 문의는{" "}
         {/* Link가 아니라 a인 이유: 이 본문은 랜딩의 약관 모달 안에서도 렌더된다.
@@ -166,10 +227,10 @@ export const TermsContent = () => (
         </a>
         {" "}또는{" "}
         <a
-          href="mailto:hello@chatbase.kr"
+          href={`mailto:${COMPANY.email}`}
           className="text-text-main hover:underline"
         >
-          hello@chatbase.kr
+          {COMPANY.email}
         </a>
         로 보내주세요.
       </p>
@@ -183,9 +244,9 @@ export const PrivacyContent = () => (
   <>
     <Section number="01" title="개요">
       <p>
-        chatbase.kr(이하 "회사")은 「개인정보 보호법」 등 관련 법령을 준수하고,
-        이용자의 개인정보를 안전하게 보호하기 위해 본 개인정보처리방침을
-        수립·공개합니다.
+        {COMPANY.name}(이하 "회사")은 chatbase.kr 서비스를 운영하면서
+        「개인정보 보호법」 등 관련 법령을 준수하고, 이용자의 개인정보를 안전하게
+        보호하기 위해 본 개인정보처리방침을 수립·공개합니다.
       </p>
     </Section>
 
@@ -194,7 +255,9 @@ export const PrivacyContent = () => (
         items={[
           "회원가입 및 인증: 이메일, 이름(닉네임), 비밀번호(해시 저장), 또는 OAuth 제공자(Google / Kakao)에서 받은 프로필 이미지·이메일",
           "서비스 이용: 등록한 챗봇 정보(이름, 시스템 프롬프트, 학습 데이터, 모델 선택), 외부 LLM API 키(암호화 저장)",
-          "대화 로그: 임베드 위젯에서 발생한 방문자 메시지·응답·세션 식별자",
+          "대화 로그: 임베드 위젯 또는 연동된 카카오톡 채널에서 발생한 방문자 메시지·응답·세션 식별자. 카카오톡 채널 연동 시에는 카카오가 제공하는 익명 사용자 식별자를 함께 저장합니다.",
+          "결제: 유료 플랜 이용 시 결제 수단 정보(카드 정보는 회사가 보관하지 않으며 토스페이먼츠가 처리), 결제 이력",
+          "문의: 1:1 문의 시 이메일 또는 전화번호, 문의 내용",
           "서비스 운영·개선: 접속 로그, 쿠키, 기기 정보(IP, User-Agent)",
         ]}
       />
@@ -206,7 +269,8 @@ export const PrivacyContent = () => (
           "회원 정보: 회원 탈퇴 시까지 보관하며, 탈퇴 시 즉시 파기합니다.",
           "대화 로그: 챗봇이 삭제되거나 회원이 탈퇴할 때까지 보관합니다.",
           "외부 LLM API 키: 회원이 직접 삭제하거나 탈퇴할 때까지 암호화하여 보관합니다.",
-          "관련 법령에 따라 보존이 필요한 경우 해당 법령이 정한 기간 동안 보관합니다(예: 통신비밀보호법 3개월).",
+          "결제·거래 기록: 전자상거래 등에서의 소비자보호에 관한 법률에 따라 계약·청약철회 기록 5년, 대금결제 기록 5년, 소비자 불만·분쟁처리 기록 3년간 보관합니다.",
+          "그 밖에 관련 법령에 따라 보존이 필요한 경우 해당 법령이 정한 기간 동안 보관합니다(예: 통신비밀보호법에 따른 접속 기록 3개월).",
         ]}
       />
     </Section>
@@ -220,33 +284,72 @@ export const PrivacyContent = () => (
         items={[
           "이용자가 사전에 동의한 경우",
           "법령에 의해 제공이 요구되는 경우",
-          "BYOK 모델 특성상, 챗봇 응답을 생성하기 위해 이용자가 등록한 외부 LLM 제공자(OpenAI, Anthropic, Google 등)에 메시지가 전달됩니다. 이는 이용자의 키와 계정으로 직접 호출되며, 각 제공자의 개인정보처리방침이 적용됩니다.",
+          "BYOK 모델 특성상, 챗봇 응답을 생성하기 위해 이용자가 등록한 외부 LLM 제공자(OpenAI, Anthropic, Google)에 메시지가 전달됩니다. 이는 이용자의 키와 계정으로 직접 호출되며, 각 제공자의 개인정보처리방침이 적용됩니다. 자세한 내용은 아래 '개인정보의 국외 이전'을 참고해 주세요.",
         ]}
       />
     </Section>
 
     <Section number="05" title="개인정보 처리의 위탁">
-      <p>회사는 안정적인 서비스 제공을 위해 다음과 같은 업무를 위탁합니다.</p>
+      <p>
+        회사는 안정적인 서비스 제공을 위해 다음과 같이 개인정보 처리 업무를
+        위탁하고 있습니다.
+      </p>
       <SubList
         items={[
-          "결제 처리: 토스페이먼츠 (유료 플랜 이용 시)",
-          "인프라 호스팅: 클라우드 인프라 제공 업체 (예: AWS / Google Cloud / 자체 호스팅)",
+          "Amazon Web Services — 서비스 인프라 호스팅 및 데이터 보관. 국내(서울) 리전을 사용하므로 회원 정보와 대화 로그는 국내에 보관됩니다.",
+          "토스페이먼츠 주식회사 — 유료 플랜 결제 처리 및 정기결제 수단 관리",
+          "주식회사 카카오 — 카카오톡 채널 연동을 사용하는 경우 해당 채널의 메시지 송수신",
+          "Cloudflare, Inc. — 도메인 및 트래픽 처리(CDN·보안). 접속 IP 등이 처리 과정에서 경유합니다.",
+          "DeepL SE — FAQ·인사말 번역 기능을 사용하는 경우 해당 텍스트의 번역 처리",
+          "Google LLC — 서비스 이용 통계 분석(Google Analytics 4)",
         ]}
       />
+      <p>
+        위탁 계약 시 개인정보가 안전하게 관리될 수 있도록 필요한 사항을 규정하고
+        있으며, 위탁 업무의 내용이나 수탁자가 변경될 경우 본 방침을 통해
+        공개합니다.
+      </p>
     </Section>
 
-    <Section number="06" title="이용자 및 법정대리인의 권리">
+    {/* 개인정보보호법 제28조의8 — 계약 이행에 필요한 국외 이전은 방침에
+        아래 항목을 공개하면 별도 동의 없이 가능하다. 항목을 빠뜨리면
+        공개했다고 인정받지 못하므로 이전받는 자·국가·항목·시점·목적·보유기간을
+        전부 적는다. */}
+    <Section number="06" title="개인정보의 국외 이전">
+      <p>
+        회사는 서비스 제공을 위해 아래와 같이 개인정보를 국외로 이전합니다.
+        이전은 서비스 이용 시점에 정보통신망을 통한 암호화(HTTPS) 전송 방식으로
+        이루어집니다.
+      </p>
+      <SubList
+        items={[
+          "OpenAI, L.L.C. (미국) — 이전 항목: 챗봇에 입력된 대화 메시지, 시스템 프롬프트, 학습 데이터 / 이용 목적: 챗봇 응답 생성 / 보유 기간: 해당 제공자의 정책에 따르며, 이용자 본인의 API 키와 계정으로 호출됩니다.",
+          "Anthropic PBC (미국) — 이전 항목·목적·보유 기간은 위와 같습니다.",
+          "Google LLC (미국) — 이전 항목: 챗봇 대화 메시지(Gemini 모델 사용 시), 접속 로그·쿠키 식별자·기기 정보(Google Analytics) / 이용 목적: 챗봇 응답 생성 및 서비스 이용 통계 분석 / 보유 기간: 해당 제공자의 정책에 따릅니다.",
+          "DeepL SE (독일) — 이전 항목: 번역을 요청한 FAQ·인사말 텍스트 / 이용 목적: 다국어 번역 / 보유 기간: 해당 제공자의 정책에 따릅니다.",
+          "Cloudflare, Inc. (미국 및 글로벌 엣지 네트워크) — 이전 항목: 접속 IP, User-Agent 등 트래픽 정보 / 이용 목적: 콘텐츠 전송 및 보안 / 보유 기간: 해당 제공자의 정책에 따릅니다.",
+        ]}
+      />
+      <p>
+        이용자는 개인정보의 국외 이전을 거부할 수 있습니다. 다만 위 이전은 서비스
+        제공에 필수적이므로, 거부하는 경우 해당 기능 또는 서비스 이용이 제한될 수
+        있습니다. 거부를 원하시는 경우 아래 개인정보 보호책임자에게 연락해 주세요.
+      </p>
+    </Section>
+
+    <Section number="07" title="이용자 및 법정대리인의 권리">
       <p>이용자는 언제든지 다음 권리를 행사할 수 있습니다.</p>
       <SubList
         items={[
           "개인정보 열람·정정·삭제 요청 (대시보드 설정 페이지 또는 이메일 문의)",
           "개인정보 처리 정지 요청",
           "동의 철회 및 회원 탈퇴 (계정 삭제)",
+          "개인정보 국외 이전 거부",
         ]}
       />
     </Section>
 
-    <Section number="07" title="개인정보의 안전성 확보 조치">
+    <Section number="08" title="개인정보의 안전성 확보 조치">
       <SubList
         items={[
           "외부 LLM API 키: Fernet(AES-128 기반) 대칭키 암호화 후 데이터베이스에 저장하며, 평문은 어떤 시점에도 저장되지 않습니다.",
@@ -258,36 +361,53 @@ export const PrivacyContent = () => (
       />
     </Section>
 
-    <Section number="08" title="쿠키 및 자동 수집 도구">
-      <p>
-        회사는 로그인 세션 유지를 위해 쿠키(JWT 토큰)를 사용합니다. 임베드
-        위젯은 방문자 식별을 위해 localStorage에 임의의 visitor_id를
-        저장합니다. 이용자는 브라우저 설정에서 쿠키 저장을 거부할 수 있으나, 이
-        경우 일부 기능 이용이 제한될 수 있습니다.
-      </p>
-    </Section>
-
-    <Section number="09" title="개인정보 보호책임자">
-      <p>
-        개인정보 처리에 관한 문의·민원은 아래 연락처로 접수해주세요.
-      </p>
+    {/* 여기에 GA4가 빠져 있었다. 방침에 없는 수집은 그 자체로 위법 소지다.
+        /embed에 GA를 싣지 않는다는 사실도 같이 적는다 — 남의 사이트 방문자에게
+        우리 분석 도구를 심지 않는다는 것이 실제 구현이고, 그건 밝힐 값어치가 있다. */}
+    <Section number="09" title="쿠키 및 자동 수집 도구">
       <SubList
         items={[
-          "개인정보 보호책임자: chatbase.kr 운영자",
-          <>
-            이메일:{" "}
-            <a
-              href="mailto:hello@chatbase.kr"
-              className="text-text-main hover:underline"
-            >
-              hello@chatbase.kr
-            </a>
-          </>,
+          "로그인 세션 유지를 위해 쿠키(JWT 토큰)를 사용합니다.",
+          "임베드 위젯은 방문자 식별을 위해 localStorage에 임의의 visitor_id를 저장합니다. 이 값은 개인을 특정하지 않는 임의의 문자열입니다.",
+          "서비스 이용 통계 분석을 위해 Google Analytics 4(측정 ID: G-QWJEXZL10M)를 사용합니다. 이를 통해 접속 로그, 기기 정보, 페이지 이동 경로가 수집됩니다.",
+          "회원 사이트에 삽입되는 임베드 위젯(/embed) 화면에는 Google Analytics를 포함한 어떠한 분석 도구도 로드하지 않습니다. 회원 사이트 방문자는 회사의 분석 대상이 아닙니다.",
+          "이용자는 브라우저 설정에서 쿠키 저장을 거부하거나 Google에서 제공하는 차단 부가기능을 설치하여 수집을 거부할 수 있습니다. 다만 이 경우 일부 기능 이용이 제한될 수 있습니다.",
         ]}
       />
     </Section>
 
-    <Section number="10" title="고지 의무">
+    <Section number="10" title="개인정보 보호책임자">
+      <p>
+        개인정보 처리에 관한 문의·민원은 아래 연락처로 접수해 주세요. 회사는
+        접수된 내용에 대해 지체 없이 답변하고 처리하겠습니다.
+      </p>
+      <SubList
+        items={[
+          `개인정보 보호책임자: ${COMPANY.privacyOfficer}`,
+          <>
+            이메일:{" "}
+            <a
+              href={`mailto:${COMPANY.email}`}
+              className="text-text-main hover:underline"
+            >
+              {COMPANY.email}
+            </a>
+          </>,
+          ...(SHOW_BUSINESS_INFO && COMPANY.tel
+            ? [
+                `전화: ${COMPANY.tel}${COMPANY.telHours ? ` (${COMPANY.telHours})` : ""}`,
+              ]
+            : []),
+        ]}
+      />
+      <p>
+        개인정보 침해에 대한 신고나 상담이 필요한 경우 개인정보분쟁조정위원회
+        (1833-6972), 개인정보침해신고센터(118), 대검찰청 사이버수사과(1301),
+        경찰청 사이버수사국(182)에 문의하실 수 있습니다.
+      </p>
+    </Section>
+
+    <Section number="11" title="고지 의무">
       <p>
         본 방침의 내용 추가·삭제 및 수정이 있을 시 시행 7일 전부터 서비스 내
         공지 또는 이메일을 통해 고지합니다.
@@ -296,7 +416,11 @@ export const PrivacyContent = () => (
   </>
 );
 
+/**
+ * 시행일 — 개정 시 여기만 고친다. 약관 §03·방침 §11이 "시행 7일 전 고지"를
+ * 약속하고 있으므로, 개정할 때는 **오늘 날짜가 아니라 7일 뒤**를 넣는다.
+ */
 export const LEGAL_META = {
-  terms: { title: "이용약관", effectiveDate: "2026-05-03" },
-  privacy: { title: "개인정보처리방침", effectiveDate: "2026-05-03" },
+  terms: { title: "이용약관", effectiveDate: "2026-09-07" },
+  privacy: { title: "개인정보처리방침", effectiveDate: "2026-09-07" },
 };

@@ -12,6 +12,10 @@
  * - **웹 검색은 전 플랜 공통**이라 플랜 카드에 넣지 않는다. 이미 3사(OpenAI/Anthropic/
  *   Gemini) 모두에서 동작 중이라(각 `infra` provider의 chat_service) 특정 플랜에 가두면 지금 되던
  *   기능을 회수하는 셈이 된다. 대신 가격표 하단에 공통 제공으로 한 줄 안내한다.
+ * - **QR도 전 플랜 공통이고, Free 카드에 일부러 적어둔다.** 게이팅하면
+ *   "사이트가 없어서 못 쓰던 사람"이 처음부터 막힌다. QR로 들어온 대화도 Free의
+ *   100건을 그대로 태우므로 전환 레버는 이미 걸려 있다. Global이 파는 건 QR 자체가
+ *   아니라 **그 QR을 찍은 사람이 자기 언어로 답을 받는 것**(`multilingual`)이다.
  */
 
 /** Free 플랜 월 대화 한도(방문자 질문 1건 = 1건). 백엔드 게이팅도 이 값을 기준으로 맞춘다. */
@@ -67,6 +71,18 @@ export interface Plan {
   name: string;
   price: string;
   unit?: string;
+  /**
+   * **누가 사는 플랜인가.** 카드 맨 위, 플랜 이름보다 먼저 읽히는 자리에 넣는다.
+   *
+   * 가격표에서 사람이 실제로 하는 일은 비교가 아니라 **"어느 게 내 얘기인가"를
+   * 찾는 것**이다. 그걸 기능 목록에서 역산하게 두면 네 칸을 다 읽어야 하고,
+   * 대부분은 그 전에 닫는다.
+   *
+   * 그래서 **업종으로 적는다.** "여러 채널 운영"은 자기 얘기인지 판단해야 하지만
+   * "호텔 · 숙소 · 식당"은 그냥 보인다. `tagline`은 무엇을 해주는지(가치)고
+   * 이건 누구를 위한 것인지(대상)라 서로 대체하지 않는다.
+   */
+  bestFor: string;
   tagline: string;
   features: PlanFeature[];
   limits: PlanLimits;
@@ -79,11 +95,13 @@ export const PLANS: Plan[] = [
   {
     name: "FREE",
     price: "₩0",
-    tagline: "내 사이트에서 먼저 써보기",
+    bestFor: "먼저 써보는 분",
+    tagline: "내 사이트에서, 또는 QR로",
     features: [
       { label: "챗봇 1개" },
       { label: `월 대화 ${FREE_MONTHLY_MESSAGES}건` },
       { label: "위젯 · iframe 임베드" },
+      { label: "QR 코드", note: "사이트 없어도 됨" },
       { label: "텍스트 · 웹페이지 학습" },
       { label: "대화 기록 7일" },
       { label: "파일 학습", off: true },
@@ -103,6 +121,7 @@ export const PLANS: Plan[] = [
     name: "STANDARD",
     price: "₩19,000",
     unit: "/ 월 · VAT 별도",
+    bestFor: "학원 · 병원 · 공방",
     tagline: "홈페이지 상담 자동화",
     features: [
       { label: "챗봇 1개" },
@@ -126,6 +145,7 @@ export const PLANS: Plan[] = [
     name: "PREMIUM",
     price: "₩49,000",
     unit: "/ 월 · VAT 별도",
+    bestFor: "여러 매장 · 제작 대행사",
     tagline: "여러 채널 · 여러 봇 운영",
     features: [
       { label: "Standard의 모든 기능" },
@@ -149,12 +169,13 @@ export const PLANS: Plan[] = [
     name: "GLOBAL",
     price: "₩99,000",
     unit: "/ 월 · VAT 별도",
-    tagline: "외국인 방문자 응대",
+    bestFor: "호텔 · 게스트하우스 · 식당",
+    tagline: "외국인 손님을 QR 한 장으로",
     features: [
       { label: "Premium의 모든 기능" },
       { label: "챗봇 5개" },
       { label: "다국어 응대", note: "한 · 영 · 일 · 중" },
-      { label: "QR 코드 제공" },
+      { label: "인사말 · 자주 묻는 질문 자동 번역" },
       { label: "우선 지원" },
     ],
     limits: {

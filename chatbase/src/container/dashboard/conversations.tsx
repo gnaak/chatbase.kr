@@ -3,8 +3,10 @@ import { createPortal } from "react-dom";
 import { Search, Bot, User, MessagesSquare, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import Topbar from "@/component/layout/topbar";
+import Calendar, { DateRange } from "@/ui/calendar";
 import Card from "@/ui/card";
 import Input from "@/ui/input";
+import Pagination from "@/ui/pagination";
 import Select, { SelectOption } from "@/ui/select";
 import Skeleton from "@/ui/skeleton";
 import { useGet } from "@/hooks/common/useAPI";
@@ -88,9 +90,25 @@ const formatTime = (iso: string | null): string => {
   });
 };
 
+/**
+ * 한 쪽에 몇 줄. 40줄을 한 번에 그리면 스크롤이 길어지고, 20줄이면 화면 하나에
+ * 안 들어와 결국 스크롤한다. 15줄이 표 아래 페이지네이션까지 한 화면에 들어온다.
+ */
+const PAGE_SIZE = 15;
+
+/** 그날 00:00:00 */
+const startOfDay = (d: Date) =>
+  new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+
+/** 그날 23:59:59.999 — 종료일을 포함하려면 하루 끝까지 열어야 한다 */
+const endOfDay = (d: Date) =>
+  new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).getTime();
+
 const Conversations = () => {
   const [botFilter, setBotFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [range, setRange] = useState<DateRange>({ start: null, end: null });
+  const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<number | undefined>();
 
   const { data: bots } = useGet<BotDto[]>("api/bot/", ["bots"]);
@@ -127,14 +145,40 @@ const Conversations = () => {
 
   const filteredSessions = useMemo(() => {
     if (!sessions) return [];
-    if (!search.trim()) return sessions;
     const q = search.trim().toLowerCase();
-    return sessions.filter((s) => {
-      const hay = `${s.visitor_id} ${s.preview ?? ""}`.toLowerCase();
-      return hay.includes(q);
-    });
-  }, [sessions, search]);
+    // 기간은 `last_message_at`(= 목록 정렬 기준)으로 본다. 시작 시각으로 걸면
+    // 어제 시작해 오늘까지 이어진 대화가 "오늘"에서 사라진다.
+    const from = range.start ? startOfDay(range.start) : null;
+    const to = range.end ? endOfDay(range.end) : null;
 
+    return sessions.filter((s) => {
+      if (q) {
+        const hay = `${s.visitor_id} ${s.preview ?? ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      if (from !== null || to !== null) {
+        const at = s.last_message_at ?? s.started_at;
+        if (!at) return false;
+        const t = new Date(at).getTime();
+        if (from !== null && t < from) return false;
+        if (to !== null && t > to) return false;
+      }
+      return true;
+    });
+  }, [sessions, search, range]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredSessions.length / PAGE_SIZE));
+
+  // 필터를 좁혀 페이지 수가 줄면 현재 페이지가 범위 밖으로 나가 빈 표가 보인다.
+  // 상태를 따로 되돌리지 않고 그릴 때 좁혀서, 필터와 페이지가 어긋나는 순간 자체를 없앤다.
+  const safePage = Math.min(page, totalPages);
+
+  const pagedSessions = useMemo(
+    () => filteredSessions.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [filteredSessions, safePage],
+  );
+
+  // 모달은 페이지 밖 세션도 열려 있을 수 있으므로 전체에서 찾는다.
   const selected = filteredSessions.find((s) => s.id === selectedId);
 
   return (
@@ -145,26 +189,49 @@ const Conversations = () => {
       />
 
       <div className="flex-1 overflow-y-auto px-8 md:px-12 py-8">
-        <div className="flex flex-col gap-4 max-w-5xl mx-auto">
+        <div className="flex flex-col gap-4 max-w-6xl mx-auto">
           {/*
             봇 필터가 예전에는 Topbar 안에 `hidden md:flex`로 있어서 모바일에서는
             아예 사라졌다 — 필터링 자체가 불가능했다. 검색창 옆으로 내려 두 화면
             모두에서 쓸 수 있게 한다.
+
+            배치: **챗봇 왼쪽 / 기간·검색 오른쪽.** 왼쪽은 "무엇을 보는가"(대상),
+            오른쪽은 "그 안에서 좁히기"(도구)라 성격이 갈린다. 셋을 한 줄에 균등하게
+            늘어놓으면 어느 게 대상이고 어느 게 도구인지 안 읽힌다.
+            검색창은 고정폭으로 줄였다 — `flex-1`로 두면 넓은 화면에서 혼자 늘어나
+            빈 입력칸이 줄의 절반을 먹는다.
           */}
           <div className="flex items-center gap-2 flex-wrap">
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="방문자 ID, 메시지 검색"
-              leftIcon={<Search className="w-4 h-4" />}
-              className="flex-1 min-w-[180px]"
-            />
             <Select
               value={botFilter}
-              onChange={setBotFilter}
+              onChange={(v) => {
+                setBotFilter(v);
+                setPage(1);
+              }}
               options={botFilterOptions}
-              className="w-40 ml-auto"
+              className="w-40"
             />
+
+            <div className="flex items-center gap-2 ml-auto">
+              <Calendar
+                value={range}
+                onChange={(v) => {
+                  setRange(v);
+                  setPage(1);
+                }}
+                className="w-[188px]"
+              />
+              <Input
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+                placeholder="방문자 ID, 메시지 검색"
+                leftIcon={<Search className="w-4 h-4" />}
+                className="w-[220px]"
+              />
+            </div>
           </div>
 
           <Card variant="outline" className="overflow-hidden">
@@ -188,7 +255,7 @@ const Conversations = () => {
             ) : filteredSessions.length === 0 ? (
               <EmptyRow hasSessions={!!sessions && sessions.length > 0} />
             ) : (
-              filteredSessions.map((s) => (
+              pagedSessions.map((s) => (
                 <SessionRow
                   key={s.id}
                   session={s}
@@ -198,6 +265,25 @@ const Conversations = () => {
               ))
             )}
           </Card>
+
+          {/* 건수는 페이지네이션이 없을 때도 보여준다 — 필터를 걸어놓고
+              "몇 건이 걸렸는지"를 아는 게 페이지를 넘기는 것보다 자주 필요하다. */}
+          {!sessionsLoading && filteredSessions.length > 0 && (
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <span className="text-[12px] text-text-sub tabular-nums">
+                {filteredSessions.length.toLocaleString()}건
+                {filteredSessions.length !== (sessions?.length ?? 0) &&
+                  ` / 전체 ${(sessions?.length ?? 0).toLocaleString()}건`}
+              </span>
+              <Pagination
+                page={safePage}
+                total={filteredSessions.length}
+                pageSize={PAGE_SIZE}
+                onChange={setPage}
+                className="ml-auto"
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -540,7 +626,7 @@ const EmptyRow = ({ hasSessions }: { hasSessions: boolean }) => (
     </p>
     <p className="text-[12px] text-text-sub max-w-xs leading-relaxed">
       {hasSessions
-        ? "검색어와 일치하는 대화가 없습니다."
+        ? "조건에 맞는 대화가 없습니다. 챗봇·기간·검색어를 바꿔보세요."
         : "방문자가 챗봇과 대화하면 여기에 쌓입니다."}
     </p>
   </div>

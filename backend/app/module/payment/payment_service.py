@@ -208,7 +208,21 @@ class PaymentService:
         )
 
     async def get_subscription(self, request):
+        # 유저 존재 확인이 _ensure_subscription 보다 먼저다.
+        #
+        # with_login 은 토큰의 서명·만료만 본다. **그 사람이 아직 있는지는 안 본다.**
+        # 그래서 탈퇴한 계정(또는 DB를 갈아끼운 뒤 남은 예전 쿠키)의 토큰이 만료 전까지
+        # 살아서 들어온다. 그 상태로 _ensure_subscription 을 부르면 tb_users 에 없는
+        # user_id 로 INSERT 가 나가 FK(tb_subscriptions_ibfk_1)가 터진다 —
+        # 조회 API 가 500 을 뱉는다. subscribe() 는 같은 자리에서 이미 막고 있었고
+        # 여기만 빠져 있었다.
+        #
+        # 아래 _ensure_customer_key(user) 도 None 을 받으면 AttributeError 다.
+        # FK 가 먼저 터져서 안 보였을 뿐이라, 이 가드 하나가 둘을 같이 막는다.
         user = await self.user_repo.get_user_by_id(request.user_id)
+        if not user:
+            fail("사용자를 찾을 수 없습니다.", "USER_NOT_FOUND", 404)
+
         sub = await self._ensure_subscription(request.user_id)
         customer_key = await self._ensure_customer_key(user)
         await self.payment_repo.db.commit()

@@ -120,17 +120,22 @@ class BotRepository:
         return result.scalar_one_or_none()
 
     async def upsert_translation(
-        self, bot_id: int, lang: str, faqs, source_hash: str
+        self, bot_id: int, lang: str, greeting, faqs, source_hash: str
     ) -> None:
         """있으면 갱신, 없으면 생성. (bot_id, lang) 유니크라 한 쪽만 남는다."""
         row = await self.find_translation(bot_id, lang)
         if row:
+            row.greeting = greeting
             row.faqs = faqs
             row.source_hash = source_hash
         else:
             self.db.add(
                 BotTranslation(
-                    bot_id=bot_id, lang=lang, faqs=faqs, source_hash=source_hash
+                    bot_id=bot_id,
+                    lang=lang,
+                    greeting=greeting,
+                    faqs=faqs,
+                    source_hash=source_hash,
                 )
             )
         await self.db.flush()

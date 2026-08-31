@@ -9,6 +9,7 @@ import { useChatStream, useGet } from "@/hooks/common/useAPI";
 import { getVisitorId } from "@/hooks/common/visitorId";
 import { remarkGfmKo } from "@/utils/format/markdown";
 import LangPill from "@/component/bot/langPill";
+import { t } from "@/component/bot/i18n";
 
 interface BotPublicDto {
   id: string;
@@ -28,6 +29,8 @@ interface BotPublicDto {
    * 그 즉답 성질이 사라진다. 대화 응답은 LLM이 그때그때 맞춘다.
    */
   faqs_i18n?: Record<string, { q: string; a: string }[]> | null;
+  /** 언어별 인사말 `{ en, ja, zh }`. 원문(한국어)은 `greeting`. */
+  greeting_i18n?: Record<string, string> | null;
   /** 유료 플랜은 false. 응답 전이거나 필드가 없으면 표시하는 쪽으로 기운다. */
   show_badge?: boolean;
 }
@@ -109,13 +112,24 @@ const EmbedChat = () => {
   );
   const { sendMessage } = useChatStream<StreamRequest>("api/chat/stream");
 
-  // 인사말은 한국어 하나다. 언어를 고르기 **전에** 한 번 보이고, 고른 뒤에는
-  // 대화가 시작돼 다시 렌더되지 않는다 — 번역본을 만들어도 보여줄 자리가 없다.
-  const greetingText = bot?.greeting || null;
+  // 고른 언어의 인사말 → 없으면 원문(한국어).
+  //
+  // 방문자는 들어오자마자 언어부터 바꾼다. 그때 인사말은 아직 화면 맨 위에
+  // 그대로 있어서, 한국어 인사말 밑에 영어 대화가 붙는다. 그래서 인사말도
+  // 언어를 따라간다.
+  const greetingText =
+    (lang !== "ko" && bot?.greeting_i18n?.[lang]) || bot?.greeting || null;
   useEffect(() => {
-    if (greetingText) {
-      setMessages([{ id: 0, role: "bot", content: greetingText, created_at: null }]);
-    }
+    if (!greetingText) return;
+    // ⚠️ 통째로 갈아끼우면 안 된다. 대화 도중에 언어를 바꾸면 그때까지의
+    // 기록이 전부 날아간다. 인사말(id 0)만 제자리에서 바꾼다.
+    setMessages((prev) =>
+      prev.length === 0
+        ? [{ id: 0, role: "bot", content: greetingText, created_at: null }]
+        : prev.map((m) =>
+            m.id === 0 && m.role === "bot" ? { ...m, content: greetingText } : m,
+          ),
+    );
   }, [greetingText]);
 
   // 고른 언어의 번역본 → 없으면 원문(한국어). 번역이 아직 안 돌았거나 DeepL
@@ -184,7 +198,7 @@ const EmbedChat = () => {
     try {
       await sendMessage({ bot_id: botId, visitor_id: visitorId.current, content: text, session_id: sessionId, lang }, handleChunk);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "응답을 받지 못했습니다.";
+      const msg = err instanceof Error ? err.message : t(lang, "failed");
       setError(msg);
       setMessages((prev) => prev.filter((m) => m.id !== streamingBotId));
     } finally {
@@ -296,17 +310,17 @@ const EmbedChat = () => {
             </div>
             <div className="text-[11px] text-text-sub flex items-center gap-1">
               <span className={["w-1.5 h-1.5 rounded-full", bot?.active === false ? "bg-text-disabled" : "bg-point-green"].join(" ")} />
-              {bot?.active === false ? "비활성" : "온라인"}
+              {bot?.active === false ? t(lang, "inactive") : t(lang, "online")}
             </div>
           </div>
         </div>
         <div className="flex items-center gap-1.5">
           {bot?.multilingual && <LangPill value={lang} onChange={setLang} />}
-          <IconBtn label="대화 초기화" onClick={handleReset}>
+          <IconBtn label={t(lang, "reset")} onClick={handleReset}>
             <RotateCcw className="w-3.5 h-3.5" />
           </IconBtn>
           {!isStandalone && (
-            <IconBtn label="닫기" onClick={handleClose}>
+            <IconBtn label={t(lang, "close")} onClick={handleClose}>
               <X className="w-3.5 h-3.5" />
             </IconBtn>
           )}
@@ -367,13 +381,13 @@ const EmbedChat = () => {
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder={isStreaming ? "응답을 기다리는 중..." : "메시지를 입력하세요"}
+          placeholder={isStreaming ? t(lang, "waiting") : t(lang, "placeholder")}
           disabled={isStreaming}
           className="flex-1 h-9 px-3 rounded-comfy bg-input-bg shadow-border text-[13px] text-text-main placeholder:text-text-placeholder outline-none border-0 focus:shadow-[0_0_0_1px_rgb(var(--text-main))] transition-shadow disabled:opacity-60"
         />
         <button
           type="submit"
-          aria-label="전송"
+          aria-label={t(lang, "send")}
           disabled={!input.trim() || isStreaming}
           className="inline-flex items-center justify-center w-9 h-9 rounded-comfy bg-text-main text-text-inverse hover:bg-text-main/90 disabled:bg-bg-disabled disabled:text-text-disabled disabled:cursor-not-allowed transition-colors"
         >

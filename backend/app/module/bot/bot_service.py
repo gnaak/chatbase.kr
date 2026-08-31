@@ -106,14 +106,17 @@ def _file_to_dict(f: BotFile) -> dict:
 logger = logging.getLogger(__name__)
 
 
-def faqs_hash(faqs) -> str:
-    """원문 FAQ의 지문. 이게 그대로면 다시 번역하지 않는다.
+def content_hash(greeting, faqs) -> str:
+    """번역 원문(인사말 + FAQ)의 지문. 이게 그대로면 다시 번역하지 않는다.
 
     DeepL 무료는 월 50만 자다. 봇을 저장할 때마다 부르면 금방 태운다.
     정렬된 JSON으로 직렬화해 키 순서가 흔들려도 같은 값이 나오게 한다.
+
+    둘을 **함께** 해싱한다. 하나만 바뀌어도 다시 번역해야 하기 때문이다.
     """
+    payload = {"greeting": greeting or "", "faqs": faqs or []}
     return hashlib.sha256(
-        json.dumps(faqs or [], ensure_ascii=False, sort_keys=True).encode()
+        json.dumps(payload, ensure_ascii=False, sort_keys=True).encode()
     ).hexdigest()
 
 
@@ -149,7 +152,7 @@ async def _translate_bot_faqs(bot_id: int) -> None:
 
     if not deepl_service.is_configured():
         logger.info(
-            "faq translation skipped bot_id=%s: DEEPL_API_KEY 미설정", bot_id
+            "translation skipped bot_id=%s: DEEPL_API_KEY 미설정", bot_id
         )
         return
 
@@ -158,22 +161,23 @@ async def _translate_bot_faqs(bot_id: int) -> None:
             repo = BotRepository(db)
             bot = await repo.find_by_id(bot_id)
             if not bot:
-                logger.info("faq translation skipped bot_id=%s: 봇 없음", bot_id)
+                logger.info("translation skipped bot_id=%s: 봇 없음", bot_id)
                 return
             if not bot.multilingual:
                 logger.info(
-                    "faq translation skipped bot_id=%s: 다국어 꺼짐", bot_id
+                    "translation skipped bot_id=%s: 다국어 꺼짐", bot_id
                 )
                 return
 
-            source = bot.faqs or []
-            if not source:
+            greeting = (bot.greeting or "").strip()
+            faqs = bot.faqs or []
+            if not greeting and not faqs:
                 logger.info(
-                    "faq translation skipped bot_id=%s: FAQ 없음", bot_id
+                    "translation skipped bot_id=%s: 번역할 인사말·FAQ 없음", bot_id
                 )
                 return
 
-            digest = faqs_hash(source)
+            digest = content_hash(greeting, faqs)
             done, skipped, failed = [], [], []
 
             for lang in TRANSLATION_LANGS:
@@ -181,24 +185,38 @@ async def _translate_bot_faqs(bot_id: int) -> None:
                 if existing and existing.source_hash == digest:
                     skipped.append(lang)  # 원문 그대로 — 호출하지 않는다
                     continue
-                translated = await deepl_service.translate_faqs(source, lang)
-                if translated is None:
+
+                # 인사말과 FAQ를 요청 하나로 합치지 않는다. FAQ 쪽은 q/a 를
+                # 번갈아 담아 인덱스로 되꺼내는 구조라, 앞에 한 줄을 끼우면
+                # 짝이 밀린다. 대신 인사말이 비어 있으면 아예 안 부른다.
+                g_out = greeting
+                if greeting:
+                    got = await deepl_service.translate([greeting], lang)
+                    if got is None:
+                        failed.append(lang)
+                        continue
+                    g_out = got[0]
+
+                f_out = await deepl_service.translate_faqs(faqs, lang)
+                if f_out is None:
                     failed.append(lang)  # 한도 소진·오류. 다음 저장 때 재시도
                     continue
-                await repo.upsert_translation(bot_id, lang, translated, digest)
+
+                await repo.upsert_translation(bot_id, lang, g_out, f_out, digest)
                 done.append(lang)
 
             await db.commit()
             logger.info(
-                "faq translation bot_id=%s faqs=%d 저장=%s 생략=%s 실패=%s",
+                "translation bot_id=%s greeting=%s faqs=%d 저장=%s 생략=%s 실패=%s",
                 bot_id,
-                len(source),
+                "있음" if greeting else "없음",
+                len(faqs),
                 done or "-",
                 skipped or "-",
                 failed or "-",
             )
     except Exception as exc:  # noqa: BLE001
-        logger.exception("faq translation failed bot_id=%s: %s", bot_id, exc)
+        logger.exception("translation failed bot_id=%s: %s", bot_id, exc)
 
 
 class BotService:
@@ -314,10 +332,13 @@ class BotService:
         # 언어를 바꿀 때마다 왕복하면 버튼이 늦게 바뀌어 티가 난다.
         # 다국어가 꺼져 있으면 빈 객체다(있어도 쓸 데가 없다).
         faqs_i18n: dict[str, list] = {}
+        greeting_i18n: dict[str, str] = {}
         if bot.multilingual:
             for row in await self.bot_repo.find_translations(bot.id):
                 if row.faqs:
                     faqs_i18n[row.lang] = row.faqs
+                if row.greeting:
+                    greeting_i18n[row.lang] = row.greeting
 
         response = success(
             data={
@@ -333,6 +354,7 @@ class BotService:
                 # 있다. 몇 백 바이트라 왕복을 한 번 더 하는 것보다 싸다.
                 "multilingual": bool(bot.multilingual),
                 "faqs_i18n": faqs_i18n,
+                "greeting_i18n": greeting_i18n,
                 "show_badge": not limits.remove_badge,
             }
         )

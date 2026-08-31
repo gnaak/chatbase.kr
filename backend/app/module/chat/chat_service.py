@@ -229,6 +229,9 @@ def _session_to_dict(session: ChatSession, last_message: str | None = None) -> d
         "id": session.id,
         "bot_id": session.bot_id,
         "visitor_id": session.visitor_id,
+        #: 방문자가 고른 언어. 컬럼이 생기기 전 세션과 다국어 OFF 세션은 None이고,
+        #: 둘을 구분할 방법이 없어 화면이 "-"로 표시한다.
+        "lang": session.lang,
         "started_at": session.started_at.isoformat() if session.started_at else None,
         "last_message_at": (
             session.last_message_at.isoformat() if session.last_message_at else None
@@ -359,6 +362,7 @@ class ChatService:
         await self.chat_repo.add_message(bot_msg)
 
         session.last_message_at = now_kst()
+        session.lang = lang or session.lang
         if self.usage_service:
             await self.usage_service.record_message(bot)
         await self.chat_repo.db.commit()
@@ -535,6 +539,7 @@ class ChatService:
                 )
                 await chat_repo.add_message(bot_msg)
                 session.last_message_at = now_kst()
+                session.lang = lang or session.lang
                 await usage_service.record_message(bot)
                 await db.commit()
                 await db.refresh(bot_msg)
@@ -696,6 +701,7 @@ class ChatService:
                 )
                 await chat_repo.add_message(bot_msg)
                 session.last_message_at = now_kst()
+                session.lang = lang or session.lang
                 await db.commit()
                 await db.refresh(bot_msg)
 

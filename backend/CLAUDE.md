@@ -20,7 +20,7 @@ app/
     ├── admin/ auth/ user/
     ├── api_key/ bot/ chat/ usage/ payment/
     ├── kakao_skill/ llm_model/ stats/ inquiry/ llm_error/
-    └── infra/                      anthropic deepl gemini google kakao
+    └── infra/                      anthropic gemini google kakao
                                     llm mail openai toss
 ```
 
@@ -67,11 +67,10 @@ module/[domain]/
 
 | 모듈 | 역할 |
 |------|------|
-| `infra/llm/` | 3사 공통 진입점 · `strip_citations()` |
+| `infra/llm/` | 3사 공통 진입점 · `strip_citations()` · `translate_service`(FAQ·인사말 번역) |
 | `infra/openai/` | Responses API · 벡터 스토어(`file_search`) · 스트리밍 |
 | `infra/anthropic/` | Anthropic SDK 래핑 · 스트리밍 |
 | `infra/gemini/` | Google Gemini |
-| `infra/deepl/` | FAQ·인사말 번역. 키 없으면 조용히 아무것도 안 한다 |
 | `infra/toss/` | 토스페이먼츠 빌링키 발급·청구 |
 | `infra/kakao/` `infra/google/` | OAuth 호출 |
 | `infra/mail/` | 메일 단일 창구. **`_transport()`가 비어 있다** — 아직 안 나간다 |

@@ -109,7 +109,11 @@ logger = logging.getLogger(__name__)
 def content_hash(greeting, faqs) -> str:
     """번역 원문(인사말 + FAQ)의 지문. 이게 그대로면 다시 번역하지 않는다.
 
-    DeepL 무료는 월 50만 자다. 봇을 저장할 때마다 부르면 금방 태운다.
+    번역이 LLM으로 옮겨간 뒤로 이 해시의 역할이 하나 늘었다. 원래는 봇을 저장할
+    때마다 번역 API를 때리지 않으려는 **비용** 장치였는데, 이제는 **화면 문구를
+    고정하는** 장치이기도 하다. LLM은 같은 원문에 다른 문장을 낼 수 있어서,
+    다시 부르지 않는 것이 곧 FAQ 번역이 흔들리지 않는다는 뜻이다.
+
     정렬된 JSON으로 직렬화해 키 순서가 흔들려도 같은 값이 나오게 한다.
 
     둘을 **함께** 해싱한다. 하나만 바뀌어도 다시 번역해야 하기 때문이다.
@@ -124,7 +128,7 @@ def content_hash(greeting, faqs) -> str:
 #:
 #: 이벤트 루프는 태스크를 약한 참조로만 잡는다. `asyncio.create_task(...)` 의
 #: 반환값을 버리면 GC 가 실행 도중에 태스크를 수거할 수 있고, 그러면 번역이
-#: 조용히 중간에 사라진다 — 로그도 안 남아서 "DeepL 이 안 돈다"로만 보인다.
+#: 조용히 중간에 사라진다 — 로그도 안 남아서 "번역이 안 돈다"로만 보인다.
 _translation_tasks: set = set()
 
 
@@ -145,16 +149,17 @@ async def _translate_bot_faqs(bot_id: int) -> None:
     그대로 나가므로 서비스는 산다. 다만 **왜 안 됐는지는 반드시 로그로 남긴다.**
     조용히 넘어가면 키가 없는 건지, 한도가 찬 건지, 봇이 다국어가 아닌 건지
     바깥에서 구분할 방법이 없다.
+
+    번역은 **봇 주인의 키**로 한다(BYOK). 그래서 실패 사유에 "주인이 키를 안
+    넣었다"와 "주인 키의 한도가 찼다"가 새로 생겼고, 둘 다 우리가 고칠 수 없는
+    것이라 로그로만 남기고 넘어간다.
     """
     from app.core.database.base import SessionLocal
+    from app.module.api_key.api_key_repository import ApiKeyRepository
+    from app.module.api_key.api_key_service import ApiKeyService
     from app.module.bot.bot_repository import BotRepository
-    from app.module.infra.deepl import deepl_service
-
-    if not deepl_service.is_configured():
-        logger.info(
-            "translation skipped bot_id=%s: DEEPL_API_KEY 미설정", bot_id
-        )
-        return
+    from app.module.infra.llm import translate_service
+    from app.module.infra.llm.llm_service import LLMService, classify_llm_error
 
     try:
         async with SessionLocal() as db:
@@ -177,6 +182,30 @@ async def _translate_bot_faqs(bot_id: int) -> None:
                 )
                 return
 
+            # 번역도 BYOK다 — 봇에 설정된 모델과 **봇 주인의 키**로 부른다.
+            # 예전에는 우리 DeepL 키를 썼다.
+            try:
+                provider = resolve_provider(bot.model)
+            except ValueError:
+                logger.info(
+                    "translation skipped bot_id=%s: 지원하지 않는 모델 %s",
+                    bot_id,
+                    bot.model,
+                )
+                return
+
+            api_key = await ApiKeyService(
+                ApiKeyRepository(db)
+            ).get_decrypted_key(bot.user_id, provider)
+            if not api_key:
+                logger.info(
+                    "translation skipped bot_id=%s: %s 키 미등록",
+                    bot_id,
+                    provider.value if hasattr(provider, "value") else provider,
+                )
+                return
+
+            llm_service = LLMService()
             digest = content_hash(greeting, faqs)
             done, skipped, failed = [], [], []
 
@@ -186,20 +215,48 @@ async def _translate_bot_faqs(bot_id: int) -> None:
                     skipped.append(lang)  # 원문 그대로 — 호출하지 않는다
                     continue
 
-                # 인사말과 FAQ를 요청 하나로 합치지 않는다. FAQ 쪽은 q/a 를
-                # 번갈아 담아 인덱스로 되꺼내는 구조라, 앞에 한 줄을 끼우면
-                # 짝이 밀린다. 대신 인사말이 비어 있으면 아예 안 부른다.
-                g_out = greeting
-                if greeting:
-                    got = await deepl_service.translate([greeting], lang)
-                    if got is None:
-                        failed.append(lang)
-                        continue
-                    g_out = got[0]
+                try:
+                    # 인사말과 FAQ를 요청 하나로 합치지 않는다. FAQ 쪽은 q/a 를
+                    # 번갈아 담아 인덱스로 되꺼내는 구조라, 앞에 한 줄을 끼우면
+                    # 짝이 밀린다. 대신 인사말이 비어 있으면 아예 안 부른다.
+                    g_out = greeting
+                    if greeting:
+                        got = await translate_service.translate(
+                            [greeting],
+                            lang,
+                            model=bot.model,
+                            api_key=api_key,
+                            llm_service=llm_service,
+                        )
+                        if got is None:
+                            failed.append(lang)
+                            continue
+                        g_out = got[0]
 
-                f_out = await deepl_service.translate_faqs(faqs, lang)
-                if f_out is None:
-                    failed.append(lang)  # 한도 소진·오류. 다음 저장 때 재시도
+                    f_out = await translate_service.translate_faqs(
+                        faqs,
+                        lang,
+                        model=bot.model,
+                        api_key=api_key,
+                        llm_service=llm_service,
+                    )
+                    if f_out is None:
+                        failed.append(lang)  # 응답 모양 불일치. 다음 저장 때 재시도
+                        continue
+                except Exception as exc:  # noqa: BLE001
+                    # 키가 틀렸거나 한도가 찼으면 **남은 언어도 같은 이유로
+                    # 실패한다.** 주인 키를 3번 더 때릴 이유가 없어 멈춘다.
+                    kind = classify_llm_error(exc)
+                    logger.warning(
+                        "translation aborted bot_id=%s lang=%s kind=%s: %s",
+                        bot_id,
+                        lang,
+                        kind,
+                        exc,
+                    )
+                    failed.append(lang)
+                    if kind in ("auth", "quota"):
+                        break
                     continue
 
                 await repo.upsert_translation(bot_id, lang, g_out, f_out, digest)
@@ -420,7 +477,7 @@ class BotService:
         await self.bot_repo.db.refresh(bot)
         # FAQ 번역은 커밋 뒤 백그라운드로 돌린다.
         #
-        # 저장 응답을 붙잡아두면 안 된다 — DeepL 왕복이 언어 3개면 수 초다.
+        # 저장 응답을 붙잡아두면 안 된다 — LLM 왕복이 언어 3개면 수십 초다.
         # 원문이 안 바뀌었으면 `_translate_bot_faqs` 안에서 해시로 걸러 아예
         # 호출하지 않으므로, 매번 부르는 비용은 사실상 0이다.
         if bot.multilingual:
@@ -471,7 +528,7 @@ class BotService:
         await self.bot_repo.db.refresh(bot)
         # FAQ 번역은 커밋 뒤 백그라운드로 돌린다.
         #
-        # 저장 응답을 붙잡아두면 안 된다 — DeepL 왕복이 언어 3개면 수 초다.
+        # 저장 응답을 붙잡아두면 안 된다 — LLM 왕복이 언어 3개면 수십 초다.
         # 원문이 안 바뀌었으면 `_translate_bot_faqs` 안에서 해시로 걸러 아예
         # 호출하지 않으므로, 매번 부르는 비용은 사실상 0이다.
         if bot.multilingual:

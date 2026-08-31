@@ -31,10 +31,9 @@ const Pagination = ({
   visibleCount = 5,
   className = "",
 }: PaginationProps) => {
+  // 한 장뿐이어도 그린다. 하단에 고정해두는 자리라, 페이지 수에 따라 나타났다
+  // 사라지면 그때마다 표 아래 여백이 널뛴다. 비활성 버튼으로 자리를 지키는 쪽이 낫다.
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
-
-  // 한 장뿐이면 아예 안 그린다. 쓸 수 없는 버튼만 남는 줄은 자리만 먹는다.
-  if (totalPages <= 1) return null;
 
   const count = Math.max(1, Math.min(visibleCount, totalPages));
   const current = Math.min(Math.max(1, page), totalPages);
@@ -42,8 +41,9 @@ const Pagination = ({
   const end = Math.min(totalPages, start + count - 1);
   const pages = Array.from({ length: end - start + 1 }, (_, i) => start + i);
 
+  // 이 저장소는 액션 버튼이 캡슐형이 기본이다(`chatbase/CLAUDE.md`).
   const box =
-    "inline-flex items-center justify-center h-8 min-w-8 px-2 rounded-DEFAULT text-[12px] tabular-nums transition-colors";
+    "inline-flex items-center justify-center h-8 min-w-8 px-2 rounded-full text-[12px] tabular-nums transition-colors";
   const idle = "text-text-sub hover:text-text-main hover:bg-bg-hover";
   const off = "text-text-disabled pointer-events-none";
 

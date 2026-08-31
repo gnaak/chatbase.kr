@@ -15,9 +15,14 @@
 
 ## source_hash
 
-DeepL 무료는 월 50만 자다. 봇을 저장할 때마다 다시 번역하면 금방 태운다.
 원문(**인사말 + FAQ**)의 해시를 같이 저장해두고, **안 바뀌었으면 건너뛴다.**
 둘 중 하나만 바뀌어도 해시가 달라져 다시 돈다.
+
+번역이 DeepL에서 **봇 주인의 LLM 키(BYOK)**로 옮겨간 뒤 이 해시가 더 중요해졌다.
+번역기는 같은 원문에 같은 결과를 주지만 LLM은 그렇지 않다. **다시 부르지 않는
+것이 곧 화면 문구가 고정된다는 뜻**이다. 반대로 원문을 고치면 그 봇·그 언어의
+번역이 통째로 새로 만들어지므로, FAQ 하나만 고쳐도 다른 FAQ의 번역 문장이
+미세하게 달라질 수 있다.
 """
 
 from sqlalchemy import (
@@ -34,7 +39,7 @@ from sqlalchemy import (
 from app.core.database.base import Base, now_kst
 
 #: 번역 대상 언어. 원문은 한국어라 여기 없다.
-#: DeepL target_lang 으로 그대로 못 쓰는 값이 있어(zh → ZH) 매핑은 서비스가 한다.
+#: 코드 → 프롬프트에 넣을 언어 이름 매핑은 `infra/llm/translate_service.py`가 한다.
 TRANSLATION_LANGS = ("en", "ja", "zh")
 
 

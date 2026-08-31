@@ -33,6 +33,12 @@ interface SessionDto {
   id: number;
   bot_id: string; // slug
   visitor_id: string;
+  /**
+   * 방문자가 고른 언어. `null`인 경우가 둘이고 **구분할 방법이 없다** —
+   * 컬럼이 생기기 전(2026-08-31)에 쌓인 세션과, 언어 pill이 없는 봇
+   * (= 다국어 OFF)에서 들어온 세션. 그래서 "한국어"로 단정하지 않고 "-"로 둔다.
+   */
+  lang: string | null;
   started_at: string | null;
   last_message_at: string | null;
   /** 세션의 마지막 메시지 */
@@ -55,18 +61,35 @@ interface SessionDetailDto {
  * 표의 칸 나눔과 좌우 여백. 헤더와 각 행이 **반드시 같은 값을 써야** 세로줄이 맞는다.
  * 한쪽만 고치면 헤더와 내용이 어긋난 표가 되므로 한 상수로 묶어둔다.
  *
- * 칸: 챗봇 / 마지막 대화 / 채널 / 시각
+ * 칸: 챗봇 / 마지막 대화 / 언어 / 채널 / 시각
  *
  * 원래 `방문자` 칸에 `v_8f3a2b1c` 같은 난수를 그대로 띄웠는데, 그 값으로는
  * 누군지도 알 수 없고 40줄을 눈으로 대조해 같은 값을 찾는 사람도 없다.
  * 토큰은 버리고 거기서 뽑아낼 수 있는 **채널**만 남겼다.
  * 원본 ID는 필요할 때 모달 헤더에서 본다.
+ *
+ * `언어`는 GLOBAL을 파는 근거다 — 외국인 손님이 실제로 왔는지를 봇 주인이
+ * 확인할 수 있는 유일한 자리라, 채널 옆에 붙여 한눈에 세어지게 둔다.
  */
-const COLS = "md:grid-cols-[150px_minmax(0,1fr)_88px_88px]";
+const COLS = "md:grid-cols-[150px_minmax(0,1fr)_76px_76px_88px]";
 const ROW_PADDING = "px-5 md:px-6";
 
 /** 카카오 유입 세션의 visitor_id 접두사. 백엔드 `KAKAO_PREFIX`와 같아야 한다. */
 const KAKAO_PREFIX = "kakao:";
+
+/**
+ * 언어 코드 → 표에 쓸 짧은 이름.
+ *
+ * `component/bot/langPill.tsx`의 `LANGS`와 같은 집합이어야 한다. 거기서 직접
+ * import하지 않는 이유는 그쪽이 국기 이모지 + 원어 표기(`日本語`)라 목록용이고,
+ * 여기는 76px 칸에 들어가야 해서 표기 규칙이 다르기 때문이다.
+ */
+const LANG_LABEL: Record<string, string> = {
+  ko: "한국어",
+  en: "English",
+  ja: "日本語",
+  zh: "中文",
+};
 
 const formatRelative = (iso: string | null): string => {
   if (!iso) return "";
@@ -91,10 +114,11 @@ const formatTime = (iso: string | null): string => {
 };
 
 /**
- * 한 쪽에 몇 줄. 40줄을 한 번에 그리면 스크롤이 길어지고, 20줄이면 화면 하나에
- * 안 들어와 결국 스크롤한다. 15줄이 표 아래 페이지네이션까지 한 화면에 들어온다.
+ * 한 쪽에 몇 줄. 전부 그리면 스크롤이 길어지고, 많으면 표 아래 페이지네이션이
+ * 화면 밖으로 밀려 "다음 쪽이 있다"는 걸 스크롤해야 알게 된다.
+ * 13줄이면 머리말·페이지네이션까지 한 화면에 들어온다.
  */
-const PAGE_SIZE = 15;
+const PAGE_SIZE = 13;
 
 /** 그날 00:00:00 */
 const startOfDay = (d: Date) =>
@@ -188,89 +212,108 @@ const Conversations = () => {
         description="방문자가 챗봇과 나눈 대화를 확인합니다."
       />
 
-      <div className="flex-1 overflow-y-auto px-8 md:px-12 py-8">
-        <div className="flex flex-col gap-4 max-w-6xl mx-auto">
-          {/*
-            봇 필터가 예전에는 Topbar 안에 `hidden md:flex`로 있어서 모바일에서는
-            아예 사라졌다 — 필터링 자체가 불가능했다. 검색창 옆으로 내려 두 화면
-            모두에서 쓸 수 있게 한다.
+      {/*
+        페이지네이션을 하단에 고정하려고 한 겹 더 쌌다.
 
-            배치: **챗봇 왼쪽 / 기간·검색 오른쪽.** 왼쪽은 "무엇을 보는가"(대상),
-            오른쪽은 "그 안에서 좁히기"(도구)라 성격이 갈린다. 셋을 한 줄에 균등하게
-            늘어놓으면 어느 게 대상이고 어느 게 도구인지 안 읽힌다.
-            검색창은 고정폭으로 줄였다 — `flex-1`로 두면 넓은 화면에서 혼자 늘어나
-            빈 입력칸이 줄의 절반을 먹는다.
-          */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <Select
-              value={botFilter}
-              onChange={(v) => {
-                setBotFilter(v);
-                setPage(1);
-              }}
-              options={botFilterOptions}
-              className="w-40"
-            />
+        스크롤 컨테이너 **안에** absolute 로 두면 컨테이너의 패딩 박스를 기준으로
+        잡혀서 내용과 같이 스크롤된다 — 화면에 붙어 있지 않다. 그래서 스크롤을
+        안쪽 div 에 주고, 고정 바를 그 **형제**로 둔 뒤 바깥에 relative 를 건다.
+        바깥은 `main`(h-svh flex-col)의 flex 자식이라 높이가 화면에 묶여 있고,
+        `min-h-0` 이 없으면 flex 자식이 내용만큼 부풀어 스크롤이 안 생긴다.
+      */}
+      <div className="flex-1 min-h-0 relative">
+        <div className="h-full overflow-y-auto px-8 md:px-12 pt-8 pb-24">
+          <div className="flex flex-col gap-4 max-w-6xl mx-auto">
+            {/*
+              봇 필터가 예전에는 Topbar 안에 `hidden md:flex`로 있어서 모바일에서는
+              아예 사라졌다 — 필터링 자체가 불가능했다. 검색창 옆으로 내려 두 화면
+              모두에서 쓸 수 있게 한다.
 
-            <div className="flex items-center gap-2 ml-auto">
-              <Calendar
-                value={range}
+              배치: **챗봇 왼쪽 / 기간·검색 오른쪽.** 왼쪽은 "무엇을 보는가"(대상),
+              오른쪽은 "그 안에서 좁히기"(도구)라 성격이 갈린다. 셋을 한 줄에 균등하게
+              늘어놓으면 어느 게 대상이고 어느 게 도구인지 안 읽힌다.
+              검색창은 고정폭으로 줄였다 — `flex-1`로 두면 넓은 화면에서 혼자 늘어나
+              빈 입력칸이 줄의 절반을 먹는다.
+            */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <Select
+                value={botFilter}
                 onChange={(v) => {
-                  setRange(v);
+                  setBotFilter(v);
                   setPage(1);
                 }}
-                className="w-[188px]"
+                options={botFilterOptions}
+                className="w-40"
               />
-              <Input
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
-                }}
-                placeholder="방문자 ID, 메시지 검색"
-                leftIcon={<Search className="w-4 h-4" />}
-                className="w-[220px]"
-              />
-            </div>
-          </div>
 
-          <Card variant="outline" className="overflow-hidden">
-            {/* 칸 이름은 넓은 화면에서만. 모바일은 행 자체가 쌓이는 형태라 머리말이 의미 없다. */}
-            <div
-              className={[
-                "hidden md:grid gap-x-4 h-10 items-center border-b border-line bg-bg-sub/50",
-                "text-[11px] font-medium tracking-tight text-text-sub",
-                ROW_PADDING,
-                COLS,
-              ].join(" ")}
-            >
-              <span className="text-center">챗봇</span>
-              <span className="text-center">마지막 대화</span>
-              <span className="text-center">채널</span>
-              <span className="text-center">시각</span>
-            </div>
-
-            {sessionsLoading ? (
-              <SessionTableSkeleton />
-            ) : filteredSessions.length === 0 ? (
-              <EmptyRow hasSessions={!!sessions && sessions.length > 0} />
-            ) : (
-              pagedSessions.map((s) => (
-                <SessionRow
-                  key={s.id}
-                  session={s}
-                  botName={botNameMap.get(s.bot_id) ?? "봇"}
-                  onClick={() => setSelectedId(s.id)}
+              <div className="flex items-center gap-2 ml-auto">
+                <Calendar
+                  value={range}
+                  onChange={(v) => {
+                    setRange(v);
+                    setPage(1);
+                  }}
+                  className="w-[188px]"
                 />
-              ))
-            )}
-          </Card>
+                <Input
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="방문자 ID, 메시지 검색"
+                  leftIcon={<Search className="w-4 h-4" />}
+                  className="w-[220px]"
+                />
+              </div>
+            </div>
 
-          {/* 건수는 페이지네이션이 없을 때도 보여준다 — 필터를 걸어놓고
-              "몇 건이 걸렸는지"를 아는 게 페이지를 넘기는 것보다 자주 필요하다. */}
-          {!sessionsLoading && filteredSessions.length > 0 && (
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <span className="text-[12px] text-text-sub tabular-nums">
+            <Card variant="outline" className="overflow-hidden">
+              {/* 칸 이름은 넓은 화면에서만. 모바일은 행 자체가 쌓이는 형태라 머리말이 의미 없다. */}
+              <div
+                className={[
+                  "hidden md:grid gap-x-4 h-10 items-center border-b border-line bg-bg-sub/50",
+                  "text-[11px] font-medium tracking-tight text-text-sub",
+                  ROW_PADDING,
+                  COLS,
+                ].join(" ")}
+              >
+                <span className="text-center">챗봇</span>
+                <span className="text-center">마지막 대화</span>
+                <span className="text-center">언어</span>
+                <span className="text-center">채널</span>
+                <span className="text-center">시각</span>
+              </div>
+
+              {sessionsLoading ? (
+                <SessionTableSkeleton />
+              ) : filteredSessions.length === 0 ? (
+                <EmptyRow hasSessions={!!sessions && sessions.length > 0} />
+              ) : (
+                pagedSessions.map((s) => (
+                  <SessionRow
+                    key={s.id}
+                    session={s}
+                    botName={botNameMap.get(s.bot_id) ?? "봇"}
+                    onClick={() => setSelectedId(s.id)}
+                  />
+                ))
+              )}
+            </Card>
+          </div>
+        </div>
+
+        {/*
+          하단 고정 바. 페이지가 하나여도 자리를 지킨다 — 나타났다 사라지면
+          표 아래 여백이 페이지마다 널뛴다.
+
+          `pointer-events-none` 은 바탕용이다. 그라데이션 띠가 표 위를 덮고 있어서
+          그대로 두면 그 아래 행을 못 누른다. 실제로 눌러야 하는 것들만 auto 로 되돌린다.
+        */}
+        {!sessionsLoading && filteredSessions.length > 0 && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 pt-10 pb-5 bg-gradient-to-t from-bg via-bg to-transparent">
+            <div className="relative flex items-center max-w-6xl mx-auto px-8 md:px-12">
+              <span className="pointer-events-auto text-[12px] text-text-sub tabular-nums">
                 {filteredSessions.length.toLocaleString()}건
                 {filteredSessions.length !== (sessions?.length ?? 0) &&
                   ` / 전체 ${(sessions?.length ?? 0).toLocaleString()}건`}
@@ -280,11 +323,11 @@ const Conversations = () => {
                 total={filteredSessions.length}
                 pageSize={PAGE_SIZE}
                 onChange={setPage}
-                className="ml-auto"
+                className="pointer-events-auto absolute left-1/2 -translate-x-1/2"
               />
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {selected && (
@@ -350,7 +393,7 @@ const SessionRow = ({
 
       {/* 모바일에서는 첫 줄 오른쪽 끝, 데스크톱에서는 마지막 칸 가운데.
           tabular-nums로 자릿수를 고정해야 "3분 전 / 12분 전"이 섞여도 안 흔들린다. */}
-      <span className="md:order-4 shrink-0 text-[11px] tabular-nums text-text-sub text-right md:text-center">
+      <span className="md:order-5 shrink-0 text-[11px] tabular-nums text-text-sub text-right md:text-center">
         {formatRelative(session.last_message_at)}
       </span>
 
@@ -358,10 +401,34 @@ const SessionRow = ({
         {session.preview ?? "(메시지 없음)"}
       </p>
 
+      {/* 모바일에서는 언어·채널을 한 줄에 나란히 둔다. 좁은 화면에서 줄을
+          하나 더 쓰면 행이 4줄이 되어 목록을 훑는 리듬이 깨진다. */}
       <span className="col-span-2 md:col-span-1 md:order-3 md:text-center text-[11px] text-text-sub">
+        <LangTag lang={session.lang} />
+      </span>
+
+      <span className="col-span-2 md:col-span-1 md:order-4 md:text-center text-[11px] text-text-sub">
         {isKakao ? "카카오" : "위젯"}
       </span>
     </button>
+  );
+};
+
+/**
+ * 언어 한 칸.
+ *
+ * 한국어는 **일부러 흐리게** 둔다. 대부분의 봇이 한국어뿐이라 이 칸이 전부
+ * 같은 값이면 아무 정보도 아니고, 반대로 외국어 한 줄이 섞였을 때 그게 눈에
+ * 띄어야 한다. GLOBAL을 유지할 이유가 보이는 자리가 여기다.
+ */
+const LangTag = ({ lang }: { lang: string | null }) => {
+  if (!lang) return <span className="text-text-disabled">-</span>;
+  const label = LANG_LABEL[lang] ?? lang.toUpperCase();
+  if (lang === "ko") return <span className="text-text-sub">{label}</span>;
+  return (
+    <span className="inline-flex items-center px-2 h-5 rounded-full bg-info-bg text-info text-[10px] font-medium">
+      {label}
+    </span>
   );
 };
 
@@ -440,6 +507,7 @@ const SessionModal = ({
               </div>
               <div className="text-[11px] text-text-sub truncate">
                 {botName} · 시작 {formatRelative(session.started_at)}
+                {session.lang && ` · ${LANG_LABEL[session.lang] ?? session.lang}`}
               </div>
             </div>
           </div>
@@ -583,9 +651,10 @@ const SessionTableSkeleton = () => (
           <Skeleton className="w-5 h-5 rounded-full shrink-0" />
           <Skeleton className="h-3 w-20" />
         </div>
-        <Skeleton className="md:order-4 h-2.5 w-10 ml-auto md:mx-auto" />
+        <Skeleton className="md:order-5 h-2.5 w-10 ml-auto md:mx-auto" />
         <Skeleton className="col-span-2 md:col-span-1 md:order-2 h-[17px] w-full" />
-        <Skeleton className="col-span-2 md:col-span-1 md:order-3 h-2.5 w-8 md:mx-auto" />
+        <Skeleton className="col-span-2 md:col-span-1 md:order-3 h-2.5 w-10 md:mx-auto" />
+        <Skeleton className="col-span-2 md:col-span-1 md:order-4 h-2.5 w-8 md:mx-auto" />
       </div>
     ))}
   </>

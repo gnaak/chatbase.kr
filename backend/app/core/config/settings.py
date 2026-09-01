@@ -65,12 +65,25 @@ class RawEnv(BaseSettings):
     prod_app_url: str = "https://chatbase.kr"
 
     # MAIL
-    # 발송 인프라(SES/SMTP + SPF·DKIM·DMARC)가 아직 없다. TODO.md 2번이 끝나기
-    # 전까지 mail_enabled는 false로 두고, 발송 지점은 로그만 남긴다.
+    # `mail_enabled=true` + smtp_host 가 있어야 실제로 나간다. 둘 중 하나라도
+    # 비면 `MailService`가 로그만 남기고 False를 돌려준다(호출자는 안 깨진다).
     mail_enabled: bool = False
     mail_from: str = "chatbase.kr <hello@chatbase.kr>"
     #: 신규 문의 알림을 받을 운영자 주소.
     mail_admin_to: str = "hello@chatbase.kr"
+
+    # SMTP — **제공자를 가리지 않는다.** SES SMTP · Resend · Brevo 어디든
+    # host/port/user/password 네 개만 바꾸면 갈아탈 수 있다. 그래서 SES v2 API가
+    # 아니라 SMTP로 붙였다.
+    #
+    # ⚠️ `mail_from`의 도메인이 SMTP 제공자에서 **인증(verify)된 도메인**과 같아야
+    # 한다. 다르면 메일은 나가는데 전부 스팸함으로 간다 — 그리고 그건 로그에
+    # 성공으로 찍혀서 원인을 찾기 어렵다.
+    smtp_host: Optional[str] = None
+    #: 587=STARTTLS, 465=SSL. 코드가 이 값으로 분기한다.
+    smtp_port: int = 587
+    smtp_user: Optional[str] = None
+    smtp_password: Optional[str] = None
 
     model_config = SettingsConfigDict(
         env_file=os.path.join(
@@ -201,6 +214,22 @@ class Settings:
     @property
     def mail_admin_to(self) -> str:
         return self.raw.mail_admin_to
+
+    @property
+    def smtp_host(self) -> Optional[str]:
+        return self.raw.smtp_host
+
+    @property
+    def smtp_port(self) -> int:
+        return self.raw.smtp_port
+
+    @property
+    def smtp_user(self) -> Optional[str]:
+        return self.raw.smtp_user
+
+    @property
+    def smtp_password(self) -> Optional[str]:
+        return self.raw.smtp_password
 
 
 # 전역 인스턴스

@@ -192,6 +192,14 @@ def _should_enable_web_search(bot) -> bool:
 VISITOR_LLM_ERROR_MESSAGE = "일시적인 오류가 발생했어요. 잠시 후 다시 물어봐 주세요."
 
 
+#: 키가 없을 때 **주인 대시보드**에 남길 문구. 방문자는 이걸 보지 않는다.
+#: 종류는 `LlmErrorKind.AUTH` — "키를 다시 등록해야 한다"는 뜻이라 딱 맞는다.
+#:
+#: `bot.active` 를 시스템이 끄는 방식은 쓰지 않는다. 주인이 켠 걸 우리가 끄면
+#: 주인은 "왜 꺼졌지"만 보고 다시 켜고, 또 꺼진다. 호출 시점에 판정한다.
+NO_KEY_OWNER_MESSAGE = "API 키가 등록되지 않아 답변할 수 없습니다."
+
+
 def _format_llm_error(provider_value: str, exc: Exception) -> str:
     """LLM SDK 에러를 **봇 주인이 보는 화면용**으로 가공. 원문을 그대로 포함한다.
 
@@ -254,128 +262,6 @@ class ChatService:
         self.api_key_service = api_key_service
         self.llm_service = llm_service
         self.usage_service = usage_service
-
-    # ── 임베드 위젯에서 호출 (인증 없음) ──────────
-    async def send_message(self, request):
-        """body: {"bot_id", "visitor_id", "content", "session_id"?}
-
-        반환: {"session_id", "user_message", "bot_message"}
-        """
-        body = await request.json()
-        bot_slug = (body.get("bot_id") or "").strip()
-        visitor_id = (body.get("visitor_id") or "").strip()
-        lang = (body.get("lang") or "").strip().lower()
-        content = (body.get("content") or "").strip()
-        session_id = body.get("session_id")
-        model_override = body.get("model")
-
-        if not (bot_slug and visitor_id and content):
-            fail("bot_id, visitor_id, content가 필요합니다.", "BAD_REQUEST")
-
-        bot = await self.bot_repo.find_by_slug(bot_slug)
-        if not bot or not bot.active:
-            fail("이 챗봇은 현재 사용할 수 없습니다.", "BOT_UNAVAILABLE", 404)
-
-        # 실제 방문자 대화 경로 — 월 대화 한도 확인. 프리뷰 경로에는 걸지 않는다.
-        if self.usage_service:
-            await self.usage_service.ensure_can_send(bot)
-
-        effective_model = _resolve_effective_model(bot.model, model_override)
-
-        # 1) 세션 확보
-        if session_id:
-            session = await self.chat_repo.find_session(int(session_id))
-            # 세션 소유 방문자까지 검증 — bot_id만 보면 다른 방문자 세션 탈취 가능(IDOR)
-            if (
-                not session
-                or session.bot_id != bot.id
-                or session.visitor_id != visitor_id
-            ):
-                fail("세션이 유효하지 않습니다.", "INVALID_SESSION", 400)
-        else:
-            session = ChatSession(
-                bot_id=bot.id,
-                visitor_id=visitor_id,
-            )
-            await self.chat_repo.add_session(session)
-
-        # 2) 사용자 메시지 저장
-        user_msg = ChatMessage(
-            session_id=session.id,
-            role=MessageRole.USER,
-            content=content,
-        )
-        await self.chat_repo.add_message(user_msg)
-
-        # 3) BYOK 키 — 없으면 빈 문자열로 호출 시도. SDK가 raise하면 그 메시지가 답변.
-        provider = resolve_provider(effective_model)
-        api_key = await self.api_key_service.get_decrypted_key(bot.user_id, provider) or ""
-
-        # 4) LLM 호출 — 학습 데이터를 시스템 프롬프트에 합성
-        history = await self.chat_repo.find_messages(session.id)
-        api_messages = [
-            {
-                "role": "user" if m.role == MessageRole.USER else "assistant",
-                "content": m.content,
-            }
-            for m in history
-        ]
-
-        # vector_store는 OpenAI 모델일 때만 의미 있음
-        vec_id = (
-            bot.vector_store_id
-            if provider == Provider.OPENAI
-            else None
-        )
-        system = _build_system_prompt(
-            bot,
-            vec_id,
-            await _multilingual_allowed(bot, self.usage_service),
-            lang,
-        )
-        try:
-            answer = await self.llm_service.chat(
-                model=effective_model,
-                system_prompt=system,
-                messages=api_messages,
-                api_key=api_key,
-                vector_store_id=vec_id,
-                enable_web_search=_should_enable_web_search(bot),
-            )
-        except Exception:
-            # 방문자에게는 중립 문구만. 원문은 로그로.
-            logger.exception(
-                "위젯 LLM 호출 실패 bot=%s user=%s provider=%s",
-                bot.slug, bot.user_id, provider.value,
-            )
-            answer = VISITOR_LLM_ERROR_MESSAGE
-
-        if not answer.strip():
-            answer = bot.fallback or "죄송해요, 질문을 이해하지 못했어요. 다시 한번 말씀해 주시겠어요?"
-
-        # 5) 봇 메시지 저장 + 세션 갱신
-        bot_msg = ChatMessage(
-            session_id=session.id,
-            role=MessageRole.BOT,
-            content=answer,
-        )
-        await self.chat_repo.add_message(bot_msg)
-
-        session.last_message_at = now_kst()
-        session.lang = lang or session.lang
-        if self.usage_service:
-            await self.usage_service.record_message(bot)
-        await self.chat_repo.db.commit()
-        await self.chat_repo.db.refresh(user_msg)
-        await self.chat_repo.db.refresh(bot_msg)
-
-        return success(
-            data={
-                "session_id": session.id,
-                "user_message": _msg_to_dict(user_msg),
-                "bot_message": _msg_to_dict(bot_msg),
-            }
-        )
 
     # ── 임베드 위젯 streaming (SSE) ────────────
     async def stream_message(self, body: dict) -> AsyncGenerator[str, None]:
@@ -462,7 +348,7 @@ class ChatService:
 
                 effective_model = _resolve_effective_model(bot.model, model_override)
                 provider = resolve_provider(effective_model)
-                # 키 없어도 빈 문자열로 호출 시도 — SDK 에러를 답변으로 노출
+                # 키가 없으면 LLM을 부르지 않고 주인 fallback 으로 끝낸다.
                 api_key = (
                     await api_key_service.get_decrypted_key(bot.user_id, provider)
                 ) or ""
@@ -490,39 +376,61 @@ class ChatService:
                 ]
 
                 full_text = ""
-                logger.debug("[stream] LLM 호출 시작 model=%s", effective_model)
-                try:
-                    async for chunk in self.llm_service.chat_stream(
-                        model=effective_model,
-                        system_prompt=system,
-                        messages=api_messages,
-                        api_key=api_key,
-                        vector_store_id=vec_id,
-                        enable_web_search=_should_enable_web_search(bot),
-                    ):
-                        if not full_text:
-                            logger.debug("[stream] 첫 청크 수신")
-                        full_text += chunk
-                        yield _sse("chunk", {"text": chunk})
-                except Exception as exc:
-                    logger.exception(
-                        "위젯 스트리밍 LLM 실패 bot=%s user=%s provider=%s chars=%d",
-                        bot.slug, bot.user_id, provider.value, len(full_text),
+
+                if not api_key:
+                    # 키가 없으면 스트림을 열지 않는다. 빈 키로 열면 SDK가 raise 하고
+                    # 그 결과가 방문자 화면에 붙는다 — BYOK 라 키 없는 봇이 기본
+                    # 상태인데, 그 방문자가 본 게 '일시적인 오류'였다.
+                    logger.info(
+                        "스트리밍 키 없음 — fallback 응답 bot=%s user=%s provider=%s",
+                        bot.slug, bot.user_id, provider.value,
                     )
-                    # 방문자는 중립 문구만 받으므로, 주인이 알 수 있게 DB에도 남긴다.
-                    # 아래 db.commit()에 같이 실린다.
+                    # 방문자는 중립 문구를 받으니 주인이 알 수 있게 DB에 남긴다.
+                    # 아래 db.commit() 에 같이 실린다.
                     await LlmErrorRepository(db).record(
                         bot_id=bot.id,
                         channel=LlmErrorChannel.WIDGET,
-                        kind=LlmErrorKind(classify_llm_error(exc)),
+                        kind=LlmErrorKind.AUTH,
                         provider=provider.value,
                         model=effective_model,
-                        message=str(exc),
+                        message=NO_KEY_OWNER_MESSAGE,
                     )
-                    # 이미 일부가 나갔으면 이어서 붙이고, 아직이면 이 문구만 나간다.
-                    err_msg = VISITOR_LLM_ERROR_MESSAGE
-                    full_text = (full_text or "") + err_msg
-                    yield _sse("chunk", {"text": err_msg})
+                    full_text = visitor_unavailable_message(bot)
+                    yield _sse("chunk", {"text": full_text})
+                else:
+                    logger.debug("[stream] LLM 호출 시작 model=%s", effective_model)
+                    try:
+                        async for chunk in self.llm_service.chat_stream(
+                            model=effective_model,
+                            system_prompt=system,
+                            messages=api_messages,
+                            api_key=api_key,
+                            vector_store_id=vec_id,
+                            enable_web_search=_should_enable_web_search(bot),
+                        ):
+                            if not full_text:
+                                logger.debug("[stream] 첫 청크 수신")
+                            full_text += chunk
+                            yield _sse("chunk", {"text": chunk})
+                    except Exception as exc:
+                        logger.exception(
+                            "위젯 스트리밍 LLM 실패 bot=%s user=%s provider=%s chars=%d",
+                            bot.slug, bot.user_id, provider.value, len(full_text),
+                        )
+                        # 방문자는 중립 문구만 받으므로, 주인이 알 수 있게 DB에도 남긴다.
+                        # 아래 db.commit()에 같이 실린다.
+                        await LlmErrorRepository(db).record(
+                            bot_id=bot.id,
+                            channel=LlmErrorChannel.WIDGET,
+                            kind=LlmErrorKind(classify_llm_error(exc)),
+                            provider=provider.value,
+                            model=effective_model,
+                            message=str(exc),
+                        )
+                        # 이미 일부가 나갔으면 이어서 붙이고, 아직이면 이 문구만 나간다.
+                        err_msg = VISITOR_LLM_ERROR_MESSAGE
+                        full_text = (full_text or "") + err_msg
+                        yield _sse("chunk", {"text": err_msg})
 
                 if not full_text.strip():
                     full_text = bot.fallback or "죄송합니다. 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요."

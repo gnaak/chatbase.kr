@@ -87,6 +87,16 @@ export interface Plan {
   features: PlanFeature[];
   limits: PlanLimits;
   cta: string;
+  /**
+   * CTA 링크. **`/dashboard` 가 아니라 `/signup` 이다.**
+   *
+   * `/dashboard` 는 `ProtectedRoute` 라서 비로그인이면 `/login` 으로 튕긴다.
+   * 처음 온 사람이 "무료로 시작"을 눌렀는데 가입이 아니라 로그인 폼을 보는 게
+   * 랜딩에서 가장 비싼 실수였다.
+   *
+   * 이미 로그인한 사람이 눌러도 문제없다 — `/signup` 은 `PublicOnlyRoute` 라
+   * `/dashboard` 로 되돌려 보낸다. 그래서 분기를 따로 만들지 않는다.
+   */
   href: string;
   featured?: boolean;
 }
@@ -115,7 +125,7 @@ export const PLANS: Plan[] = [
       multilingual: false,
     },
     cta: "무료로 시작",
-    href: "/dashboard",
+    href: "/signup",
   },
   {
     name: "STANDARD",
@@ -139,7 +149,7 @@ export const PLANS: Plan[] = [
       multilingual: false,
     },
     cta: "시작하기",
-    href: "/dashboard",
+    href: "/signup",
   },
   {
     name: "PREMIUM",
@@ -162,7 +172,7 @@ export const PLANS: Plan[] = [
       multilingual: false,
     },
     cta: "시작하기",
-    href: "/dashboard",
+    href: "/signup",
     featured: true,
   },
   {
@@ -187,7 +197,7 @@ export const PLANS: Plan[] = [
       multilingual: true,
     },
     cta: "시작하기",
-    href: "/dashboard",
+    href: "/signup",
   },
 ];
 

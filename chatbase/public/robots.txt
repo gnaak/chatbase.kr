@@ -102,7 +102,6 @@ Disallow: /admin
 Disallow: /api/
 Disallow: /google/login
 Disallow: /kakao/login
-Disallow: /test
 
 # 임베드 페이지는 검색엔진에 단독 노출될 필요 없음
 Disallow: /embed/

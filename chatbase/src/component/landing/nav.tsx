@@ -63,7 +63,7 @@ const Nav = () => {
               >
                 로그인
               </Link>
-              <Link to="/dashboard">
+              <Link to="/signup">
                 <Button size="sm" pill>
                   무료로 시작
                 </Button>

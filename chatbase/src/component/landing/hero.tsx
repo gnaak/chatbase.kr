@@ -36,7 +36,7 @@ const Hero = () => {
             </p>
 
             <div className="mt-10 flex flex-col sm:flex-row items-start sm:items-center gap-3">
-              <Link to="/dashboard">
+              <Link to="/signup">
                 <Button
                   size="lg"
                   pill

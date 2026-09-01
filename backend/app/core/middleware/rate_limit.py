@@ -25,7 +25,7 @@ class RateLimitRule:
 RATE_LIMIT_RULES: dict[str, RateLimitRule] = {
     # 방문자가 봇과 나누는 대화. 사람이 1분에 20번 넘게 묻지 않는다.
     "chat": RateLimitRule(
-        paths=frozenset({"/api/chat/message", "/api/chat/stream"}),
+        paths=frozenset({"/api/chat/stream"}),
         max_requests=20,
         window_seconds=60,
     ),

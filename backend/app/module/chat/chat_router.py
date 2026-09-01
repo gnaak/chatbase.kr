@@ -8,15 +8,6 @@ from app.core.provider.http.service import ServiceProvider
 router = APIRouter()
 
 
-# ── 임베드 위젯 (인증 없음) ─────────────────────
-@router.post("/message")
-@with_provider
-@without_login
-async def send_message(p: ServiceProvider):
-    """body: {bot_id, visitor_id, content, session_id?}"""
-    return await p.chat_service.send_message(p.request)
-
-
 # ── 대시보드 미리보기 (로그인 필요, 봇 소유자만, DB 저장 X) ──
 @router.post("/preview/stream")
 @with_provider

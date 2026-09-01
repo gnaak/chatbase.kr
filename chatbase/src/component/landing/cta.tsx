@@ -14,7 +14,7 @@ const CTA = () => {
             계정 만드는 데 30초, 챗봇 만드는 데 30초. 카드 등록은 필요 없습니다.
           </p>
           <div className="mt-10">
-            <Link to="/dashboard">
+            <Link to="/signup">
               <Button
                 size="lg"
                 pill

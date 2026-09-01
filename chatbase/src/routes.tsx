@@ -1,7 +1,6 @@
 import { Route } from "react-router-dom";
 import publicRoutes from "@/publicRoutes";
 import Guide from "@/container/guide";
-import Test from "@/container/test";
 import EmbedChat from "@/container/embed";
 import DashboardLayout from "@/container/dashboard/layout";
 import DashboardHome from "@/container/dashboard/home";
@@ -37,7 +36,6 @@ const chatbaseRoutes = () => (
     {publicRoutes()}
 
     <Route path="/embed/:botId" element={<EmbedChat />} />
-    <Route path="/test" element={<Test />} />
 
     {/* 로그인 필수: 비로그인 시 /login으로 */}
     <Route element={<ProtectedRoute />}>

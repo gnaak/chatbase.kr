@@ -36,6 +36,7 @@ from app.module.llm_error.llm_error import LlmErrorChannel, LlmErrorKind
 from app.module.usage.usage_service import visitor_unavailable_message
 from app.module.chat.chat_service import (
     _build_system_prompt,
+    NO_KEY_OWNER_MESSAGE,
     VISITOR_LLM_ERROR_MESSAGE,
     _should_enable_web_search,
 )
@@ -481,6 +482,22 @@ class KakaoSkillService:
     ) -> str:
         provider = resolve_provider(bot.model)
         api_key = await self.api_key_service.get_decrypted_key(bot.user_id, provider) or ""
+
+        if not api_key:
+            # 키가 없으면 LLM을 아예 부르지 않는다. 위젯 동기·스트리밍과 같은 판정이다.
+            #
+            # 빈 키로 부르면 SDK가 raise 하고, 그 결과로 카카오 상대에게
+            # "일시적인 오류"가 간다. BYOK 라 키 없는 봇이 기본 상태인데
+            # 그게 일시적이지도 않고, 주인이 써둔 fallback 도 안 쓰인다.
+            logger.info(
+                "kakao 키 없음 — fallback 응답 bot=%s user=%s provider=%s",
+                bot.slug, bot.user_id, provider.value,
+            )
+            await self._record_error(
+                bot, LlmErrorKind.AUTH, provider.value,
+                NO_KEY_OWNER_MESSAGE,
+            )
+            return visitor_unavailable_message(bot)
 
         history = await self.chat_repo.find_messages(session.id)
         api_messages = [

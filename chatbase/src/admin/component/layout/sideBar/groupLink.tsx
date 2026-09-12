@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ChevronDownIcon } from "lucide-react";
-import { GroupProps } from "@/admin/types/sidebar";
+import { type GroupProps } from "@/admin/types/sidebar";
 import SubLink from "./subLink";
 
 const GroupLink = ({ item }: GroupProps) => {

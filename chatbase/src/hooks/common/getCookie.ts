@@ -1,4 +1,4 @@
-import { UserInfo } from "@/types/user";
+import { type UserInfo } from "@/types/user";
 
 export type AuthType = "user" | "admin";
 

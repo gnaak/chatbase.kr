@@ -16,9 +16,9 @@ import { useToast } from "@/hooks/common/useToast";
 import {
   CATEGORY_LABEL,
   CATEGORY_OPTIONS,
-  Inquiry,
-  InquiryCategory,
-  InquiryListItem,
+  type Inquiry,
+  type InquiryCategory,
+  type InquiryListItem,
   STATUS_LABEL,
 } from "@/types/inquiry";
 

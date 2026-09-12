@@ -1,4 +1,4 @@
-import { ChangeEvent, DragEvent, useRef, useState } from "react";
+import { type ChangeEvent, type DragEvent, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Upload, FileText, Trash2, X } from "lucide-react";
 import ConfirmModal from "@/ui/confirmModal";

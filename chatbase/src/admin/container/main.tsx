@@ -279,10 +279,6 @@ const AdminMain = () => {
       .slice(0, 5);
   }, [subscriptions]);
 
-  const mismatchCount = (subscriptions ?? []).filter(
-    (s) => s.plan_mismatch,
-  ).length;
-
   /** 방치하면 매출이나 온보딩이 새는 항목들. 0이면 "정상"으로 접어둔다. */
   const alerts = [
     {
@@ -294,15 +290,11 @@ const AdminMain = () => {
       tone: "text-point-red",
       to: "/admin/payments",
     },
-    {
-      key: "mismatch",
-      icon: <TriangleAlert className="w-3.5 h-3.5" />,
-      label: "플랜 불일치",
-      hint: "구독과 실제 권한이 다름",
-      count: mismatchCount,
-      tone: "text-point-red",
-      to: "/admin/payments",
-    },
+    // "플랜 불일치" 카드가 있던 자리. `plan_mismatch` 는 개념째 지웠다
+    // (PROGRESS.md 참고) — 게이팅이 구독 행을 직접 읽게 되면서 받은 돈과
+    // 열어준 권한이 어긋나는 것이 **구조적으로 불가능**해졌기 때문이다.
+    // 백엔드·payments.tsx·billing.ts 에서는 지웠는데 여기만 남아서, 늘 0인
+    // 알림 칸을 하나 차지하고 있었다.
     {
       key: "failed",
       icon: <CreditCard className="w-3.5 h-3.5" />,

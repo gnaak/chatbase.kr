@@ -3,7 +3,7 @@ import {
   useCallback,
   useLayoutEffect,
   useState,
-  ReactNode,
+  type ReactNode,
 } from "react";
 
 export type Theme = "light" | "dark" | "system";

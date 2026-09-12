@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { usePost } from "@/hooks/common/useAPI";
 import { parseUserInfo } from "@/hooks/common/getCookie";
 import { useAuth } from "@/hooks/common/useAuth";
-import { LoginRequest, LoginResponse } from "@/admin/types/login";
+import { type LoginRequest, type LoginResponse } from "@/admin/types/login";
 import LoginForm from "@/admin/component/layout/login/loginForm";
 import LoginErrorModal from "@/admin/component/modal/loginErrorModal";
 

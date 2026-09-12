@@ -1,5 +1,5 @@
 import { useGet } from "@/hooks/common/useAPI";
-import { UserDetail } from "@/types/user";
+import { type UserDetail } from "@/types/user";
 import { Outlet } from "react-router-dom";
 import { useAuth } from "@/hooks/common/useAuth";
 import LoadingScreen from "@/component/auth/loadingScreen";

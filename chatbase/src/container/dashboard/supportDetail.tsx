@@ -11,7 +11,7 @@ import { useGet, usePost } from "@/hooks/common/useAPI";
 import { useToast } from "@/hooks/common/useToast";
 import {
   CATEGORY_LABEL,
-  InquiryThread as InquiryThreadDto,
+  type InquiryThread as InquiryThreadDto,
   STATUS_LABEL,
 } from "@/types/inquiry";
 

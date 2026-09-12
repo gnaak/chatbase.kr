@@ -12,7 +12,7 @@ import {
 import Topbar from "@/component/layout/topbar";
 import Card from "@/ui/card";
 import Button from "@/ui/button";
-import Select, { SelectOption } from "@/ui/select";
+import Select, { type SelectOption } from "@/ui/select";
 import Skeleton from "@/ui/skeleton";
 import LineChart from "@/ui/lineChart";
 import { useGet, usePost } from "@/hooks/common/useAPI";

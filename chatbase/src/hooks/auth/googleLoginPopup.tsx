@@ -39,7 +39,9 @@ const GoogleLoginPopup = ({
     const left = window.screenX + (window.innerWidth - width) / 2;
     const top = window.screenY + (window.innerHeight - height) / 2;
 
-    const popup = window.open(
+    // 반환된 핸들은 안 쓴다. 팝업과의 통신은 postMessage 로만 하고
+    // (아래 handleMessage), 창을 닫는 것도 팝업 자신이 한다.
+    window.open(
       authUrl,
       "googleLoginPopup",
       `width=${width},height=${height},left=${left},top=${top},scrollbars=yes`,

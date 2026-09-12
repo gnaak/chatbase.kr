@@ -7,7 +7,7 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
-import Table, { Column } from "@/admin/component/ui/table/table";
+import Table, { type Column } from "@/admin/component/ui/table/table";
 import Pagination from "@/admin/component/ui/pagination";
 import StatCard from "@/admin/component/ui/statCard";
 import { useGet } from "@/hooks/common/useAPI";

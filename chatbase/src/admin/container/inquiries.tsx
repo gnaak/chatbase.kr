@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { MailIcon, PhoneIcon, SearchIcon } from "lucide-react";
 
-import Table, { Column } from "@/admin/component/ui/table/table";
+import Table, { type Column } from "@/admin/component/ui/table/table";
 import Pagination from "@/admin/component/ui/pagination";
 import FormModal from "@/admin/component/ui/feedback/formModal";
 import InputBox from "@/admin/component/ui/form/inputbox";
@@ -15,12 +15,12 @@ import InquiryThread from "@/admin/component/inquiry/thread";
 import { useGet, usePatch, usePost } from "@/hooks/common/useAPI";
 import { useToast } from "@/hooks/common/useToast";
 import {
-  AdminInquiryList,
+  type AdminInquiryList,
   CATEGORY_LABEL,
-  InquiryListItem,
-  InquiryReplyResult,
-  InquiryStatus,
-  InquiryThread as InquiryThreadDto,
+  type InquiryListItem,
+  type InquiryReplyResult,
+  type InquiryStatus,
+  type InquiryThread as InquiryThreadDto,
   STATUS_CLASS,
   STATUS_LABEL,
 } from "@/types/inquiry";

@@ -1,6 +1,6 @@
 import { Outlet } from "react-router-dom";
 import AdminSidebar from "@/admin/component/layout/sideBar/sideBar";
-import { AdminMenuItem } from "@/admin/types/sidebar";
+import { type AdminMenuItem } from "@/admin/types/sidebar";
 import {
   ChartColumnIcon,
   UsersIcon,

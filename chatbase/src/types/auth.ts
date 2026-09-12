@@ -1,4 +1,4 @@
-import { UserInfo } from "./user";
+import { type UserInfo } from "./user";
 
 export type AuthContextType = {
   user: UserInfo | null;

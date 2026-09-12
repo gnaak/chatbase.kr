@@ -1,4 +1,4 @@
-import { ChangeEvent, useRef } from "react";
+import { type ChangeEvent, useRef } from "react";
 import { ImageIcon, Upload, X } from "lucide-react";
 
 interface LogoUploadProps {

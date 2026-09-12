@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { SubLinkProps } from "@/admin/types/sidebar";
+import { type SubLinkProps } from "@/admin/types/sidebar";
 
 const SubLink = ({ to, label, icon: Icon, end = false }: SubLinkProps) => {
   return (

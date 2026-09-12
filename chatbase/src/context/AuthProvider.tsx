@@ -1,9 +1,9 @@
 // src/context/AuthProvider.tsx
 
-import { useEffect, useState, ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { parseUserInfo } from "@/hooks/common/getCookie";
 import { AuthContext } from "@/hooks/common/useAuth";
-import { UserInfo } from "@/types/user";
+import { type UserInfo } from "@/types/user";
 
 /**
  * 쿠키에 저장된 사용자 정보를 읽어서

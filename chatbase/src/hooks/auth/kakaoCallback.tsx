@@ -5,9 +5,15 @@ import { readUtm } from "../common/utm";
 import { parseUserInfo } from "../common/getCookie";
 import { useAuth } from "../common/useAuth";
 
+/** `usePost` 가 던지는 모양. useAPI.ts 의 `throw { status, message }` 와 짝이다. */
+interface ApiError {
+  status?: number;
+  message?: string;
+}
+
 interface KakaoProps {
-  onSuccess?: (data) => void;
-  onError?: (error) => void;
+  onSuccess?: (data: unknown) => void;
+  onError?: (error: ApiError) => void;
   autoRun?: boolean;
   redirectURL: string;
   apiURL: string;
@@ -62,7 +68,7 @@ const KakaoCallBack = ({
       onSuccess?.(data);
       navigate(redirectURL, { replace: true });
     } catch (err) {
-      onError?.(err);
+      onError?.(err as ApiError);
     }
   };
 

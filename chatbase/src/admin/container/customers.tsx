@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import Table, { Column } from "@/admin/component/ui/table/table";
+import Table, { type Column } from "@/admin/component/ui/table/table";
 import { useGet } from "@/hooks/common/useAPI";
 
 interface UserDto {

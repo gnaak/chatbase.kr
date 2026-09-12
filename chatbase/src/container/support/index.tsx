@@ -15,8 +15,8 @@ import { useToast } from "@/hooks/common/useToast";
 import {
   CATEGORY_LABEL,
   CATEGORY_OPTIONS,
-  Inquiry,
-  InquiryCategory,
+  type Inquiry,
+  type InquiryCategory,
 } from "@/types/inquiry";
 
 const NAME_MAX = 50;

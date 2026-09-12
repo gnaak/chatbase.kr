@@ -1,4 +1,4 @@
-import { InquiryMessage } from "@/types/inquiry";
+import { type InquiryMessage } from "@/types/inquiry";
 
 interface InquiryThreadProps {
   messages: InquiryMessage[];

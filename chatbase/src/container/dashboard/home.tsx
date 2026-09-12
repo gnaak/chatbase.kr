@@ -4,7 +4,7 @@ import { Plus, Bot, KeyRound } from "lucide-react";
 import Topbar from "@/component/layout/topbar";
 import Button from "@/ui/button";
 import ConfirmModal from "@/ui/confirmModal";
-import BotCard, { BotCardData } from "@/component/bot/botCard";
+import BotCard, { type BotCardData } from "@/component/bot/botCard";
 import Card from "@/ui/card";
 import Skeleton from "@/ui/skeleton";
 import { useGet } from "@/hooks/common/useAPI";

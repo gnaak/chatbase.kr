@@ -4,7 +4,7 @@ import { LogOut } from "lucide-react";
 import GroupLink from "./groupLink";
 import SubLink from "./subLink";
 import { usePost } from "@/hooks/common/useAPI";
-import { AdminSidebarProps } from "@/admin/types/sidebar";
+import { type AdminSidebarProps } from "@/admin/types/sidebar";
 import { useAuth } from "@/hooks/common/useAuth";
 import ConfirmModal from "@/admin/component/ui/feedback/confirmModal";
 

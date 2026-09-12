@@ -1,7 +1,7 @@
 import {
-  ButtonHTMLAttributes,
-  ReactNode,
-  ReactElement,
+  type ButtonHTMLAttributes,
+  type ReactNode,
+  type ReactElement,
   cloneElement,
   isValidElement,
 } from "react";

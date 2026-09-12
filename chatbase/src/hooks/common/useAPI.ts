@@ -102,7 +102,18 @@ export const useGet = <T>(
         const ok = await refreshToken();
         if (!ok) {
           window.location.href = fallback;
-          return;
+          // 여기서 `return;`(undefined) 하면 안 된다.
+          //
+          // queryFn 의 반환 타입이 `T | undefined` 가 되어 useQuery<T> 의 제네릭
+          // 추론이 통째로 깨진다. 그러면 **앱 전체의** `data` 가
+          // `never[] | NonNullable<NoInfer<TQueryFnData>>` 로 떨어져서
+          // `data.map`, `data.plan` 같은 게 전부 타입 에러가 되고, 타입체크가
+          // 노이즈에 묻혀 무력화된다(실측 348건이 전부 이 한 줄이었다).
+          //
+          // 동작상으로도 throw 가 맞다. 이미 리다이렉트가 걸렸으므로 이 쿼리는
+          // 성공한 게 아니다. undefined 로 resolve 하면 화면이 떠나기 직전에
+          // "데이터 없음" 상태를 한 번 그린다.
+          throw new Error("UNAUTHORIZED");
         }
         response = await makeRequest();
       }
@@ -361,7 +372,9 @@ export const useChatStream = <TRequest extends object>(url: string) => {
         }
       }
     } catch (err) {
-      if (err.name === "AbortError") {
+      // abort 는 정상 흐름이다(사용자가 중단했거나 컴포넌트가 언마운트됐다).
+      // 그 외 에러만 올려보낸다.
+      if (err instanceof Error && err.name === "AbortError") {
         console.log("Chat stream aborted");
       } else {
         throw err;

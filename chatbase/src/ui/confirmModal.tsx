@@ -1,4 +1,4 @@
-import { ReactNode, useEffect } from "react";
+import { type ReactNode, useEffect } from "react";
 import Button from "@/ui/button";
 
 type Variant = "default" | "danger";

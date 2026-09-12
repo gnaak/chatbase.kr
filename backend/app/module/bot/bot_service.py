@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 from app.module.payment.plan_lookup import limits_of
 from app.core.utils.response import fail, success
 from app.module.api_key.api_key import Provider
-from app.module.api_key.api_key_service import ApiKeyService
+from app.module.api_key.api_key_service import ApiKeyService, has_usable_key
 from app.module.bot.bot import Bot
 from app.module.bot.bot_file import BotFile
 from app.module.bot.bot_translation import TRANSLATION_LANGS
@@ -337,6 +337,49 @@ class BotService:
             fail("권한이 없습니다.", "FORBIDDEN", 403)
         return bot
 
+    async def _ensure_file_learning_allowed(
+        self, user_id: int, training_type, model
+    ) -> None:
+        """파일 학습을 **켤 수 있는 상태인가.** 플랜과 키를 둘 다 본다.
+
+        여태 이 검사는 `upload_files` 에만 있었다. 그래서 `training_type="file"`
+        로 **저장은 되고** 업로드만 막히는 상태가 만들어졌다. 그 봇은
+        `_uses_file_learning` 이 True 라서 벡터스토어 없이 도는데, 그러면
+        `_build_system_prompt` 의 `has_knowledge` 가 False 가 되어 **자료 한정
+        규칙이 통째로 빠진다.** 호텔 봇이 체크인 시간을 지어낸다. 저장 시점에
+        막아야 하는 이유다.
+
+        OpenAI 모델일 때만 본다. 다른 provider 는 애초에 벡터스토어를 안 쓰고
+        (`upload_files` 가 `RAG_PROVIDER_UNSUPPORTED` 로 막는다), 본인 키로만
+        도니까 여기서 걸 이유가 없다.
+        """
+        if _normalize_training_type(training_type) != "file":
+            return
+        if resolve_provider(model) != Provider.OPENAI:
+            return
+
+        # 1) 플랜. FREE 는 파일 학습이 없다.
+        limits = await self._plan_limits(user_id)
+        if not limits.file_learning:
+            fail(
+                "파일 학습은 유료 플랜에서 이용할 수 있습니다.",
+                "PLAN_UPGRADE_REQUIRED",
+                403,
+            )
+
+        # 2) 키. 제공 키로는 안 된다 — 벡터스토어는 **만든 계정에 귀속**돼서
+        #    주인 키로 만든 `vs_...` 를 우리 키로 부르면 그 계정에 없는 ID라 404다.
+        #    그래서 `resolve_llm_route` 도 이 조합을 거절한다.
+        if await self.api_key_service.get_decrypted_key(user_id, Provider.OPENAI):
+            return
+        fail(
+            "파일 학습은 내 OpenAI 키가 필요합니다. "
+            "무료 제공 키로는 업로드한 파일을 읽을 수 없어요. "
+            "API 키 화면에서 내 키를 등록해 주세요.",
+            "OPENAI_KEY_MISSING",
+            424,
+        )
+
     async def _require_openai_key(self, user_id: int) -> str:
         api_key = await self.api_key_service.get_decrypted_key(user_id, Provider.OPENAI)
         if not api_key:
@@ -444,15 +487,20 @@ class BotService:
         await self._ensure_bot_slot(user_id)
         await self._ensure_multilingual_allowed(user_id, body.get("multilingual"))
 
-        # API 키가 등록되지 않은 provider의 모델로는 챗봇을 만들 수 없음
+        # 호출할 수단이 없는 모델로는 챗봇을 만들 수 없음.
+        # 본인 키가 없어도 **우리가 제공하는 키**가 있으면 만들 수 있다 —
+        # 여기서 본인 키만 보면 가입 직후 첫 봇부터 막힌다.
         provider = resolve_provider(model)
-        api_key = await self.api_key_service.get_decrypted_key(user_id, provider)
-        if not api_key:
+        if not await has_usable_key(self.api_key_service, user_id, provider):
             fail(
                 "챗봇을 만들려면 먼저 해당 모델의 API 키를 등록해야 합니다.",
                 "API_KEY_REQUIRED",
                 424,
             )
+
+        await self._ensure_file_learning_allowed(
+            user_id, body.get("training_type"), model
+        )
 
         for image_field in ("logo", "widget_icon"):
             _validate_image_field(image_field, body.get(image_field))
@@ -493,6 +541,13 @@ class BotService:
         was_active = bool(bot.active)
         if "multilingual" in body:
             await self._ensure_multilingual_allowed(user_id, body["multilingual"])
+        # 둘 중 하나만 바뀌어도 조합이 달라지므로 현재 값과 합쳐서 본다.
+        if "training_type" in body or "model" in body:
+            await self._ensure_file_learning_allowed(
+                user_id,
+                body.get("training_type", bot.training_type),
+                body.get("model", bot.model),
+            )
         for field in (
             "name",
             "logo",

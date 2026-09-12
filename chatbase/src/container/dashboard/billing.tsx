@@ -422,9 +422,12 @@ const Billing = () => {
                   <span className="font-semibold tracking-display text-[18px]">
                     {used.toLocaleString()}
                   </span>
+                  {/* 이제 무제한인 플랜은 없다. limit 이 null 이면 **내 키를 쓰는
+                      중**이라 서버가 한도를 안 건 것이다. 그냥 "제한 없음"이라고만
+                      하면 왜 그런지 몰라서, 키를 지우고 나서 갑자기 막히게 된다. */}
                   <span className="text-text-sub">
                     {limit === null
-                      ? " 건 · 제한 없음"
+                      ? " 건 · 내 키 사용 중이라 제한 없음"
                       : ` / ${limit.toLocaleString()}건`}
                   </span>
                 </span>
@@ -448,14 +451,21 @@ const Billing = () => {
                     style={{ width: `${ratio}%` }}
                   />
                 </div>
+                {/* 예전에는 "플랜을 올리면 제한 없이"라고 썼는데, 이제 유료
+                    플랜에도 한도가 있어서(10,000 / 25,000 / 50,000) 거짓말이
+                    된다. 대신 실제로 한도가 풀리는 길 — 내 키 등록 — 을 먼저
+                    안내한다. 그게 우리 원가도 같이 없애는 길이다. */}
                 {usage?.exceeded ? (
                   <p className="mt-2.5 text-[12px] text-text-sub leading-relaxed">
-                    한도를 모두 사용했습니다. 플랜을 올리면 제한 없이 이용할 수
-                    있습니다.
+                    한도를 모두 사용했습니다. API 키 화면에서{" "}
+                    <span className="text-text-main">내 OpenAI 키</span>를
+                    등록하면 건수 제한 없이 바로 이어서 쓸 수 있고, 플랜을 올리면
+                    한도 자체가 커집니다.
                   </p>
                 ) : usage?.warn ? (
                   <p className="mt-2.5 text-[12px] text-text-sub leading-relaxed">
-                    한도의 80%를 넘었습니다. 유료 플랜은 대화 건수 제한이 없습니다.
+                    한도의 80%를 넘었습니다. 내 OpenAI 키를 등록하면 건수 제한이
+                    없어집니다.
                   </p>
                 ) : null}
               </>

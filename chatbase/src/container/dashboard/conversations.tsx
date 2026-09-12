@@ -3,14 +3,15 @@ import { createPortal } from "react-dom";
 import { Search, Bot, User, MessagesSquare, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import Topbar from "@/component/layout/topbar";
-import Calendar, { DateRange } from "@/ui/calendar";
+import Calendar, { type DateRange } from "@/ui/calendar";
 import Card from "@/ui/card";
 import Input from "@/ui/input";
 import Pagination from "@/ui/pagination";
-import Select, { SelectOption } from "@/ui/select";
+import Select, { type SelectOption } from "@/ui/select";
 import Skeleton from "@/ui/skeleton";
 import { useGet } from "@/hooks/common/useAPI";
 import { remarkGfmKo } from "@/utils/format/markdown";
+import type { UsageSummary } from "@/types/usage";
 
 /**
  * 대화 로그 — 세션 목록(표) + 전체를 덮는 상세 모달.
@@ -144,6 +145,11 @@ const Conversations = () => {
     sessionsUrl,
     ["sessions", botFilter],
   );
+
+  // 보관 기간이 지난 대화는 서버가 목록에서 빼고 내려준다. 안 알리면
+  // "옛날 대화가 왜 없지"가 되고, 그 자체로는 화면에서 알 길이 없다.
+  const { data: usage } = useGet<UsageSummary>("api/usage/", ["usage"]);
+  const historyDays = usage?.history_days ?? null;
 
   const { data: detail } = useGet<SessionDetailDto>(
     `api/chat/sessions/${selectedId}`,
@@ -288,7 +294,10 @@ const Conversations = () => {
               {sessionsLoading ? (
                 <SessionTableSkeleton />
               ) : filteredSessions.length === 0 ? (
-                <EmptyRow hasSessions={!!sessions && sessions.length > 0} />
+                <EmptyRow
+                  hasSessions={!!sessions && sessions.length > 0}
+                  historyDays={historyDays}
+                />
               ) : (
                 pagedSessions.map((s) => (
                   <SessionRow
@@ -681,7 +690,14 @@ const MessagesSkeleton = () => (
  * 대화가 하나도 없는 것과 검색 결과가 없는 것은 다른 상황이다.
  * 같은 문구를 쓰면 "검색어를 지우면 나온다"는 사실을 못 알아챈다.
  */
-const EmptyRow = ({ hasSessions }: { hasSessions: boolean }) => (
+const EmptyRow = ({
+  hasSessions,
+  historyDays,
+}: {
+  hasSessions: boolean;
+  /** 플랜의 대화 보관 일수. null = 무제한 */
+  historyDays: number | null;
+}) => (
   <div className="flex flex-col items-center justify-center text-center px-6 py-16">
     <div className="w-12 h-12 rounded-DEFAULT bg-bg-sub shadow-border flex items-center justify-center mb-4">
       {hasSessions ? (
@@ -698,6 +714,14 @@ const EmptyRow = ({ hasSessions }: { hasSessions: boolean }) => (
         ? "조건에 맞는 대화가 없습니다. 챗봇·기간·검색어를 바꿔보세요."
         : "방문자가 챗봇과 대화하면 여기에 쌓입니다."}
     </p>
+    {/* 대화가 있었는데 안 보이는 경우를 설명한다. 보관 기간이 지나면 목록에서
+        빠지는데, 삭제된 게 아니라 플랜을 올리면 다시 보인다. */}
+    {historyDays !== null && (
+      <p className="mt-2 text-[11px] text-text-sub/80 max-w-xs leading-relaxed">
+        현재 플랜은 최근 {historyDays}일의 대화를 보여줍니다. 그 이전 대화는
+        지워지지 않았고, 플랜을 올리면 다시 보입니다.
+      </p>
+    )}
   </div>
 );
 

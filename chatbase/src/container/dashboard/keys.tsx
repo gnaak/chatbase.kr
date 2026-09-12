@@ -6,7 +6,7 @@ import Button from "@/ui/button";
 import Card from "@/ui/card";
 import Input from "@/ui/input";
 import Skeleton from "@/ui/skeleton";
-import { useGet, usePost } from "@/hooks/common/useAPI";
+import { useGet, usePatch, usePost } from "@/hooks/common/useAPI";
 import { useToast } from "@/hooks/common/useToast";
 import ConfirmModal from "@/ui/confirmModal";
 
@@ -68,6 +68,7 @@ const MODEL_PROVIDER_TO_KEY: Record<string, Provider> = {
   gemini: "google",
 };
 
+/** 사용자가 **등록한** 키. 제공 키는 여기 안 들어온다(`serviceKey` 로 따로 다룬다). */
 interface KeyState {
   last4?: string;
   registeredAt?: string;
@@ -75,9 +76,14 @@ interface KeyState {
 
 interface ApiKeyDto {
   provider: Provider;
-  last4: string;
+  /** 제공 키는 뒷자리를 안 준다(알 필요가 없고, 계정마다 같은 값이라 알려줄 것도 없다). */
+  last4: string | null;
   registered_at: string | null;
   updated_at: string | null;
+  source?: "own" | "service";
+  model?: string | null;
+  /** 지금 실제로 쓰이는 쪽인가. OpenAI 만 제공 키와 경쟁한다. */
+  selected?: boolean;
 }
 
 const KEYS_QUERY_KEY = ["api-keys"];
@@ -119,22 +125,60 @@ const Keys = () => {
     "api/api-key/delete",
   );
 
+  /**
+   * 제공 키 / 내 키 선택. 봇이 아니라 **계정** 단위라 사용자 설정으로 저장한다.
+   * (usePatch 는 usePost 와 반대로 <응답, 요청> 순서다.)
+   */
+  const chooseMutation = usePatch<unknown, { use_service_key: boolean }>(
+    "api/user/me",
+  );
+
+  const choose = (useService: boolean) =>
+    chooseMutation.mutate(
+      { use_service_key: useService },
+      {
+        onSuccess: () => {
+          invalidate();
+          toast.success(
+            useService
+              ? "무료 제공 키를 사용합니다."
+              : "등록한 내 키를 사용합니다.",
+          );
+        },
+        onError: (err) =>
+          toast.error(err?.message || "변경에 실패했습니다."),
+      },
+    );
+
+  const allKeys = useMemo(() => keysList ?? [], [keysList]);
+
+  /**
+   * 제공 키(우리가 내주는 것). DB 에 없고 서버가 응답에서 합성해 준다.
+   * 본인 OpenAI 키와 **공존**하므로 `keys` 맵에 못 담는다 — 그 맵은 provider 당
+   * 하나라서 덮어써진다.
+   */
+  const serviceKey = useMemo(
+    () => allKeys.find((k) => k.source === "service"),
+    [allKeys],
+  );
+
   const keys = useMemo<Record<Provider, KeyState>>(() => {
     const map: Record<Provider, KeyState> = {
       openai: {},
       anthropic: {},
       google: {},
     };
-    (keysList ?? []).forEach((k) => {
+    allKeys.forEach((k) => {
+      if (k.source === "service") return; // 위 serviceKey 로 따로 다룬다
       map[k.provider] = {
-        last4: k.last4,
+        last4: k.last4 ?? undefined,
         registeredAt: k.registered_at
           ? new Date(k.registered_at).toLocaleString("ko-KR")
           : undefined,
       };
     });
     return map;
-  }, [keysList]);
+  }, [allKeys]);
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: KEYS_QUERY_KEY });
@@ -169,7 +213,7 @@ const Keys = () => {
     <>
       <Topbar
         title="API 키"
-        description="사용할 모델 제공자의 API 키를 직접 등록합니다 (BYOK)."
+        description="OpenAI는 무료로 제공됩니다. 내 키를 등록해 바꿀 수도 있습니다."
       />
 
       <div className="flex-1 overflow-y-auto px-8 md:px-12 py-8">
@@ -185,6 +229,8 @@ const Keys = () => {
               modelsLoading={modelsLoading}
               onSave={(plain) => handleSave(provider.id, plain)}
               onRemove={() => handleRemove(provider.id)}
+              service={provider.id === "openai" ? serviceKey : undefined}
+              onChoose={provider.id === "openai" ? choose : undefined}
             />
           ))}
         </div>
@@ -302,10 +348,13 @@ const Notice = () => (
   <div className="flex items-start gap-3 p-4 rounded-comfy bg-info-bg shadow-border">
     <KeyRound className="w-4 h-4 mt-0.5 shrink-0 text-info" />
     <div className="text-[13px] leading-relaxed text-text-main">
-      <p className="font-medium mb-0.5">키는 사용자 본인 계정으로 호출됩니다 (BYOK).</p>
+      <p className="font-medium mb-0.5">
+        OpenAI는 키 없이 바로 쓸 수 있습니다. 사용량은 저희가 부담합니다.
+      </p>
       <p className="text-text-sub">
-        등록된 키는 암호화되어 저장되며, 챗봇 응답 시에만 사용됩니다. 키 사용량 및
-        과금은 각 제공자 계정에서 직접 관리됩니다.
+        Anthropic·Google 모델과 파일 학습·웹 검색은 본인 키가 필요합니다. 등록한
+        키는 암호화되어 저장되고 챗봇 응답 시에만 쓰이며, 그 사용량과 과금은 각
+        제공자 계정에서 직접 관리됩니다.
       </p>
     </div>
   </div>
@@ -314,6 +363,14 @@ const Notice = () => (
 interface ProviderCardProps {
   provider: ProviderInfo;
   state: KeyState;
+  /**
+   * 이 provider 에 걸린 제공 키(우리가 내주는 것). 지금은 OpenAI 에만 온다.
+   * 본인 키와 **공존**하므로 `state` 와 별개로 받는다 — `state` 는 provider 당
+   * 하나라서 둘을 같이 담을 수 없다.
+   */
+  service?: ApiKeyDto;
+  /** 제공/내 키 선택. 없으면 선택 UI 를 안 그린다. */
+  onChoose?: (useService: boolean) => void;
   /** 키 등록 여부를 아직 모르는 상태. 등록/미등록 UI 대신 스켈레톤을 그린다. */
   keyLoading: boolean;
   /** 모델 카탈로그 로딩 중. 모델 칩 자리를 미리 잡아둔다. */
@@ -325,6 +382,8 @@ interface ProviderCardProps {
 const ProviderCard = ({
   provider,
   state,
+  service,
+  onChoose,
   keyLoading,
   modelsLoading,
   onSave,
@@ -335,7 +394,13 @@ const ProviderCard = ({
   const [showKey, setShowKey] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const isRegistered = !!state.last4;
+  const hasOwn = !!state.last4;
+  // 제공 키가 지금 쓰이는 중인가. 본인 키가 같이 등록돼 있어도 참일 수 있다.
+  const usingService = !!service?.selected;
+  // 제공 키는 last4 가 없다. 그것만 보면 '미등록'으로 그려진다.
+  const isRegistered = hasOwn || !!service;
+  // 선택지가 둘인 provider 는 선택 블록이 등록·변경 입구까지 겸한다.
+  const choosable = !!service && !!onChoose;
 
   const commitSave = (value: string) => {
     onSave(value);
@@ -372,12 +437,16 @@ const ProviderCard = ({
             {keyLoading ? (
               <Skeleton className="h-5 w-16 rounded-full" />
             ) : (
-              isRegistered && (
+              (usingService ? (
+                <span className="inline-flex items-center gap-1 px-2 h-5 rounded-full bg-info-bg text-info text-[11px] font-medium">
+                  무료 제공 중
+                </span>
+              ) : hasOwn ? (
                 <span className="inline-flex items-center gap-1 px-2 h-5 rounded-full bg-success-bg text-success text-[11px] font-medium">
                   <Check className="w-3 h-3" />
-                  등록됨
+                  {choosable ? "내 키 사용 중" : "등록됨"}
                 </span>
-              )
+              ) : null)
             )}
           </div>
           <p className="text-[12px] text-text-sub leading-relaxed mb-2">
@@ -423,7 +492,124 @@ const ProviderCard = ({
         <Skeleton className="h-10 w-full rounded-DEFAULT" />
       )}
 
-      {!editing && !keyLoading && isRegistered && (
+      {/* 제공 키 / 내 키 선택.
+          제공 키는 뒷자리도 삭제 버튼도 없다 — 우리 키라 사용자가 지울 것이 아니다.
+          대신 각 줄에 '무엇이 열리는지'를 적어서 등록 동기가 되게 한다.
+
+          줄을 통째로 <button> 으로 감싸면 변경·삭제 버튼이 버튼 안의 버튼이 돼서
+          HTML 이 깨진다. 그래서 줄은 div 이고, 고르는 영역만 button 이다. */}
+      {!editing && !keyLoading && choosable && (
+        <div className="flex flex-col gap-1.5">
+          <div
+            className={[
+              "flex items-start gap-2.5 px-3 py-2.5 rounded-DEFAULT shadow-border transition-colors",
+              usingService ? "bg-bg-sub" : "hover:bg-bg-hover",
+            ].join(" ")}
+          >
+            <button
+              type="button"
+              onClick={() => onChoose!(true)}
+              aria-pressed={usingService}
+              className="flex items-start gap-2.5 min-w-0 flex-1 text-left focus:outline-none focus-visible:shadow-focus rounded-DEFAULT"
+            >
+              <Check
+                className={[
+                  "w-3.5 h-3.5 mt-0.5 shrink-0",
+                  usingService ? "text-success" : "text-transparent",
+                ].join(" ")}
+              />
+              <span className="min-w-0">
+                <span className="flex items-baseline gap-1.5 flex-wrap text-[12.5px] text-text-main">
+                  무료 제공
+                  {service!.model && (
+                    <span className="font-mono text-[11px] text-text-sub">
+                      {service!.model}
+                    </span>
+                  )}
+                </span>
+                <span className="block mt-0.5 text-[11px] text-text-sub leading-relaxed">
+                  키 등록 없이 바로 쓸 수 있어요. 사용료는 저희가 냅니다. 모델은
+                  이 하나로 고정됩니다.
+                </span>
+              </span>
+            </button>
+          </div>
+
+          <div
+            className={[
+              "flex items-start gap-2.5 px-3 py-2.5 rounded-DEFAULT shadow-border transition-colors",
+              !usingService && hasOwn ? "bg-bg-sub" : "hover:bg-bg-hover",
+            ].join(" ")}
+          >
+            <button
+              type="button"
+              onClick={() => (hasOwn ? onChoose!(false) : setEditing(true))}
+              aria-pressed={!usingService && hasOwn}
+              className="flex items-start gap-2.5 min-w-0 flex-1 text-left focus:outline-none focus-visible:shadow-focus rounded-DEFAULT"
+            >
+              <Check
+                className={[
+                  "w-3.5 h-3.5 mt-0.5 shrink-0",
+                  !usingService && hasOwn ? "text-success" : "text-transparent",
+                ].join(" ")}
+              />
+              <span className="min-w-0">
+                <span className="flex items-baseline gap-1.5 flex-wrap text-[12.5px] text-text-main">
+                  내 키 사용
+                  {hasOwn ? (
+                    <span className="font-mono text-[11px] text-text-sub">
+                      {provider.prefix}
+                      {"•".repeat(6)}
+                      {state.last4}
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-text-sub">등록 필요</span>
+                  )}
+                </span>
+                <span className="block mt-0.5 text-[11px] text-text-sub leading-relaxed">
+                  모델을 직접 고르고, 파일 학습과 웹 검색을 쓸 수 있어요.
+                </span>
+              </span>
+            </button>
+            {hasOwn && (
+              <div className="flex items-center gap-0.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  aria-label="키 변경"
+                  title="키 변경"
+                  className="
+                    inline-flex items-center justify-center w-7 h-7 rounded-full
+                    text-text-sub hover:text-text-main
+                    hover:bg-bg-hover active:bg-bg-active
+                    transition-colors duration-150
+                    focus:outline-none focus-visible:shadow-focus
+                  "
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={onRemove}
+                  aria-label="키 삭제"
+                  title="키 삭제"
+                  className="
+                    inline-flex items-center justify-center w-7 h-7 rounded-full
+                    text-text-sub hover:text-point-red
+                    hover:bg-bg-hover active:bg-bg-active
+                    transition-colors duration-150
+                    focus:outline-none focus-visible:shadow-focus
+                  "
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {!editing && !keyLoading && hasOwn && !choosable && (
         <div className="flex items-center justify-between gap-3 px-3 h-10 rounded-DEFAULT bg-bg-sub shadow-border">
           <div className="flex items-center gap-2 min-w-0 font-mono text-[12px] text-text-main">
             <span>{provider.prefix}</span>

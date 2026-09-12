@@ -18,7 +18,7 @@ import ConfirmModal from "@/ui/confirmModal";
 import Field from "@/ui/field";
 import Input from "@/ui/input";
 import Textarea from "@/ui/textarea";
-import Select, { SelectOption } from "@/ui/select";
+import Select, { type SelectOption } from "@/ui/select";
 import Skeleton from "@/ui/skeleton";
 import LogoUpload from "@/ui/logoUpload";
 import CodeBlock from "@/ui/codeBlock";
@@ -28,6 +28,7 @@ import ChatPreview from "@/component/bot/chatPreview";
 import FileLearning from "@/component/bot/fileLearning";
 import { baseURL, useDelete, useGet, usePatch, usePost } from "@/hooks/common/useAPI";
 import { useToast } from "@/hooks/common/useToast";
+import type { UsageSummary } from "@/types/usage";
 
 interface ModelDto {
   value: string;
@@ -44,12 +45,20 @@ interface ModelDto {
 const formatUsd = (v: number) => `$${Number(v.toFixed(4))}`;
 
 /**
- * 드롭다운 라벨 아래 줄. BYOK라 모델 사용료를 사용자가 직접 부담하므로
- * 운영자가 쓴 설명과 함께 토큰 단가를 같이 보여준다.
- * 설명이 비어 있어도 단가는 나오므로 빈 줄이 생기지 않는다.
+ * 드롭다운 라벨 아래 줄.
+ *
+ * 단가는 **사용자가 직접 내는 경우에만** 의미가 있다. 무료 제공 키로 도는
+ * 모델에 $ 단가를 띄우면 자기가 낼 돈으로 읽힌다.
  */
-const buildModelDescription = (m: ModelDto, hasKey: boolean): string => {
-  if (!hasKey) return "API 키를 먼저 등록해주세요";
+const buildModelDescription = (
+  m: ModelDto,
+  state: "free" | "own" | "locked" | "nokey",
+): string => {
+  if (state === "free") return "무료 제공 · 키 등록 없이 사용";
+  if (state === "locked") {
+    return "API 키 화면에서 '내 키 사용'을 골라야 열립니다";
+  }
+  if (state === "nokey") return "API 키를 먼저 등록해주세요";
   const parts: string[] = [];
   if (m.description) parts.push(m.description);
   if (m.pricing_input !== null && m.pricing_output !== null) {
@@ -62,8 +71,17 @@ const buildModelDescription = (m: ModelDto, hasKey: boolean): string => {
 
 interface ApiKeyDto {
   provider: "openai" | "anthropic" | "google";
-  last4: string;
+  last4: string | null;
   registered_at: string | null;
+  /**
+   * `own`     사용자가 등록한 키
+   * `service` 우리가 내주는 무료 키 — DB 에 없고 서버가 합성해 준다
+   */
+  source?: "own" | "service";
+  /** 제공 키일 때 고정되는 모델. 이것 말고는 고를 수 없다. */
+  model?: string | null;
+  /** 지금 실제로 쓰이는 쪽인가. OpenAI 만 제공 키와 경쟁한다. */
+  selected?: boolean;
 }
 
 const PROVIDER_LABEL: Record<string, string> = {
@@ -225,15 +243,49 @@ const BotEdit = () => {
     ["api-keys"],
   );
 
-  const registeredKeyProviders = useMemo(
-    () => new Set<string>((registeredKeys ?? []).map((k) => k.provider)),
-    [registeredKeys],
+  // 다국어는 플랜 기능이다. `plan === "global"` 로 비교하지 않는다 —
+  // 이 기능을 포함하는 플랜이 늘어나도 여기는 고칠 게 없어야 한다.
+  const { data: usage } = useGet<UsageSummary>("api/usage/", ["usage"]);
+  const multilingualAllowed = usage?.multilingual === true;
+
+  const allKeys = useMemo(() => registeredKeys ?? [], [registeredKeys]);
+
+  /**
+   * **본인이 등록한** 키의 provider 만. 제공 키는 여기 들어오면 안 된다 —
+   * 그러면 GPT 전체가 열린 것처럼 보이는데 실제로는 luna 하나만 돈다.
+   */
+  const ownKeyProviders = useMemo(
+    () =>
+      new Set<string>(
+        allKeys.filter((k) => k.source !== "service").map((k) => k.provider),
+      ),
+    [allKeys],
   );
+
+  /** 무료 제공 키. 지금 선택된 상태일 때만 모델이 그쪽으로 고정된다. */
+  const serviceKey = useMemo(
+    () => allKeys.find((k) => k.source === "service"),
+    [allKeys],
+  );
+  const usingServiceKey = !!serviceKey?.selected;
+  const serviceModel = serviceKey?.model ?? null;
+
+  /** 파일 학습은 **본인** OpenAI 키가 있어야 한다(벡터스토어가 계정 귀속이라). */
+  const hasOwnOpenAIKey = ownKeyProviders.has("openai");
+  /**
+   * 파일 학습은 **플랜 기능이자 키 기능**이다. 둘 다 있어야 열린다.
+   * `usage` 가 아직 안 왔으면 막지 않는다 — 로딩 중에 탭이 사라졌다 나타나는
+   * 깜빡임보다, 잠깐 보였다가 서버가 거절하는 쪽이 덜 어지럽다.
+   */
+  const fileLearningInPlan = usage?.file_learning !== false;
 
   const isOpenAIModel = useMemo(() => {
     const m = chatModels?.find((x) => x.value === form.model);
     return m?.provider === "openai";
   }, [chatModels, form.model]);
+
+  const fileLearningAvailable =
+    isOpenAIModel && hasOwnOpenAIKey && fileLearningInPlan;
 
   const modelOptions: SelectOption[] = useMemo(() => {
     const sorted = [...(chatModels ?? [])].sort((a, b) => {
@@ -244,16 +296,29 @@ const BotEdit = () => {
     });
     return sorted.map((m) => {
       const keyProvider = MODEL_PROVIDER_TO_KEY[m.provider] ?? m.provider;
-      const hasKey = registeredKeyProviders.has(keyProvider);
+      const hasOwn = ownKeyProviders.has(keyProvider);
+      // 무료 키를 쓰는 중이면 OpenAI 자리에서 고를 수 있는 건 그 모델 하나다.
+      // 다른 걸 골라봐야 서버가 무시하고 무료 모델로 답한다.
+      const isFree = usingServiceKey && m.value === serviceModel;
+      const lockedByService =
+        usingServiceKey && keyProvider === "openai" && !isFree;
+
+      const state: "free" | "own" | "locked" | "nokey" = isFree
+        ? "free"
+        : lockedByService
+          ? "locked"
+          : hasOwn
+            ? "own"
+            : "nokey";
       const providerLabel = PROVIDER_LABEL[m.provider] ?? m.provider;
       return {
         value: m.value,
         label: `${providerLabel} · ${m.label}`,
-        description: buildModelDescription(m, hasKey),
-        disabled: !hasKey,
+        description: buildModelDescription(m, state),
+        disabled: state === "locked" || state === "nokey",
       };
     });
-  }, [chatModels, registeredKeyProviders]);
+  }, [chatModels, ownKeyProviders, usingServiceKey, serviceModel]);
 
   // 로드된 봇 정보를 폼에 반영
   useEffect(() => {
@@ -337,7 +402,7 @@ const BotEdit = () => {
         // 생성 응답을 그대로 캐시에 넣어둔다. 안 넣으면 상세로 넘어갈 때 이 봇을
         // 처음부터 다시 받아오면서, 방금 채운 폼이 로딩 스켈레톤으로 한 번 사라진다.
         queryClient.setQueryData(["bot", created.id], created);
-        if (isOpenAIModel && form.trainingType === "file") {
+        if (fileLearningAvailable && form.trainingType === "file") {
           await uploadPendingFiles(created.id);
         }
         invalidate();
@@ -349,7 +414,7 @@ const BotEdit = () => {
         navigate(`/dashboard/bots/${created.id}`);
       } else {
         await updateMutation.mutateAsync(payload);
-        if (isOpenAIModel && form.trainingType === "file" && pendingFiles.length) {
+        if (fileLearningAvailable && form.trainingType === "file" && pendingFiles.length) {
           await uploadPendingFiles(slug!);
         }
         invalidate();
@@ -478,7 +543,11 @@ const BotEdit = () => {
 
             <Field
               label="모델"
-              description="응답에 사용할 LLM. 키는 API 키 페이지에서 등록하세요."
+              description={
+                usingServiceKey
+                  ? "무료 제공 키를 쓰는 중이라 모델이 고정됩니다. 직접 고르려면 API 키 화면에서 내 키를 등록하세요."
+                  : "응답에 사용할 LLM. 키는 API 키 페이지에서 등록하세요."
+              }
             >
               <Select
                 value={form.model}
@@ -505,16 +574,30 @@ const BotEdit = () => {
               />
             </Field>
 
-            <Field
-              label="다국어 응대"
-              description="켜면 방문자가 쓴 언어로 답변합니다. FAQ는 영어·일본어·중국어로 자동 번역되어 저장됩니다."
-            >
-              <Toggle
-                checked={form.multilingual}
-                onChange={(next) => update("multilingual", next)}
+            {/* 쓸 수 없는 플랜이면 토글을 아예 안 그린다. 켤 수 없는 스위치를
+                놔두면 켜고 → 저장 → 403 토스트 → 켜진 채로 남음 → 다시 실패가
+                반복된다(서버는 `_ensure_multilingual_allowed` 로 막는다).
+
+                단, **이미 켜져 있으면 그린다.** 하향한 사람이 정리할 길은 남겨야
+                한다 — 서버도 끄는 것은 언제나 허용한다. */}
+            {multilingualAllowed || form.multilingual ? (
+              <Field
                 label="다국어 응대"
-              />
-            </Field>
+                description="켜면 방문자가 쓴 언어로 답변합니다. FAQ는 영어·일본어·중국어로 자동 번역되어 저장됩니다."
+              >
+                <Toggle
+                  checked={form.multilingual}
+                  onChange={(next) => update("multilingual", next)}
+                  label="다국어 응대"
+                />
+              </Field>
+            ) : (
+              <p className="text-[12px] text-text-sub leading-relaxed">
+                외국인 손님이 쓴 언어로 답하는{" "}
+                <span className="text-text-main">다국어 응대</span>는 GLOBAL
+                플랜에서 켤 수 있어요.
+              </p>
+            )}
 
             <Field
               label="FAQ 버튼"
@@ -573,7 +656,38 @@ const BotEdit = () => {
               </div>
             )}
 
-            {isOpenAIModel && (
+            {/* 막는 이유가 둘이고 해법이 달라서 문구를 나눈다.
+                플랜이면 결제, 키면 API 키 등록이다. 하나로 뭉치면 유료 사용자가
+                결제 화면으로 갔다가 아무것도 못 고치고 돌아온다.
+
+                플랜을 먼저 본다 — 둘 다 없는 FREE 사용자에게 "키를 등록하세요"라고
+                하면 등록하고 나서 또 막힌다. */}
+            {isOpenAIModel && !fileLearningInPlan && (
+              <div className="rounded-comfy bg-bg-sub/40 shadow-border px-4 py-3 text-[12px] text-text-sub leading-relaxed">
+                <span className="font-medium text-text-main">
+                  파일 학습은 유료 플랜 기능입니다.
+                </span>
+                <br />
+                PDF·DOCX를 올려 학습시키려면 STANDARD 이상이 필요합니다. 지금은
+                아래 학습 텍스트를 사용하세요.
+              </div>
+            )}
+
+            {/* 벡터 스토어는 **만든 계정에 귀속**된다. 무료 제공 키로는 주인이
+                올린 파일을 읽을 수 없고, 그렇다고 파일 없이 답하게 두면 자료 한정
+                규칙이 빠져서 지어낸다. 그래서 본인 키가 있을 때만 연다. */}
+            {isOpenAIModel && fileLearningInPlan && !hasOwnOpenAIKey && (
+              <div className="rounded-comfy bg-bg-sub/40 shadow-border px-4 py-3 text-[12px] text-text-sub leading-relaxed">
+                <span className="font-medium text-text-main">
+                  파일 학습은 내 OpenAI 키가 필요합니다.
+                </span>
+                <br />
+                무료 제공 키로는 업로드한 파일을 읽을 수 없어요. API 키 화면에서
+                내 키를 등록하면 열립니다. 지금은 아래 학습 텍스트를 사용하세요.
+              </div>
+            )}
+
+            {fileLearningAvailable && (
               <div className="inline-flex items-center gap-1 p-1 rounded-full bg-bg-sub shadow-border w-fit">
                 {(["text", "file"] as const).map((tab) => (
                   <button
@@ -593,7 +707,7 @@ const BotEdit = () => {
               </div>
             )}
 
-            {(!isOpenAIModel || form.trainingType === "text") && (
+            {(!fileLearningAvailable || form.trainingType === "text") && (
               <Field
                 label="학습 텍스트"
                 description="짧은 FAQ나 가이드는 직접 입력. 5,000자 넘어가면 파일 업로드(벡터 스토어) 권장."
@@ -656,7 +770,7 @@ A. 서울 본사 매장은 영업시간 내 방문 픽업이 가능합니다.`}
               </Field>
             )}
 
-            {isOpenAIModel && form.trainingType === "file" && (
+            {fileLearningAvailable && form.trainingType === "file" && (
               <Field
                 label="파일 업로드"
                 description="긴 문서(PDF, DOCX 등)는 저장 시 OpenAI vector store에 일괄 업로드됩니다."

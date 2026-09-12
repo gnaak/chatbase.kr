@@ -44,7 +44,7 @@ class UserService:
         return success(data=_user_to_dict(user))
 
     async def update_me(self, request):
-        """body: { name?, workspace_name?, workspace_slug?, profile_image? }"""
+        """body: { name?, profile_image?, use_service_key? }"""
         user_id = request.user_id
         user = await self.user_repo.get_user_by_id(user_id)
         if not user:
@@ -55,6 +55,9 @@ class UserService:
             user.name = (body["name"] or "").strip() or user.name
         if "profile_image" in body:
             user.profile_image = body["profile_image"]
+        if "use_service_key" in body:
+            # 키 화면의 체크. OpenAI 를 제공 키로 쓸지 본인 키로 쓸지.
+            user.use_service_key = bool(body["use_service_key"])
 
         await self.user_repo.db.commit()
         await self.user_repo.db.refresh(user)

@@ -16,10 +16,20 @@ class ChatRepository:
         )
         return result.scalar_one_or_none()
 
-    async def find_sessions_by_bot(self, bot_id: int) -> list[ChatSession]:
+    async def find_sessions_by_bot(
+        self, bot_id: int, since=None
+    ) -> list[ChatSession]:
+        """`since` 를 주면 그 시각 이후 대화만. 플랜의 보관 기간에 쓴다.
+
+        `last_message_at` 기준이다. 시작 시각으로 자르면 오래 전에 시작해서
+        지금도 이어지는 대화가 사라진다 — 사용자는 방금 온 질문을 못 본다.
+        """
+        conditions = [ChatSession.bot_id == bot_id]
+        if since is not None:
+            conditions.append(ChatSession.last_message_at >= since)
         result = await self.db.execute(
             select(ChatSession)
-            .where(ChatSession.bot_id == bot_id)
+            .where(*conditions)
             .order_by(ChatSession.last_message_at.desc())
         )
         return list(result.scalars().all())
@@ -63,15 +73,33 @@ class ChatRepository:
         return session
 
     # ── 메시지 ───────────────────────────────
-    async def find_messages(self, session_id: int) -> list[ChatMessage]:
+    async def find_messages(
+        self, session_id: int, limit: int | None = None
+    ) -> list[ChatMessage]:
+        """세션의 메시지. `limit`을 주면 **최근 N개**만, 순서는 그대로 오래된 것부터.
+
+        기본값이 무제한인 이유: 대화 로그 화면(`get_session_messages`)은 전부
+        보여줘야 한다. 자르는 건 LLM에 보낼 때만이라, 자르는 쪽이 명시적으로
+        넘기게 두는 편이 안전하다. 기본값을 제한으로 두면 어느 날 로그 화면이
+        조용히 잘린다.
+
+        ⚠️ LLM 경로에서 이걸 안 넘기면 원가가 세션 길이에 비례해 늘어난다.
+        같은 "대화 1건"인데 30번째 질문이 첫 질문의 몇 배가 된다. 건수 쿼터가
+        지출 상한 구실을 못 하게 되는 지점이 여기다.
+        """
+        stmt = select(ChatMessage).where(ChatMessage.session_id == session_id)
+        # created_at은 초 단위라 같은 초에 들어온 질문/답변의 순서가 뒤집힌다.
+        # 아래 find_last_messages와 같은 이유로 id를 쓴다.
+        if limit is None:
+            result = await self.db.execute(stmt.order_by(ChatMessage.id.asc()))
+            return list(result.scalars().all())
+
+        # 최근 N개를 뽑으려면 내림차순으로 자르고 되돌린다.
+        # 오름차순 + LIMIT 은 **앞쪽** N개라 정반대가 된다.
         result = await self.db.execute(
-            select(ChatMessage)
-            .where(ChatMessage.session_id == session_id)
-            # created_at은 초 단위라 같은 초에 들어온 질문/답변의 순서가 뒤집힌다.
-            # 아래 find_last_messages와 같은 이유로 id를 쓴다.
-            .order_by(ChatMessage.id.asc())
+            stmt.order_by(ChatMessage.id.desc()).limit(limit)
         )
-        return list(result.scalars().all())
+        return list(reversed(result.scalars().all()))
 
     async def find_last_messages(
         self,

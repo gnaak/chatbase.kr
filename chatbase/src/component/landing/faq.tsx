@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useState, ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { ExternalLink, Plus } from "lucide-react";
 import Button from "@/ui/button";
 
@@ -27,24 +27,30 @@ const API_KEY_LINKS = [
  */
 export const FAQ_ITEMS: FaqItem[] = [
   {
-    q: "BYOK가 뭐예요? 왜 API 키를 직접 등록해야 하나요?",
+    q: "API 키를 꼭 만들어야 하나요?",
     a: (
       <>
-        BYOK(Bring Your Own Key)는 OpenAI, Anthropic, Google의 API 키를 직접
-        발급받아 등록하는 방식입니다. 챗봇이 답할 때 회원님 키로 호출되므로,{" "}
-        <strong>모델 사용료는 해당 제공자에 직접 결제</strong>됩니다.
-        chatbase.kr는 호출비를 중간에서 받지 않습니다. 그래서 대화가 늘어도
-        저희 쪽 요금은 그대로입니다.
+        아니요. <strong>GPT 사용료는 저희가 부담</strong>하므로 가입 후 바로
+        챗봇을 만들어 쓰실 수 있습니다. 이 경우 모델은 응답 속도와 비용이 좋은
+        한 가지로 고정됩니다.
+        <br />
+        <br />
+        직접 발급받은 OpenAI 키를 등록하시면(BYOK, Bring Your Own Key) 모델을
+        직접 고르고 <strong>파일 학습</strong>과 <strong>웹 검색</strong>을 쓸 수
+        있으며, <strong>월 대화 건수 제한도 없어집니다</strong>. 이때 모델
+        사용료는 회원님이 OpenAI에 직접 결제하십니다. Claude(Anthropic)와
+        Gemini(Google) 모델은 본인 키가 있어야 씁니다.
       </>
     ),
   },
   {
-    q: "API 키 등록이 어렵지 않나요?",
+    q: "내 키를 등록하려면 어렵지 않나요?",
     a: (
       <>
         각 제공자 사이트에서 5분 안에 발급받을 수 있습니다. 발급받은 키를
         대시보드 &gt; API 키 페이지에 한 번만 등록하면 됩니다. 세 곳 모두
-        등록하실 필요는 없고, 쓰실 모델의 키 하나만 있으면 됩니다.
+        등록하실 필요는 없고, 쓰실 모델의 키 하나만 있으면 됩니다. 등록해두고도
+        평소에는 무료 제공 키를 쓰도록 체크 하나로 오갈 수 있습니다.
         <div className="mt-4 flex flex-wrap gap-2">
           {API_KEY_LINKS.map(({ label, href }) => (
             <a key={href} href={href} target="_blank" rel="noopener noreferrer">
@@ -66,7 +72,8 @@ export const FAQ_ITEMS: FaqItem[] = [
     q: "등록한 키는 안전한가요?",
     a: (
       <>
-        모든 API 키는 Fernet(AES-128) 대칭키 암호화로 데이터베이스에 저장됩니다.
+        회원님이 등록한 API 키는 Fernet(AES-128) 대칭키 암호화로 데이터베이스에
+        저장됩니다.
         평문은 어떤 시점에도 저장되지 않으며, 챗봇이 응답을 생성하는 순간에만
         복호화되어 외부 LLM 호출에 사용됩니다. 회원이 직접 삭제하거나 탈퇴 시
         즉시 파기됩니다.

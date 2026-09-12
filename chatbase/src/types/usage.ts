@@ -17,10 +17,24 @@ export interface UsageSummary {
    * 지금은 GLOBAL만 true지만, 화면에서 `plan === "global"`로 비교하지 않기 위한 값이다.
    */
   multilingual: boolean;
+  /**
+   * 파일 학습을 쓸 수 있는 플랜인지. 백엔드 `PlanLimits.file_learning`.
+   * 이걸 안 보면 FREE 사용자에게 파일 탭을 띄워놓고 업로드에서 403을 던지게 된다.
+   * (플랜과 별개로 **내 OpenAI 키**도 있어야 한다 — 벡터스토어가 계정 귀속이라.)
+   */
+  file_learning: boolean;
+  /** 대화 기록 보관 일수. null = 무제한. 이 기간이 지난 대화는 목록에서 가려진다. */
+  history_days: number | null;
   /** "YYYY-MM" (KST) */
   year_month: string;
   messages_used: number;
-  /** null = 무제한 (유료 플랜) */
+  /**
+   * null = 한도 없음.
+   *
+   * 플랜이 무제한이거나, **내 키를 등록해 쓰는 중**이거나 둘 중 하나다.
+   * 후자에서 서버가 일부러 null로 내려보낸다 — 플랜 숫자를 그대로 보여주면
+   * 실제로는 막히지 않는 벽을 "곧 소진"이라고 경고하게 된다.
+   */
   messages_limit: number | null;
   unlimited: boolean;
   /** 한도의 80% 이상 사용 */

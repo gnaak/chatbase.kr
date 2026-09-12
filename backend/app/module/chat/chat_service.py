@@ -1,5 +1,9 @@
 import json
+from dataclasses import dataclass
+from datetime import timedelta
 from types import SimpleNamespace
+
+from app.core.config.settings import settings
 from typing import AsyncGenerator
 
 from app.core.database.base import SessionLocal, now_kst
@@ -7,7 +11,12 @@ from app.core.logging import get_logger
 from app.core.utils.response import fail, success
 from app.module.api_key.api_key import Provider
 from app.module.api_key.api_key_repository import ApiKeyRepository
-from app.module.api_key.api_key_service import ApiKeyService
+from app.module.api_key.api_key_service import (
+    SERVICE_MODEL,
+    ApiKeyService,
+    prefers_service_key,
+    service_llm_key,
+)
 from app.module.bot.bot_repository import BotRepository
 from app.module.chat.chat_message import ChatMessage, MessageRole
 from app.module.chat.chat_repository import ChatRepository
@@ -20,12 +29,161 @@ from app.module.infra.llm.llm_service import (
 )
 from app.module.llm_error.llm_error import LlmErrorChannel, LlmErrorKind
 from app.module.llm_error.llm_error_repository import LlmErrorRepository
+from app.module.payment.plan_lookup import limits_of
 from app.module.usage.usage_service import (
     usage_service_for,
     visitor_unavailable_message,
 )
 
 logger = get_logger(__name__)
+
+
+#: 주인이 fallback 을 안 썼을 때 우리 키 경로에서 대신 쓰는 문구.
+#:
+#: 이 값이 채워지면 `_should_enable_web_search` 가 False 가 되어 **web search 도
+#: 같이 꺼진다.** 그게 의도다 — 우리 키 경로는 학습 자료 안에서만 답하게 두어야
+#: 원가가 예측 가능하고, 지어내지도 않는다.
+#:
+#: 다국어 봇에서는 LLM 이 방문자 언어로 옮겨준다(`_build_system_prompt` 언어 규칙).
+DEFAULT_FALLBACK = "죄송합니다. 관련된 내용을 찾을 수 없었어요."
+
+
+def _uses_file_learning(bot) -> bool:
+    """파일 학습을 쓰는 봇인가."""
+    training_type = getattr(bot, "training_type", None) or "text"
+    return training_type == "file" or bool(getattr(bot, "vector_store_id", None))
+
+
+def _service_prompt_view(bot):
+    """우리 키로 답할 때 **프롬프트 조립에만** 쓰는 봇 뷰.
+
+    원본 `bot` 을 건드리지 않는다. DB 객체 필드를 바꾸면 같은 요청의 커밋에
+    딸려 들어가서, 주인이 쓰지도 않은 fallback 이 저장된다.
+
+    `vector_store_id` 를 None 으로 막는 이유: 벡터스토어는 **만든 계정에 귀속**된다.
+    주인 키로 만든 `vs_...` 를 우리 키로 호출하면 그 계정에 없는 ID라 404다.
+    """
+    return SimpleNamespace(
+        system_prompt=bot.system_prompt,
+        training_text=bot.training_text,
+        training_type=getattr(bot, "training_type", None) or "text",
+        fallback=(bot.fallback or "").strip() or DEFAULT_FALLBACK,
+        multilingual=getattr(bot, "multilingual", False),
+        vector_store_id=None,
+    )
+
+
+def _preview_no_route_message(bot) -> str:
+    """미리보기에서 호출할 경로가 없을 때 **주인에게** 보여줄 문구.
+
+    방문자 경로(`visitor_unavailable_message`)와 달리 원인을 그대로 말한다 —
+    여기는 고칠 사람이 보고 있는 화면이다. 중립 문구로 뭉개면 왜 안 되는지
+    모른 채 봇 설정만 계속 만지게 된다.
+    """
+    if _uses_file_learning(bot):
+        return (
+            "파일 학습 봇은 내 OpenAI 키가 필요합니다. "
+            "무료 제공 키로는 업로드한 파일을 읽을 수 없어요. "
+            "API 키 화면에서 내 키를 등록하고 '내 키 사용'을 골라 주세요."
+        )
+    return (
+        "호출할 API 키가 없습니다. API 키 화면에서 키를 등록해 주세요."
+    )
+
+
+@dataclass(frozen=True)
+class LlmRoute:
+    """이번 호출에 무엇을 쓸지. `resolve_llm_route` 가 만든다."""
+
+    api_key: str
+    model: str
+    provider: Provider
+    vector_store_id: str | None
+    #: 프롬프트 조립용. 우리 키면 오버라이드가 적용된 뷰, 아니면 원본 bot.
+    prompt_bot: object
+    is_ours: bool
+
+
+async def resolve_llm_route(bot, api_key_service, effective_model) -> LlmRoute | None:
+    """주인 키 우선, 없으면 우리 키. `None` 이면 **LLM 을 부르면 안 된다.**
+
+    BYOK 는 삭제하지 않고 우선순위만 뒤로 뒀다. 주인이 키를 등록해두면 그대로
+    자기 모델·웹검색·파일학습을 쓰고, 안 했으면 우리 키로 기본 동작은 한다.
+    가입하자마자 첫 대화가 실패하던 게 원래 문제였다.
+
+    `None` 을 돌려주는 두 경우:
+      - 우리 키가 설정돼 있지 않다
+      - **파일 학습 봇이다.** 우리 키로는 벡터스토어를 못 읽는데, 그렇다고
+        vec_id 만 빼고 호출하면 `_build_system_prompt` 의 `has_knowledge` 가
+        False 가 되어 **자료 한정 규칙이 통째로 사라진다.** 호텔 FAQ 봇이
+        체크인 시간을 지어내게 된다. 오류보다 나쁘다.
+    """
+    provider = resolve_provider(effective_model)
+
+    # 제공 키를 쓸지는 계정 설정이다(키 화면에서 고른다). OpenAI 에만 해당한다 —
+    # Anthropic·Google 은 우리가 키를 안 내주므로 그쪽 모델이면 본인 키뿐이다.
+    prefers_service = provider == Provider.OPENAI and await prefers_service_key(
+        api_key_service.api_key_repo.db, bot.user_id
+    )
+
+    owner_key = (
+        None
+        if prefers_service
+        else await api_key_service.get_decrypted_key(bot.user_id, provider)
+    )
+    if owner_key:
+        return LlmRoute(
+            api_key=owner_key,
+            model=effective_model,
+            provider=provider,
+            vector_store_id=(
+                bot.vector_store_id if provider == Provider.OPENAI else None
+            ),
+            prompt_bot=bot,
+            is_ours=False,
+        )
+
+    service_key = service_llm_key() if provider == Provider.OPENAI else ""
+    if not service_key:
+        # 제공 경로가 없다. 제공 키를 고른 계정이라 본인 키를 아직 안 봤다면
+        # 여기서 본다 — 설정은 켜뒀는데 우리 키가 비어 있는 경우다.
+        if prefers_service:
+            owner_key = await api_key_service.get_decrypted_key(
+                bot.user_id, provider
+            )
+            if owner_key:
+                return LlmRoute(
+                    api_key=owner_key,
+                    model=effective_model,
+                    provider=provider,
+                    vector_store_id=bot.vector_store_id,
+                    prompt_bot=bot,
+                    is_ours=False,
+                )
+        return None
+    if _uses_file_learning(bot):
+        return None
+
+    return LlmRoute(
+        api_key=service_key,
+        model=SERVICE_MODEL,
+        provider=Provider.OPENAI,
+        vector_store_id=None,
+        prompt_bot=_service_prompt_view(bot),
+        is_ours=True,
+    )
+
+
+#: LLM 에 보낼 최근 대화 턴 수(메시지 개수 기준, 질문+답변이 각각 1개).
+#:
+#: 이게 없으면 세션이 길어질수록 매 턴 입력이 커진다. 같은 "대화 1건"인데
+#: 30번째 질문의 원가가 첫 질문의 몇 배가 되고, 그러면 건수 쿼터가 지출 상한
+#: 구실을 못 한다. 실측에서 60메시지 세션의 누적이 4,234자였다.
+#:
+#: 20으로 잡은 근거: FAQ 봇은 앞 대화를 길게 참조할 일이 거의 없다. 질문+답변이
+#: 한 턴에 2개씩이므로 최근 10턴이다. 상담을 길게 이어가는 봇이라면 이 값을
+#: 올려야 하는데, 그건 지금 파는 상품(호텔·학원 FAQ)이 아니다.
+LLM_HISTORY_LIMIT = 20
 
 
 def _resolve_effective_model(bot_model: str, override: str | None) -> str:
@@ -346,27 +504,29 @@ class ChatService:
                 )
                 logger.debug("[stream] meta 전송 완료")
 
-                effective_model = _resolve_effective_model(bot.model, model_override)
-                provider = resolve_provider(effective_model)
-                # 키가 없으면 LLM을 부르지 않고 주인 fallback 으로 끝낸다.
-                api_key = (
-                    await api_key_service.get_decrypted_key(bot.user_id, provider)
-                ) or ""
-
-                # vector_store는 OpenAI 모델일 때만 의미 있음
-                vec_id = (
-                    bot.vector_store_id
-                    if provider == Provider.OPENAI
-                    else None
-                )
-                system = _build_system_prompt(
+                # 주인 키 우선, 없으면 우리 키. None 이면 LLM 을 부르면 안 된다.
+                route = await resolve_llm_route(
                     bot,
+                    api_key_service,
+                    _resolve_effective_model(bot.model, model_override),
+                )
+                effective_model = route.model if route else bot.model
+                provider = route.provider if route else resolve_provider(bot.model)
+                api_key = route.api_key if route else ""
+                vec_id = route.vector_store_id if route else None
+
+                # 프롬프트는 route 가 준 뷰로 짠다. 우리 키면 fallback 이 채워져
+                # 있어서 web search 가 꺼지고 자료 한정으로 굳는다.
+                system = _build_system_prompt(
+                    route.prompt_bot if route else bot,
                     vec_id,
                     await _multilingual_allowed(bot, usage_service),
                     lang,
                 )
 
-                history = await chat_repo.find_messages(session.id)
+                history = await chat_repo.find_messages(
+                    session.id, limit=LLM_HISTORY_LIMIT
+                )
                 api_messages = [
                     {
                         "role": "user" if m.role == MessageRole.USER else "assistant",
@@ -378,12 +538,15 @@ class ChatService:
                 full_text = ""
 
                 if not api_key:
-                    # 키가 없으면 스트림을 열지 않는다. 빈 키로 열면 SDK가 raise 하고
-                    # 그 결과가 방문자 화면에 붙는다 — BYOK 라 키 없는 봇이 기본
-                    # 상태인데, 그 방문자가 본 게 '일시적인 오류'였다.
+                    # 여기 오는 경우는 둘뿐이다(resolve_llm_route 참고):
+                    #   - 주인 키도 우리 키도 없다
+                    #   - 파일 학습 봇인데 주인 키가 없다 → 우리 키로 떨어뜨리면
+                    #     자료 한정 규칙이 사라져 지어낸다. 그래서 일부러 안 부른다.
                     logger.info(
-                        "스트리밍 키 없음 — fallback 응답 bot=%s user=%s provider=%s",
+                        "스트리밍 호출 불가 — fallback 응답 bot=%s user=%s "
+                        "provider=%s 파일학습=%s",
                         bot.slug, bot.user_id, provider.value,
+                        _uses_file_learning(bot),
                     )
                     # 방문자는 중립 문구를 받으니 주인이 알 수 있게 DB에 남긴다.
                     # 아래 db.commit() 에 같이 실린다.
@@ -406,7 +569,9 @@ class ChatService:
                             messages=api_messages,
                             api_key=api_key,
                             vector_store_id=vec_id,
-                            enable_web_search=_should_enable_web_search(bot),
+                            enable_web_search=_should_enable_web_search(
+                                route.prompt_bot if route else bot
+                            ),
                         ):
                             if not full_text:
                                 logger.debug("[stream] 첫 청크 수신")
@@ -549,26 +714,30 @@ class ChatService:
                     vector_store_id=bot.vector_store_id,
                 )
 
-                effective_model = _resolve_effective_model(preview_bot.model, None)
-                provider = resolve_provider(effective_model)
-                api_key = (
-                    await api_key_service.get_decrypted_key(user_id, provider)
-                ) or ""
-
-                vec_id = (
-                    preview_bot.vector_store_id
-                    if provider == Provider.OPENAI
-                    else None
+                requested_model = _resolve_effective_model(preview_bot.model, None)
+                # 위젯과 **같은 라우터**를 탄다. 미리보기가 다른 키·모델로 돌면
+                # 여기서 확인한 답이 방문자가 받는 답이 아니게 된다.
+                route = await resolve_llm_route(
+                    preview_bot, api_key_service, requested_model
                 )
+                effective_model = route.model if route else requested_model
+                provider = (
+                    route.provider if route else resolve_provider(requested_model)
+                )
+                api_key = route.api_key if route else ""
+                vec_id = route.vector_store_id if route else None
+
                 # 미리보기도 플랜을 본다. 안 그러면 FREE 계정이 여기서
                 # 다국어를 무제한으로 쓰고, 게이팅이 반쪽이 된다.
                 system = _build_system_prompt(
-                    preview_bot,
+                    route.prompt_bot if route else preview_bot,
                     vec_id,
                     await _multilingual_allowed(preview_bot, usage_service),
                     lang,
                 )
-                history = await chat_repo.find_messages(session.id)
+                history = await chat_repo.find_messages(
+                    session.id, limit=LLM_HISTORY_LIMIT
+                )
                 api_messages = [
                     {
                         "role": "user" if m.role == MessageRole.USER else "assistant",
@@ -578,23 +747,33 @@ class ChatService:
                 ]
 
                 full_text = ""
-                try:
-                    async for chunk in self.llm_service.chat_stream(
-                        model=effective_model,
-                        system_prompt=system,
-                        messages=api_messages,
-                        api_key=api_key,
-                        vector_store_id=vec_id,
-                        enable_web_search=_should_enable_web_search(preview_bot),
-                    ):
-                        full_text += chunk
-                        yield _sse("chunk", {"text": chunk})
-                except Exception as exc:
-                    # preview_bot은 폼 override를 얹은 SimpleNamespace라 slug가 없다. DB 객체를 쓴다.
-                    logger.exception("미리보기 LLM 실패 bot=%s provider=%s", bot.slug, provider.value)
-                    err_msg = _format_llm_error(provider.value, exc)
-                    full_text += err_msg
-                    yield _sse("chunk", {"text": err_msg})
+                if not route:
+                    logger.info(
+                        "미리보기 호출 불가 bot=%s user=%s 파일학습=%s",
+                        bot.slug, user_id, _uses_file_learning(preview_bot),
+                    )
+                    full_text = _preview_no_route_message(preview_bot)
+                    yield _sse("chunk", {"text": full_text})
+                else:
+                    try:
+                        async for chunk in self.llm_service.chat_stream(
+                            model=effective_model,
+                            system_prompt=system,
+                            messages=api_messages,
+                            api_key=api_key,
+                            vector_store_id=vec_id,
+                            enable_web_search=_should_enable_web_search(
+                                route.prompt_bot
+                            ),
+                        ):
+                            full_text += chunk
+                            yield _sse("chunk", {"text": chunk})
+                    except Exception as exc:
+                        # preview_bot은 폼 override를 얹은 SimpleNamespace라 slug가 없다. DB 객체를 쓴다.
+                        logger.exception("미리보기 LLM 실패 bot=%s provider=%s", bot.slug, provider.value)
+                        err_msg = _format_llm_error(provider.value, exc)
+                        full_text += err_msg
+                        yield _sse("chunk", {"text": err_msg})
 
                 if not full_text.strip():
                     full_text = (preview_bot.fallback or "").strip() or "죄송합니다. 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
@@ -649,14 +828,18 @@ class ChatService:
                     vector_store_id=None,
                 )
 
-                effective_model = _resolve_effective_model(preview_bot.model, None)
-                provider = resolve_provider(effective_model)
-                api_key = (
-                    await api_key_service.get_decrypted_key(user_id, provider)
-                ) or ""
+                requested_model = _resolve_effective_model(preview_bot.model, None)
+                route = await resolve_llm_route(
+                    preview_bot, api_key_service, requested_model
+                )
+                effective_model = route.model if route else requested_model
+                provider = (
+                    route.provider if route else resolve_provider(requested_model)
+                )
+                api_key = route.api_key if route else ""
 
                 system = _build_system_prompt(
-                    preview_bot,
+                    route.prompt_bot if route else preview_bot,
                     None,
                     await _multilingual_allowed(preview_bot, usage_service),
                     lang,
@@ -674,22 +857,32 @@ class ChatService:
                 api_messages.append({"role": "user", "content": content})
 
                 full_text = ""
-                try:
-                    async for chunk in self.llm_service.chat_stream(
-                        model=effective_model,
-                        system_prompt=system,
-                        messages=api_messages,
-                        api_key=api_key,
-                        vector_store_id=None,
-                        enable_web_search=_should_enable_web_search(preview_bot),
-                    ):
-                        full_text += chunk
-                        yield _sse("chunk", {"text": chunk})
-                except Exception as exc:
-                    logger.exception("즉시 미리보기 LLM 실패 provider=%s", provider.value)
-                    err_msg = _format_llm_error(provider.value, exc)
-                    full_text += err_msg
-                    yield _sse("chunk", {"text": err_msg})
+                if not route:
+                    logger.info(
+                        "즉시 미리보기 호출 불가 user=%s 파일학습=%s",
+                        user_id, _uses_file_learning(preview_bot),
+                    )
+                    full_text = _preview_no_route_message(preview_bot)
+                    yield _sse("chunk", {"text": full_text})
+                else:
+                    try:
+                        async for chunk in self.llm_service.chat_stream(
+                            model=effective_model,
+                            system_prompt=system,
+                            messages=api_messages,
+                            api_key=api_key,
+                            vector_store_id=None,
+                            enable_web_search=_should_enable_web_search(
+                                route.prompt_bot
+                            ),
+                        ):
+                            full_text += chunk
+                            yield _sse("chunk", {"text": chunk})
+                    except Exception as exc:
+                        logger.exception("즉시 미리보기 LLM 실패 provider=%s", provider.value)
+                        err_msg = _format_llm_error(provider.value, exc)
+                        full_text += err_msg
+                        yield _sse("chunk", {"text": err_msg})
 
                 if not full_text.strip():
                     full_text = (preview_bot.fallback or "").strip() or "죄송합니다. 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
@@ -701,22 +894,45 @@ class ChatService:
                 yield _sse("error", {"message": str(exc)})
 
     # ── 대시보드 (with_login) ─────────────────
+    async def _history_cutoff(self, user_id: int):
+        """이 계정이 **볼 수 있는** 가장 오래된 대화 시각. 무제한이면 None.
+
+        플랜의 `history_days` 를 여기서 처음으로 실제 동작에 연결한다. 값만
+        정의해두고 아무 데서도 안 쓰던 탓에, 가격표에 "대화 기록 7일"이라고
+        써놓고 FREE 계정도 1년 전 대화를 그대로 볼 수 있었다.
+
+        **지우지는 않는다.** 보관 기간이 지난 대화는 화면에서 가릴 뿐이고,
+        플랜을 올리면 다시 보인다. 삭제로 구현하면 하향 한 번에 되돌릴 수 없는
+        데이터 손실이 되고, 실수로 하향한 사람에게는 복구 수단이 없다.
+
+        `usage_service` 를 거치지 않고 직접 조회한다 — 그건 주입이 선택이라
+        (`usage_service=None` 가 기본) 여기서 기대면 주입을 빠뜨린 경로에서
+        보관 기간이 조용히 사라진다.
+        """
+        limits = await limits_of(self.chat_repo.db, user_id)
+        if limits.history_days is None:
+            return None
+        return now_kst() - timedelta(days=limits.history_days)
+
     async def list_sessions(self, request):
         """query: bot_id(=slug) (optional). 안 주면 사용자 모든 봇의 세션."""
         user_id = request.user_id
         bot_slug = request.query_params.get("bot_id")
+        since = await self._history_cutoff(user_id)
 
         if bot_slug:
             bot = await self.bot_repo.find_by_slug(bot_slug)
             if not bot or bot.user_id != user_id:
                 fail("권한이 없습니다.", "FORBIDDEN", 403)
-            sessions = await self.chat_repo.find_sessions_by_bot(bot.id)
+            sessions = await self.chat_repo.find_sessions_by_bot(bot.id, since)
             bot_id_to_slug = {bot.id: bot.slug}
         else:
             user_bots = await self.bot_repo.find_by_user(user_id)
             sessions = []
             for b in user_bots:
-                sessions.extend(await self.chat_repo.find_sessions_by_bot(b.id))
+                sessions.extend(
+                    await self.chat_repo.find_sessions_by_bot(b.id, since)
+                )
             sessions.sort(
                 key=lambda s: s.last_message_at or s.started_at, reverse=True
             )
@@ -751,6 +967,17 @@ class ChatService:
         bot = await self.bot_repo.find_by_id(session.bot_id)
         if not bot or bot.user_id != user_id:
             fail("권한이 없습니다.", "FORBIDDEN", 403)
+
+        # 목록에서 가려진 대화를 URL 로 직접 열면 보이는 구멍을 막는다.
+        since = await self._history_cutoff(user_id)
+        last_at = session.last_message_at or session.started_at
+        if since is not None and last_at is not None and last_at < since:
+            fail(
+                "현재 플랜의 대화 기록 보관 기간이 지난 대화입니다. "
+                "플랜을 올리면 다시 볼 수 있습니다.",
+                "HISTORY_RETENTION_EXCEEDED",
+                403,
+            )
 
         messages = await self.chat_repo.find_messages(session.id)
         session_dict = _session_to_dict(session)

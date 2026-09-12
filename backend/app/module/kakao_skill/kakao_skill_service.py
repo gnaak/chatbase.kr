@@ -36,6 +36,9 @@ from app.module.llm_error.llm_error import LlmErrorChannel, LlmErrorKind
 from app.module.usage.usage_service import visitor_unavailable_message
 from app.module.chat.chat_service import (
     _build_system_prompt,
+    LLM_HISTORY_LIMIT,
+    _uses_file_learning,
+    resolve_llm_route,
     NO_KEY_OWNER_MESSAGE,
     VISITOR_LLM_ERROR_MESSAGE,
     _should_enable_web_search,
@@ -480,26 +483,28 @@ class KakaoSkillService:
     async def _generate(
         self, bot, session: ChatSession, timeout: float = SKILL_TIMEOUT_SECONDS
     ) -> str:
-        provider = resolve_provider(bot.model)
-        api_key = await self.api_key_service.get_decrypted_key(bot.user_id, provider) or ""
+        # 주인 키 우선, 없으면 우리 키. 위젯 스트리밍과 같은 판정을 쓴다.
+        route = await resolve_llm_route(bot, self.api_key_service, bot.model)
+        provider = route.provider if route else resolve_provider(bot.model)
 
-        if not api_key:
-            # 키가 없으면 LLM을 아예 부르지 않는다. 위젯 동기·스트리밍과 같은 판정이다.
-            #
-            # 빈 키로 부르면 SDK가 raise 하고, 그 결과로 카카오 상대에게
-            # "일시적인 오류"가 간다. BYOK 라 키 없는 봇이 기본 상태인데
-            # 그게 일시적이지도 않고, 주인이 써둔 fallback 도 안 쓰인다.
+        if route is None:
+            # 주인 키도 우리 키도 없거나, 파일 학습 봇이라 우리 키로 못 떨어뜨린다.
+            # 빈 키로 부르면 SDK 가 raise 하고 그 결과가 카카오 상대에게 간다 —
+            # BYOK 라 키 없는 봇이 기본 상태였고, 그게 "일시적인 오류"로 보였다.
             logger.info(
-                "kakao 키 없음 — fallback 응답 bot=%s user=%s provider=%s",
-                bot.slug, bot.user_id, provider.value,
+                "kakao 호출 불가 — fallback 응답 bot=%s user=%s provider=%s 파일학습=%s",
+                bot.slug, bot.user_id, provider.value, _uses_file_learning(bot),
             )
             await self._record_error(
-                bot, LlmErrorKind.AUTH, provider.value,
-                NO_KEY_OWNER_MESSAGE,
+                bot, LlmErrorKind.AUTH, provider.value, NO_KEY_OWNER_MESSAGE,
             )
             return visitor_unavailable_message(bot)
 
-        history = await self.chat_repo.find_messages(session.id)
+        api_key = route.api_key
+
+        history = await self.chat_repo.find_messages(
+            session.id, limit=LLM_HISTORY_LIMIT
+        )
         api_messages = [
             {
                 "role": "user" if m.role == MessageRole.USER else "assistant",
@@ -509,18 +514,18 @@ class KakaoSkillService:
         ]
 
         # vector_store는 OpenAI 모델일 때만 의미 있음 (위젯과 동일한 게이팅)
-        vec_id = bot.vector_store_id if provider == Provider.OPENAI else None
+        vec_id = route.vector_store_id
 
         started = time.perf_counter()
         try:
             answer = await asyncio.wait_for(
                 self.llm_service.chat(
-                    model=bot.model,
-                    system_prompt=_build_system_prompt(bot, vec_id),
+                    model=route.model,
+                    system_prompt=_build_system_prompt(route.prompt_bot, vec_id),
                     messages=api_messages,
                     api_key=api_key,
                     vector_store_id=vec_id,
-                    enable_web_search=_should_enable_web_search(bot),
+                    enable_web_search=_should_enable_web_search(route.prompt_bot),
                 ),
                 timeout=timeout,
             )

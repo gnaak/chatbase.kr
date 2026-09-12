@@ -17,8 +17,8 @@ const Pricing = () => {
           <p className="mt-3 text-[15px] text-text-sub max-w-3xl mx-auto leading-relaxed">
             사이트에 붙이셔도 되고, QR을 붙이셔도 됩니다. 무료로 먼저 써보세요.
             <span className="block mt-1">
-              모델 사용료는 본인 키로 직접 결제되니, 유료 플랜은 대화가 몇 건이든
-              추가 과금이 없습니다.
+              GPT 사용료는 저희가 부담하니 API 키 없이 바로 시작하실 수 있고, 내
+              키를 등록하시면 대화 건수 제한이 없어집니다.
             </span>
           </p>
           {BILLING_BETA && (

@@ -1,4 +1,5 @@
 import logging
+from types import SimpleNamespace
 
 from app.core.utils.plan import resolve_plan
 from app.module.payment.plan_lookup import limits_of, plan_of
@@ -17,9 +18,13 @@ PLAN_FEATURE_MESSAGE = (
 )
 
 #: 한도 초과 안내. **봇 주인에게 보이는 경로에서만 쓴다.**
+#:
+#: "플랜을 올리면 제한 없이"라고 쓰지 않는다 — 이제 유료 플랜에도 한도가 있다.
+#: 실제로 한도가 풀리는 길은 내 키 등록이고, 그게 우리 원가도 같이 없앤다.
 QUOTA_MESSAGE = (
     "이번 달 대화 한도를 모두 사용했습니다. "
-    "플랜을 올리면 제한 없이 이용할 수 있습니다."
+    "API 키 화면에서 내 OpenAI 키를 등록하면 건수 제한 없이 이어서 쓸 수 있고, "
+    "플랜을 올리면 한도가 커집니다."
 )
 
 #: 봇 주인의 fallback도 비어 있을 때 방문자에게 보낼 마지막 문구.
@@ -63,9 +68,20 @@ class UsageService:
 
     # ── 대화 경로에서 호출 ──────────────────────
     async def is_blocked(self, bot) -> bool:
-        """이 요청을 막아야 하는가. 월 대화 한도 초과 여부."""
+        """이 요청을 막아야 하는가. 월 대화 한도 초과 여부.
+
+        한도는 **우리가 키를 내주는 대화에만** 건다. 내 키로 도는 대화는 우리
+        원가가 0이라 조일 이유가 없다 — `plan.py` 머리말 참고.
+
+        FREE 도 예외가 아니다. FREE 사용자가 내 키를 등록하면 100건 제한이
+        풀린다. 그래도 괜찮다 — FREE 로 묶어두려는 건 우리 지출이지 사용량
+        자체가 아니고, 키를 등록할 사람은 어차피 원가를 스스로 감당한다.
+        """
         limits = await self._limits_of(bot.user_id)
         if limits.monthly_messages is None:
+            return False
+
+        if not await self._bills_us(bot):
             return False
 
         used = await self.usage_repo.total_for_user(
@@ -81,6 +97,37 @@ class UsageService:
             limits.monthly_messages,
         )
         return True
+
+    async def _bills_us(self, bot) -> bool:
+        """이 봇의 대화 사용료가 우리한테 오는가. 실패하면 **True**.
+
+        못 읽었다고 한도를 풀어버리면 우리 키로 무제한이 열린다. 반대로 잘못
+        막으면 대화 한 번이 안 되는 것이라, 여기서는 막는 쪽이 덜 비싸다.
+        """
+        from app.module.api_key.api_key_repository import ApiKeyRepository
+        from app.module.api_key.api_key_service import ApiKeyService, bills_us
+
+        db = self.usage_repo.db
+        try:
+            return await bills_us(
+                db, ApiKeyService(ApiKeyRepository(db)), bot.user_id, bot.model
+            )
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "과금 주체 판정 실패 bot_id=%s — 우리 키로 간주", bot.id
+            )
+            return True
+
+    async def _quota_applies(self, user_id: int) -> bool:
+        """이 계정에 월 대화 한도가 걸리는가. 대시보드 표시용.
+
+        `_bills_us` 는 봇 하나(=모델 하나)를 보지만 여기는 계정 단위라 대표값이
+        필요하다. 제공 키의 기본 모델로 물어보면 곧 "지금 무료 키를 쓰는 계정인가"
+        와 같은 뜻이 된다 — 화면에 필요한 것이 정확히 그것이다.
+        """
+        from app.module.api_key.api_key_service import SERVICE_MODEL
+
+        return await self._bills_us(SimpleNamespace(user_id=user_id, model=SERVICE_MODEL, id=None))
 
     async def is_feature_blocked(self, bot, feature: str) -> bool:
         """플랜에 없는 기능인가. `PlanLimits`의 bool 필드명을 그대로 받는다."""
@@ -121,7 +168,11 @@ class UsageService:
 
         used = await self.usage_repo.total_for_user(user.id, year_month)
         rows = await self.usage_repo.by_bot_for_user(user.id, year_month)
-        limit = limits.monthly_messages
+
+        # 내 키로 도는 계정은 한도를 안 받는다(`is_blocked` 와 같은 판정).
+        # 이걸 안 보면 내 키를 쓰는 사람에게 "8,000/10,000 곧 소진" 경고가
+        # 뜨는데, 실제로는 아무리 써도 안 막힌다. 없는 벽을 보여주는 셈이다.
+        limit = limits.monthly_messages if await self._quota_applies(user.id) else None
 
         # 플랜에 카카오가 없는데 과거 유입 이력이 있으면 = 쓰다가 끊긴 사람.
         # 플랜에 포함돼 있으면 물어볼 필요가 없어 쿼리를 아낀다.
@@ -149,6 +200,11 @@ class UsageService:
                 # 지금은 GLOBAL만 true지만, 프론트에 `plan === "global"`을
                 # 심어두면 플랜이 늘어날 때 화면이 조용히 틀어진다.
                 "multilingual": limits.multilingual,
+                # 파일 학습과 보관 기간도 같은 이유로 값으로 내려보낸다.
+                # 프론트가 이걸 안 보면 FREE 사용자에게 파일 탭을 띄워놓고
+                # 업로드 순간 403 을 던지게 된다.
+                "file_learning": limits.file_learning,
+                "history_days": limits.history_days,
                 "per_bot": [
                     {
                         "bot_id": bot_id,

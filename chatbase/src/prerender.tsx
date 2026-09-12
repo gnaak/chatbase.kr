@@ -55,7 +55,7 @@ export const ROUTES: PrerenderRoute[] = [
     out: "index.html",
     title: "chatbase.kr — 5분이면 끝나는 AI 챗봇",
     description:
-      "홈페이지에는 코드 한 줄, 매장에는 QR 한 장으로 내거는 AI 챗봇. 홈페이지가 없어도 되고, 외국인 손님에게는 한·영·일·중으로 답합니다. OpenAI / Anthropic / Gemini 키 직접 등록(BYOK)이라 대화가 늘어도 구독료는 그대로.",
+      "홈페이지에는 코드 한 줄, 매장에는 QR 한 장으로 내거는 AI 챗봇. 홈페이지가 없어도 되고, 외국인 손님에게는 한·영·일·중으로 답합니다. GPT 사용료는 저희가 부담해 API 키 없이 바로 시작하고, 내 키를 등록하면 모델 선택과 무제한 대화가 열립니다.",
   },
   {
     path: "/support",
@@ -69,7 +69,7 @@ export const ROUTES: PrerenderRoute[] = [
     out: "terms/index.html",
     title: "이용약관 — chatbase.kr",
     description:
-      "chatbase.kr 챗봇 임베드 SaaS 이용약관. 회원의 권리·의무, BYOK 방식의 API 키 사용 조건, 서비스 제공 범위를 규정합니다.",
+      "chatbase.kr 챗봇 임베드 SaaS 이용약관. 회원의 권리·의무, 회사 제공 API 키와 회원 등록 키(BYOK)의 사용 조건, 서비스 제공 범위를 규정합니다.",
   },
   {
     path: "/privacy",
@@ -140,7 +140,7 @@ const organization = {
   logo: `${ORIGIN}/og-image.png`,
   image: `${ORIGIN}/og-image.png`,
   description:
-    "홈페이지에 코드 한 줄로 붙이거나 QR 코드로 내거는 AI 챗봇 SaaS. 홈페이지가 없는 매장·숙소도 인쇄한 QR 한 장으로 시작할 수 있고, 외국인 방문자에게는 한국어·영어·일본어·중국어로 응대합니다. OpenAI · Anthropic · Google API 키를 회원이 직접 등록하는 BYOK 방식이라 모델 사용료가 제공자에게 직접 결제되고, 대화량이 늘어도 구독료는 그대로입니다.",
+    "홈페이지에 코드 한 줄로 붙이거나 QR 코드로 내거는 AI 챗봇 SaaS. 홈페이지가 없는 매장·숙소도 인쇄한 QR 한 장으로 시작할 수 있고, 외국인 방문자에게는 한국어·영어·일본어·중국어로 응대합니다. OpenAI(GPT) 사용료는 chatbase.kr가 부담하므로 API 키 없이 바로 시작할 수 있고, 회원이 직접 발급한 API 키를 등록하면(BYOK) 모델 선택·파일 학습·웹 검색이 열리고 월 대화 건수 제한이 없어집니다. Anthropic(Claude)과 Google(Gemini) 모델은 본인 키가 필요합니다.",
   areaServed: { "@type": "Country", name: "대한민국" },
   knowsLanguage: ["ko", "en"],
   contactPoint: [
@@ -182,7 +182,8 @@ const softwareApplication = {
     "QR 코드 — 홈페이지 없이 인쇄물로 챗봇 배포",
     "다국어 응대 — 한국어 · 영어 · 일본어 · 중국어",
     "인사말 · 자주 묻는 질문 자동 번역 (DeepL)",
-    "BYOK — OpenAI · Anthropic · Google API 키 직접 등록",
+    "API 키 없이 시작 — OpenAI(GPT) 사용료 무료 제공",
+    "BYOK — 내 OpenAI · Anthropic · Google 키 등록 시 모델 선택 · 무제한 대화",
     "텍스트 · 파일 · 웹페이지 학습",
     "자주 묻는 질문 즉답 버튼",
     "카카오톡 채널 연동 (오픈빌더 스킬 서버)",

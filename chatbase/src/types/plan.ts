@@ -6,8 +6,11 @@
  * - 유료 전환 레버는 **Free의 월 대화 건수**다. 임베드 자체는 Free에도 열어둔다 —
  *   자기 사이트에서 돌아가는 걸 봐야 결제 결심이 서기 때문에, 그 경험을 막으면
  *   Free가 체험 수단이 아니라 그냥 안 쓰는 칸이 된다.
- * - 유료 플랜은 **대화 건수를 제한하지 않는다.** BYOK라 모델 사용료가 우리 원가에
- *   잡히지 않으므로 건수를 조일 이유가 없고, "내 키로 무제한"이 그대로 셀링 포인트가 된다.
+ * - 유료 플랜에도 **월 대화 한도가 있다.** OpenAI 키를 우리가 내주기 때문이다 —
+ *   그 경로의 대화는 우리 돈이라 상한이 없으면 지출에 천장이 없다.
+ *   단, **내 키를 등록해 쓰면 한도를 받지 않는다**(그쪽은 우리 원가가 0이다).
+ *   그래서 "내 키로 무제한"은 여전히 셀링 포인트고, 동시에 BYOK 유인이 된다.
+ *   백엔드 판정은 `usage_service.is_blocked` → `api_key_service.bills_us`.
  * - Enterprise는 기능 등급이 아니라 구축(SI) 상품이라 별도 블록으로 노출한다.
  * - **웹 검색은 전 플랜 공통**이라 플랜 카드에 넣지 않는다. 이미 3사(OpenAI/Anthropic/
  *   Gemini) 모두에서 동작 중이라(각 `infra` provider의 chat_service) 특정 플랜에 가두면 지금 되던
@@ -20,6 +23,12 @@
 
 /** Free 플랜 월 대화 한도(방문자 질문 1건 = 1건). 백엔드 게이팅도 이 값을 기준으로 맞춘다. */
 export const FREE_MONTHLY_MESSAGES = 100;
+
+/**
+ * 무료 제공 키를 쓸 때만 걸리는 한도라는 주석. 플랜 카드마다 반복되므로 한곳에 둔다.
+ * 내 키를 등록하면 이 숫자는 의미가 없어진다.
+ */
+export const QUOTA_NOTE = "내 키 등록 시 무제한";
 
 /**
  * 결제 베타 잠금 — 화면에서 유료 결제 경로를 가린다.
@@ -109,7 +118,8 @@ export const PLANS: Plan[] = [
     tagline: "내 사이트에서, 또는 QR로",
     features: [
       { label: "챗봇 1개" },
-      { label: `월 대화 ${FREE_MONTHLY_MESSAGES}건` },
+      { label: `월 대화 ${FREE_MONTHLY_MESSAGES}건`, note: QUOTA_NOTE },
+      { label: "API 키 없이 바로 시작", note: "GPT 사용료 무료 제공" },
       { label: "위젯 · iframe 임베드" },
       { label: "QR 코드", note: "사이트 없어도 됨" },
       { label: "텍스트 · 웹페이지 학습" },
@@ -135,14 +145,14 @@ export const PLANS: Plan[] = [
     tagline: "홈페이지 상담 자동화",
     features: [
       { label: "챗봇 1개" },
-      { label: "대화 수 제한 없음" },
-      { label: "파일 학습", note: "OpenAI 키 필요" },
+      { label: "월 대화 10,000건", note: QUOTA_NOTE },
+      { label: "파일 학습", note: "내 OpenAI 키 필요" },
       { label: "대화 기록 90일" },
       { label: "Powered by 배지 제거" },
     ],
     limits: {
       bots: 1,
-      monthlyMessages: null,
+      monthlyMessages: 10_000,
       fileLearning: true,
       kakaoChannel: false,
       historyDays: 90,
@@ -160,12 +170,13 @@ export const PLANS: Plan[] = [
     features: [
       { label: "Standard의 모든 기능" },
       { label: "챗봇 3개" },
+      { label: "월 대화 25,000건", note: QUOTA_NOTE },
       { label: "카카오톡 채널 연동" },
       { label: "대화 기록 무제한" },
     ],
     limits: {
       bots: 3,
-      monthlyMessages: null,
+      monthlyMessages: 25_000,
       fileLearning: true,
       kakaoChannel: true,
       historyDays: null,
@@ -184,13 +195,14 @@ export const PLANS: Plan[] = [
     features: [
       { label: "Premium의 모든 기능" },
       { label: "챗봇 5개" },
+      { label: "월 대화 50,000건", note: QUOTA_NOTE },
       { label: "다국어 응대", note: "한 · 영 · 일 · 중" },
       { label: "인사말 · 자주 묻는 질문 자동 번역" },
       { label: "우선 지원" },
     ],
     limits: {
       bots: 5,
-      monthlyMessages: null,
+      monthlyMessages: 50_000,
       fileLearning: true,
       kakaoChannel: true,
       historyDays: null,
@@ -226,8 +238,17 @@ export const planLosses = (from: PlanLimits, to: PlanLimits): string[] => {
   if (to.bots < from.bots) {
     losses.push(`챗봇을 ${to.bots}개까지만 만들 수 있습니다 (현재 한도 ${from.bots}개)`);
   }
-  if (to.monthlyMessages !== null && from.monthlyMessages === null) {
-    losses.push(`월 대화가 ${to.monthlyMessages.toLocaleString()}건으로 제한됩니다`);
+  // 무제한 → 한도뿐 아니라 한도 → 더 작은 한도도 알려야 한다.
+  // 이제 유료끼리도 숫자가 다르므로(10,000 / 25,000 / 50,000) 예전 조건은
+  // PREMIUM → STANDARD 하향을 통째로 놓쳤다.
+  if (
+    to.monthlyMessages !== null &&
+    (from.monthlyMessages === null || to.monthlyMessages < from.monthlyMessages)
+  ) {
+    losses.push(
+      `월 대화가 ${to.monthlyMessages.toLocaleString()}건으로 제한됩니다` +
+        " (내 키를 등록해 쓰는 경우에는 해당하지 않습니다)",
+    );
   }
   if (to.historyDays !== null && (from.historyDays === null || to.historyDays < from.historyDays)) {
     losses.push(`대화 기록 보관이 ${to.historyDays}일로 줄어듭니다`);

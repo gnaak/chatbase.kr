@@ -4,8 +4,20 @@
 한쪽만 고치면 "가격표에 3개라고 써놓고 1개에서 막히는" 상황이 생긴다.
 (실제로 한동안 어긋나 있었다 — 프론트는 1/1/3, 백엔드는 1/3/10이었다.)
 
-BYOK라 모델 사용료가 우리 원가에 잡히지 않으므로 **유료 플랜은 대화 건수를
-제한하지 않는다**(`monthly_messages=None`). 유료 전환 레버는 Free의 월 대화 한도다.
+## 월 대화 한도는 **우리가 키를 내주기 때문에** 있다
+
+한때 유료 플랜은 전부 무제한이었다(`monthly_messages=None`). BYOK라 모델
+사용료가 우리 원가에 안 잡혔으니 건수를 조일 이유가 없었다.
+
+지금은 OpenAI 키를 우리가 내준다. 그 경로의 대화는 **우리 돈**이라 상한이
+없으면 지출에 천장이 없다. 실측 원가는 `gpt-5.6-luna` 기준 1.34원/대화
+(입력 $0.20 · 출력 $1.20 per 1M, 20턴 히스토리 상한 기준)이고, 한도를 다 쓰면
+원가율이 68~70%가 되도록 잡았다.
+
+**내 키를 등록해 쓰는 계정은 이 상한을 받지 않는다.** 그쪽 대화는 우리 원가가
+0이라 조일 이유가 없고, 오히려 "내 키를 붙이면 무제한"이 BYOK 유인이 된다.
+판정은 `usage_service.is_blocked` 가 `api_key_service.bills_us` 로 한다 —
+여기 숫자만 보고 "무조건 걸린다"고 읽으면 안 된다.
 
 ## 봇 개수를 값의 축으로 쓴다
 
@@ -70,6 +82,8 @@ class PlanLimits:
     """None = 무제한."""
 
     bots: int | None
+    #: 월 방문자 질문 건수. **제공 키로 도는 계정에만** 적용된다(위 설명 참고).
+    #: 내 키를 등록해 쓰면 `is_blocked` 가 이 값을 보지 않는다.
     monthly_messages: int | None
     file_learning: bool
     kakao_channel: bool
@@ -95,7 +109,8 @@ PLAN_LIMITS: dict[Plan, PlanLimits] = {
     ),
     Plan.STANDARD: PlanLimits(
         bots=1,
-        monthly_messages=None,
+        # 10,000 × 1.34원 = 13,400원 (가격의 70%)
+        monthly_messages=10_000,
         file_learning=True,
         kakao_channel=False,
         remove_badge=True,
@@ -104,7 +119,8 @@ PLAN_LIMITS: dict[Plan, PlanLimits] = {
     ),
     Plan.PREMIUM: PlanLimits(
         bots=3,
-        monthly_messages=None,
+        # 25,000 × 1.34원 = 33,500원 (가격의 68%)
+        monthly_messages=25_000,
         file_learning=True,
         kakao_channel=True,
         remove_badge=True,
@@ -113,7 +129,8 @@ PLAN_LIMITS: dict[Plan, PlanLimits] = {
     ),
     Plan.GLOBAL: PlanLimits(
         bots=5,
-        monthly_messages=None,
+        # 50,000 × 1.34원 = 67,000원 (가격의 68%)
+        monthly_messages=50_000,
         file_learning=True,
         kakao_channel=True,
         remove_badge=True,

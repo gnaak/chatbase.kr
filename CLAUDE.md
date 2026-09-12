@@ -38,7 +38,8 @@ chatbase/   React — chatbase.kr            :3000
 | `chatbase/` | `SALES.md` | 어디에 어떻게 팔지 + 계산 근거 |
 | `chatbase/` | `OUTREACH.md` | 가입할 곳 · 채널 · 복붙 문구 |
 | `chatbase/` | `PROGRESS.md` | 단계별 진행 기록 |
-| `chatbase/` | `chatbase-knowledge.txt` | 랜딩 데모 봇의 학습 자료 |
+| `chatbase/` | `chatbase-knowledge.txt` | 랜딩 데모 봇의 **학습 자료** |
+| `chatbase/` | `demo-bot.md` | 랜딩 데모 봇의 **나머지 설정** — 인사말·FAQ·프롬프트 |
 
 **넷의 경계**: `PROJECT.md`는 *왜 그게 그런지*, `NEED.md`·`TODO.md`는 *무엇을 할지*,
 `SALES.md`는 *어떻게 팔지*. 설명이 길어지면 PROJECT로, 체크박스가 필요해지면 나머지로.

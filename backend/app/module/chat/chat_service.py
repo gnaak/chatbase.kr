@@ -908,11 +908,19 @@ class ChatService:
         `usage_service` 를 거치지 않고 직접 조회한다 — 그건 주입이 선택이라
         (`usage_service=None` 가 기본) 여기서 기대면 주입을 빠뜨린 경로에서
         보관 기간이 조용히 사라진다.
+
+        반환값은 **naive** 다. `now_kst()` 는 tz 가 붙은 값을 주는데 MySQL
+        DATETIME 은 tz 없이 돌아와서, 그대로 비교하면
+        `can't compare offset-naive and offset-aware datetimes` 로 터진다.
+        저장할 때 KST 벽시계 값이 그대로 들어가므로 tz 만 떼면 맞다.
+        (`stats_service` · `inquiry_service` 도 같은 이유로 같은 처리를 한다.)
         """
         limits = await limits_of(self.chat_repo.db, user_id)
         if limits.history_days is None:
             return None
-        return now_kst() - timedelta(days=limits.history_days)
+        return (now_kst() - timedelta(days=limits.history_days)).replace(
+            tzinfo=None
+        )
 
     async def list_sessions(self, request):
         """query: bot_id(=slug) (optional). 안 주면 사용자 모든 봇의 세션."""
@@ -971,6 +979,10 @@ class ChatService:
         # 목록에서 가려진 대화를 URL 로 직접 열면 보이는 구멍을 막는다.
         since = await self._history_cutoff(user_id)
         last_at = session.last_message_at or session.started_at
+        # DB 에서 온 값은 naive 지만, 같은 세션에서 방금 now_kst() 로 채워진
+        # 객체가 잡히면 aware 일 수 있다. 양쪽을 naive 로 맞춰 비교한다.
+        if last_at is not None and last_at.tzinfo is not None:
+            last_at = last_at.replace(tzinfo=None)
         if since is not None and last_at is not None and last_at < since:
             fail(
                 "현재 플랜의 대화 기록 보관 기간이 지난 대화입니다. "

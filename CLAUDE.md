@@ -3,7 +3,7 @@
 한 레포에 앱 둘.
 
 ```
-backend/    FastAPI + MySQL + Redis        :8000
+backend/    FastAPI + MySQL                :8000
 chatbase/   React — chatbase.kr            :3000
 ```
 
@@ -28,18 +28,22 @@ chatbase/   React — chatbase.kr            :3000
 
 상품 문서는 상품 폴더 안에 있다. 루트에는 레포 전체에 걸치는 것만 둔다.
 
-| 위치 | 문서 | 무엇 |
-|------|------|------|
-| 루트 | `CLAUDE.md`(이 문서) | 레포 구조 · 규칙 |
-| 루트 | `DESIGN.md` | 디자인 시스템 · 토큰 |
-| `chatbase/` | `PROJECT.md` | **현재 동작하는 방식** + 함정 모음 |
-| `chatbase/` | `NEED.md` | 기능 보완 — 지금 하는 것 |
-| `chatbase/` | `TODO.md` | 사업 확장 — 그다음 |
-| `chatbase/` | `SALES.md` | 어디에 어떻게 팔지 + 계산 근거 |
-| `chatbase/` | `OUTREACH.md` | 가입할 곳 · 채널 · 복붙 문구 |
-| `chatbase/` | `PROGRESS.md` | 단계별 진행 기록 |
-| `chatbase/` | `chatbase-knowledge.txt` | 랜딩 데모 봇의 **학습 자료** |
-| `chatbase/` | `demo-bot.md` | 랜딩 데모 봇의 **나머지 설정** — 인사말·FAQ·프롬프트 |
+| 위치 | 문서 | 무엇 | |
+|------|------|------|---|
+| 루트 | `CLAUDE.md`(이 문서) | 레포 구조 · 규칙 | |
+| 루트 | `DESIGN.md` | 디자인 시스템 · 토큰 | |
+| `chatbase/` | `chatbase-knowledge.txt` | 랜딩 데모 봇의 **학습 자료** | |
+| `chatbase/` | `demo-bot.md` | 랜딩 데모 봇의 **나머지 설정** — 인사말·FAQ·프롬프트 | |
+| `chatbase/` | `PROJECT.md` | **현재 동작하는 방식** + 함정 모음 | 로컬 |
+| `chatbase/` | `NEED.md` | 기능 보완 — 지금 하는 것 | 로컬 |
+| `chatbase/` | `TODO.md` | 사업 확장 — 그다음 | 로컬 |
+| `chatbase/` | `SALES.md` | 어디에 어떻게 팔지 + 계산 근거 | 로컬 |
+| `chatbase/` | `OUTREACH.md` | 가입할 곳 · 채널 · 복붙 문구 | 로컬 |
+| `chatbase/` | `PROGRESS.md` | 단계별 진행 기록 | 로컬 |
+
+**"로컬" 표시는 `.gitignore` 대상이다.** 기획·영업 문서라 커밋하지 않는다 —
+작업하는 사람 디스크에만 있고, 레포를 새로 클론하면 없다. 그 상태로도 코드는
+돌아야 하므로 **동작에 필요한 설명은 문서가 아니라 코드 주석에 남긴다.**
 
 **넷의 경계**: `PROJECT.md`는 *왜 그게 그런지*, `NEED.md`·`TODO.md`는 *무엇을 할지*,
 `SALES.md`는 *어떻게 팔지*. 설명이 길어지면 PROJECT로, 체크박스가 필요해지면 나머지로.
@@ -49,8 +53,8 @@ chatbase/   React — chatbase.kr            :3000
 | 영역 | 기술 |
 |------|------|
 | Frontend | React 19 + TypeScript + Vite + TanStack Query v5 + Tailwind CSS v3 |
-| Backend | FastAPI + SQLAlchemy 2.0 (async) + MySQL 8 (asyncmy) + Redis + Alembic |
-| 인프라 | AWS EC2(nginx + gunicorn) + RDS MySQL + ElastiCache Redis · Cloudflare |
+| Backend | FastAPI + SQLAlchemy 2.0 (async) + MySQL 8 (asyncmy) + Alembic |
+| 인프라 | AWS EC2(nginx + gunicorn) + RDS MySQL · Cloudflare |
 | 인증 | JWT + OAuth (Google, Kakao) |
 | 결제 | 토스페이먼츠 빌링키 정기결제 |
 | LLM | OpenAI / Anthropic / Google — **전부 사용자 키(BYOK)** |

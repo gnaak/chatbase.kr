@@ -29,4 +29,11 @@ dist-ssr
 .env.*
 !.env.example
 
-FILING.md
+# 내부 기획 문서 — 공개 대상 아님
+chatbase/PROJECT.md
+chatbase/NEED.md
+chatbase/TODO.md
+chatbase/SALES.md
+chatbase/OUTREACH.md
+chatbase/PROGRESS.md
+chatbase/FILING.md

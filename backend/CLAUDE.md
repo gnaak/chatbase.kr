@@ -1,6 +1,6 @@
 # Backend — CLAUDE.md
 
-FastAPI + SQLAlchemy 2.0 (async) + MySQL 8 (asyncmy) + Redis + Alembic
+FastAPI + SQLAlchemy 2.0 (async) + MySQL 8 (asyncmy) + Alembic
 
 ## 폴더 구조
 
@@ -9,7 +9,7 @@ app/
 ├── main.py
 ├── core/
 │   ├── config/settings.py          환경변수 (hostname으로 local/prod 자동 감지)
-│   ├── database/                   base.py(+ now_kst) · redis.py
+│   ├── database/                   base.py (+ now_kst)
 │   ├── exception/handler.py        전역 예외 핸들러
 │   ├── logging/                    app.log · access.log · error.log
 │   ├── middleware/                 cors · register · secure_headers · rate limit

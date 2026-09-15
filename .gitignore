@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# 환경변수 — 값은 커밋하지 않는다.
+# 새 키를 추가할 때는 .env.example 에 키 이름만 같이 넣어 둘 것.
+.env
+.env.*
+!.env.example
+
+FILING.md

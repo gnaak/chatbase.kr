@@ -23,6 +23,7 @@
  * `middlewareMode: true` + `hmr: false` 라 **포트를 열지 않는다.** TS·JSX·`@/` 별칭을
  * 풀려고 Vite 의 모듈 로더만 빌려 쓴다. 띄워둔 :3000 과 충돌하지 않는다.
  */
+import { execFileSync } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -124,6 +125,29 @@ const hydrationGuard = (path) =>
   `if(r&&p!==${JSON.stringify(path)})r.textContent="";` +
   "})();</script>";
 
+/**
+ * 라우트의 `sources` 가 **마지막으로 커밋된 날짜**(YYYY-MM-DD).
+ *
+ * 빌드 시각을 lastmod 로 쓰면 내용이 안 바뀌어도 매번 갱신된 것처럼 보인다.
+ * 크롤러가 그걸 알아채면 이 사이트의 lastmod 를 통째로 무시하기 시작하므로,
+ * 색인 가속에 쓰라고 만든 신호가 오히려 죽는다.
+ *
+ * git 이 없거나(배포 서버가 tarball 로 받는 경우) 얕은 클론이면 null 을 주고,
+ * 그러면 `sitemapXml` 이 그 줄을 빼버린다 — 틀린 날짜보다 없는 쪽이 낫다.
+ */
+const lastModified = (sources) => {
+  try {
+    const out = execFileSync("git", ["log", "-1", "--format=%cs", "--", ...sources], {
+      cwd: ROOT,
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    return /^\d{4}-\d{2}-\d{2}$/.test(out) ? out : null;
+  } catch {
+    return null;
+  }
+};
+
 /** 본문에 실제로 글자가 몇 개 들어갔는지 — 이 숫자가 0이면 고친 게 아니다 */
 const bodyTextLength = (html) => {
   const body = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)?.[1] ?? "";
@@ -183,10 +207,14 @@ const vite = await createServer({
 });
 
 try {
-  const { ROUTES, renderRoute, structuredData, llmsTxt } =
+  const { ROUTES, renderRoute, structuredData, llmsTxt, sitemapXml } =
     await vite.ssrLoadModule("/src/prerender.tsx");
 
   const rows = [];
+  const lastmods = {};
+
+  // JSON-LD 의 dateModified 와 sitemap 의 lastmod 가 같은 값을 써야 하므로 먼저 구한다
+  for (const route of ROUTES) lastmods[route.path] = lastModified(route.sources);
 
   for (const route of ROUTES) {
     const rendered = renderRoute(route.path);
@@ -206,14 +234,30 @@ try {
     html = setMeta(html, "name", "twitter:url", url);
     html = setMeta(html, "name", "twitter:title", route.title);
     html = setMeta(html, "name", "twitter:description", route.description);
-    html = html.replace("</head>", `  ${jsonLdScript(structuredData(route.path))}\n  </head>`);
+    html = html.replace(
+      "</head>",
+      `  ${jsonLdScript(structuredData(route.path, lastmods[route.path]))}\n  </head>`,
+    );
 
     const out = join(DIST, route.out);
     await mkdir(dirname(out), { recursive: true });
     await writeFile(out, html, "utf-8");
 
-    rows.push({ path: route.path, out: route.out, chars: bodyTextLength(html) });
+    rows.push({
+      path: route.path,
+      out: route.out,
+      chars: bodyTextLength(html),
+      lastmod: lastmods[route.path],
+    });
   }
+
+  /**
+   * sitemap.xml — `public/` 이 아니라 여기서 굽는다.
+   *
+   * 손으로 관리하던 시절 `lastmod` 가 3주 넘게 2026-08-30 에 멈춰 있었고,
+   * 라우트를 추가할 때 고칠 곳도 셋이었다. 이제 ROUTES 하나가 원본이다.
+   */
+  await writeFile(join(DIST, "sitemap.xml"), sitemapXml(lastmods), "utf-8");
 
   /**
    * llms.txt — 답변을 쓰는 LLM 이 사람 글처럼 읽는 요약.
@@ -222,17 +266,27 @@ try {
    * 404 보다 나쁘다 — 크롤러가 그 HTML 덩어리를 llms.txt 로 파싱한다.
    * 실측(2026-09-19)에서 실제로 그 상태였다.
    */
-  const llms = llmsTxt();
+  // 기준일은 홈의 것을 쓴다 — llms.txt 내용(요금·기능·FAQ)이 전부 홈 sources 에서 온다
+  const llms = llmsTxt(lastmods["/"]);
   await writeFile(join(DIST, "llms.txt"), llms, "utf-8");
 
   const pad = (s, n) => String(s).padEnd(n);
   console.log("\n  프리렌더 완료 — 크롤러가 읽는 본문 글자 수\n");
-  console.log(`  ${pad("라우트", 12)}${pad("출력", 22)}본문`);
-  console.log(`  ${"-".repeat(46)}`);
+  console.log(`  ${pad("라우트", 12)}${pad("출력", 22)}${pad("본문", 12)}lastmod`);
+  console.log(`  ${"-".repeat(58)}`);
   for (const r of rows) {
-    console.log(`  ${pad(r.path, 12)}${pad(r.out, 22)}${r.chars.toLocaleString()}자`);
+    const chars = `${r.chars.toLocaleString()}자`;
+    console.log(`  ${pad(r.path, 12)}${pad(r.out, 22)}${pad(chars, 12)}${r.lastmod ?? "-"}`);
   }
   console.log(`  ${pad("(llms.txt)", 12)}${pad("llms.txt", 22)}${llms.length.toLocaleString()}자`);
+  console.log(`  ${pad("(sitemap)", 12)}${pad("sitemap.xml", 22)}${ROUTES.length}개 URL`);
+
+  if (rows.every((r) => !r.lastmod)) {
+    console.warn(
+      "\n  ⚠ sitemap 에 lastmod 가 하나도 안 들어갔습니다.\n" +
+        "    git 이 없거나 얕은 클론입니다. 색인 가속 신호가 빠진 채로 나갑니다.",
+    );
+  }
 
   const empty = rows.filter((r) => r.chars < 200);
   if (empty.length) {

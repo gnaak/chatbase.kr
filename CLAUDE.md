@@ -107,7 +107,7 @@ GA4·프리렌더·QR·다국어·GLOBAL 플랜까지 갔는데 `NEED.md`는 "�
 | 코드를 이렇게 고치면 | 같이 봐야 하는 문서 |
 |---|---|
 | 플랜·가격·한도 | `PROJECT.md` 요금제 표 · `plan.py` · `types/plan.ts` **셋 다** |
-| 라우트 추가 | `publicRoutes.tsx` · `prerender.tsx` ROUTES · `public/sitemap.xml` **셋 다** |
+| 라우트 추가 | `publicRoutes.tsx` · `prerender.tsx` ROUTES **둘 다** (sitemap·llms.txt는 ROUTES에서 자동 생성) |
 | DB 테이블 추가 | `PROJECT.md` 테이블 목록 |
 | 기능 완료 | `NEED.md`/`TODO.md` 체크박스 + `PROGRESS.md` 한 회차 |
 

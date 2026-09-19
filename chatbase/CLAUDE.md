@@ -47,7 +47,7 @@ npm run check:types  # tsc --noEmit
 고친 파일의 에러 개수를 `check:types`로 **작업 전후 비교**한다. 전체 0을 목표로
 하지 않는다 — 기존 에러(대부분 `useGet`의 `TQueryFnData` 추론)가 이미 쌓여 있다.
 
-## 프리렌더 — 라우트를 추가하면 세 곳을 같이 고친다
+## 프리렌더 — 라우트를 추가하면 두 곳을 같이 고친다
 
 랜딩이 클라이언트 렌더링이라 크롤러가 받는 `<body>` 텍스트가 **0자**였다.
 Googlebot은 JS를 실행해 주지만 **GPTBot · OAI-SearchBot · ClaudeBot은 하지 않는다.**
@@ -56,10 +56,14 @@ Googlebot은 JS를 실행해 주지만 **GPTBot · OAI-SearchBot · ClaudeBot은
 | # | 파일 | 무엇 |
 |---|------|------|
 | 1 | [`src/publicRoutes.tsx`](src/publicRoutes.tsx) | 라우트 정의 |
-| 2 | [`src/prerender.tsx`](src/prerender.tsx) `ROUTES` | 라우트별 title · description · JSON-LD |
-| 3 | [`public/sitemap.xml`](public/sitemap.xml) | 색인 요청 |
+| 2 | [`src/prerender.tsx`](src/prerender.tsx) `ROUTES` | title · description · JSON-LD · **sitemap 항목** |
 
 **어긋나면 sitemap에는 있는데 크롤러에겐 빈 페이지인 URL이 생긴다.**
+
+`sitemap.xml`·`llms.txt`는 `public/`에 없다 — **`ROUTES`에서 빌드할 때 굽는다.**
+손으로 관리하던 동안 `lastmod`가 3주 넘게 2026-08-30에 멈춰 있었다. `lastmod`는
+각 라우트 `sources`의 **마지막 커밋 날짜**다(빌드 시각이 아니다 — 내용이 안 바뀌었는데
+날짜만 올리면 크롤러가 `lastmod`를 통째로 무시한다).
 
 ⚠️ 프리렌더는 `routes.tsx`가 아니라 `publicRoutes.tsx`를 쓴다. 전자는 대시보드·
 어드민 컨테이너 30여 개를 모듈 스코프에서 끌고 오는데, 그중 하나라도 모듈

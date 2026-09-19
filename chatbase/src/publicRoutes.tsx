@@ -16,14 +16,16 @@ import SupportForm from "@/container/support";
  * (실제로 `container/dashboard/botEdit.tsx` 의 `EMBED_ORIGIN` 이 그렇다).
  * 대시보드는 로그인 뒤 화면이라 프리렌더할 이유가 없으니, 아예 안 들여온다.
  *
- * ## 세 곳이 같은 목록을 봐야 한다
+ * ## 두 곳이 같은 목록을 봐야 한다
  *
  *   1. 여기                      — 라우트 정의
- *   2. `src/prerender.tsx` ROUTES — 라우트별 title · description · JSON-LD
- *   3. `public/sitemap.xml`       — 색인 요청
+ *   2. `src/prerender.tsx` ROUTES — title · description · JSON-LD · sitemap 항목
  *
  * 어긋나면 sitemap 에는 있는데 크롤러에겐 빈 페이지인 URL 이 생긴다.
- * 라우트를 추가할 때 셋을 같이 고친다.
+ * 라우트를 추가할 때 둘을 같이 고친다.
+ *
+ * `public/sitemap.xml` 은 더 이상 없다 — `ROUTES` 에서 빌드할 때 굽는다.
+ * 손으로 관리하던 동안 `lastmod` 가 3주 넘게 멈춰 있었다.
  *
  * `/support/:token` 은 여기 없다. 로그인 없이 열리지만 URL 에 토큰이 있어
  * 색인되면 남의 문의가 검색된다 — `public/robots.txt` 에서 막았다.

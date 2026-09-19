@@ -231,14 +231,22 @@ async def get_me(p: ServiceProvider):
 Googlebot은 JS를 실행해 주지만 **GPTBot · OAI-SearchBot · ClaudeBot은 하지 않습니다.**
 
 빌드 시점에 공개 라우트를 정적 HTML로 뽑고 JSON-LD를 `<head>`에 넣습니다.
+같은 데이터에서 `sitemap.xml`과 `llms.txt`도 같이 굽습니다.
 
 ```
 npm run build  →  vite build  →  scripts/prerender.mjs
+                                   ├─ dist/<라우트>/index.html   본문 + 메타 + JSON-LD
+                                   ├─ dist/sitemap.xml          lastmod = 소스의 마지막 커밋일
+                                   └─ dist/llms.txt             AI용 사이트 안내서
 ```
 
-라우트를 추가하면 **세 곳을 같이** 고쳐야 합니다 — `publicRoutes.tsx` ·
-`prerender.tsx`의 `ROUTES` · `public/sitemap.xml`. 어긋나면 sitemap에는 있는데
+라우트를 추가하면 **두 곳을 같이** 고쳐야 합니다 — `publicRoutes.tsx`(라우트 정의)와
+`prerender.tsx`의 `ROUTES`(메타·JSON-LD·sitemap 항목). 어긋나면 sitemap에는 있는데
 크롤러에겐 빈 페이지인 URL이 생깁니다.
+
+요금·기능·FAQ는 `PLANS`와 `FAQ_ITEMS`에서 **직접 읽습니다.** 구조화 데이터용으로
+따로 적어두지 않는 이유는 두 벌이 되면 가격을 고칠 때 한쪽만 고치게 되고,
+그러면 AI가 틀린 가격을 답하기 때문입니다.
 
 ⚠️ 프리렌더는 `routes.tsx`가 아니라 `publicRoutes.tsx`를 씁니다. 전자는 대시보드
 컨테이너를 전부 끌고 오는데 그중 일부가 모듈 스코프에서 `window`를 읽어 Node에서

@@ -8,6 +8,8 @@
     "build": "vite build && node scripts/prerender.mjs",
     "build:spa": "vite build",
     "prerender": "node scripts/prerender.mjs",
+    "indexnow": "node scripts/indexnow.mjs",
+    "og-image": "node scripts/og-image.mjs",
     "check:types": "tsc --noEmit",
     "lint": "eslint .",
     "preview": "vite preview"

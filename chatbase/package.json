@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node scripts/prerender.mjs",
-    "build:spa": "vite build",
+    "build": "node scripts/check-env.mjs && vite build && node scripts/prerender.mjs",
+    "build:spa": "node scripts/check-env.mjs && vite build",
+    "check:env": "node scripts/check-env.mjs",
     "prerender": "node scripts/prerender.mjs",
     "indexnow": "node scripts/indexnow.mjs",
     "og-image": "node scripts/og-image.mjs",

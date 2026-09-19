@@ -29,6 +29,7 @@ import publicRoutes from "@/publicRoutes";
 import { FAQ_ITEMS } from "@/component/landing/faq";
 import { ENTERPRISE, PLANS } from "@/types/plan";
 import { BUSINESS_INFO_ROWS, SHOW_BUSINESS_INFO } from "@/constants/company";
+import { INDUSTRIES, industryBySlug, type Industry } from "@/constants/industries";
 
 const ORIGIN = "https://chatbase.kr";
 
@@ -115,6 +116,28 @@ export const ROUTES: PrerenderRoute[] = [
     changefreq: "yearly",
     priority: 0.3,
   },
+  /**
+   * 업종 페이지 — 손으로 적지 않고 `INDUSTRIES` 에서 뽑는다.
+   *
+   * 업종을 추가할 때 고칠 곳이 `constants/industries.ts` 하나가 된다.
+   * 라우트(`/for/:slug`)는 이미 있고, sitemap·llms.txt 도 여기서 따라온다.
+   */
+  ...INDUSTRIES.map(
+    (industry): PrerenderRoute => ({
+      path: `/for/${industry.slug}`,
+      out: `for/${industry.slug}/index.html`,
+      title: industry.title,
+      description: industry.description,
+      sources: [
+        "src/constants/industries.ts",
+        "src/container/industry.tsx",
+        "src/types/plan.ts",
+      ],
+      changefreq: "monthly",
+      // 홈(1.0)보다는 낮고 법적 문서(0.3)보다는 높다 — 실제로 팔려는 페이지다
+      priority: 0.8,
+    }),
+  ),
 ];
 
 /* ── 라우트 렌더 ────────────────────────────────────────────── */
@@ -312,6 +335,40 @@ const faqPage = () => ({
  * 내용은 그대로 두고 날짜만 올리는 건 답변엔진이 감지하면 역효과다.
  * 값이 없으면(git 없는 환경) 필드째 뺀다 — 틀린 날짜보다 없는 쪽이 낫다.
  */
+/**
+ * 업종 페이지의 FAQ.
+ *
+ * 랜딩 `faqPage()` 와 **질문이 겹치지 않아야** 한다. 같은 Q&A 를 여러 URL 에
+ * FAQPage 로 중복 선언하면 스팸 신호가 되기 때문이고, `constants/industries.ts` 의
+ * `faq` 주석에도 같은 경고를 달아뒀다.
+ *
+ * 랜딩과 달리 답변이 이미 평문이라 `plainText()` 를 거치지 않는다.
+ */
+const industryFaqPage = (industry: Industry) => ({
+  "@type": "FAQPage",
+  "@id": `${ORIGIN}/for/${industry.slug}#faq`,
+  inLanguage: "ko",
+  isPartOf: { "@id": `${ORIGIN}/#website` },
+  mainEntity: industry.faq.map((item) => ({
+    "@type": "Question",
+    name: item.q,
+    acceptedAnswer: { "@type": "Answer", text: item.a },
+  })),
+});
+
+/**
+ * 빵부스러기. 업종 페이지가 생기면서 계층이 처음 생겼다(홈 → 업종).
+ * **마지막 항목에는 `item` 을 넣지 않는다** — 현재 페이지라서 자기 링크가 된다.
+ */
+const breadcrumb = (path: string, label: string) => ({
+  "@type": "BreadcrumbList",
+  "@id": `${ORIGIN}${path}#breadcrumb`,
+  itemListElement: [
+    { "@type": "ListItem", position: 1, name: "chatbase.kr", item: ORIGIN },
+    { "@type": "ListItem", position: 2, name: label },
+  ],
+});
+
 const webPage = (route: PrerenderRoute, type: string, lastmod: string | null) => ({
   "@type": type,
   "@id": `${ORIGIN}${route.path}#webpage`,
@@ -335,6 +392,8 @@ export const structuredData = (path: string, lastmod: string | null = null): obj
 
   const graph: object[] = [organization, website];
 
+  const industry = path.startsWith("/for/") ? industryBySlug(path.slice(5)) : undefined;
+
   if (path === "/") {
     // 홈에도 WebPage 를 둔다 — `dateModified` 를 달 자리가 필요하고,
     // `@id` 가 달라 SoftwareApplication·FAQPage 와 충돌하지 않는다
@@ -342,6 +401,12 @@ export const structuredData = (path: string, lastmod: string | null = null): obj
       webPage(route, "WebPage", lastmod),
       { ...softwareApplication, ...(lastmod ? { dateModified: lastmod } : {}) },
       faqPage(),
+    );
+  } else if (industry) {
+    graph.push(
+      webPage(route, "WebPage", lastmod),
+      breadcrumb(path, `${industry.name} 챗봇`),
+      industryFaqPage(industry),
     );
   } else {
     graph.push(webPage(route, path === "/support" ? "ContactPage" : "WebPage", lastmod));

@@ -1,9 +1,12 @@
+import { Link } from "react-router-dom";
+
 import { LegalModalLink } from "@/component/landing/legalModal";
 import {
   BUSINESS_INFO_ROWS,
   FTC_LOOKUP_URL,
   SHOW_BUSINESS_INFO,
 } from "@/constants/company";
+import { INDUSTRIES } from "@/constants/industries";
 
 const Footer = () => {
   const year = new Date().getFullYear();
@@ -23,17 +26,23 @@ const Footer = () => {
               </p>
             </div>
 
+            {/*
+              앵커에 `/` 를 붙인다. 이 푸터는 랜딩 말고 업종 페이지에서도 쓰이는데,
+              거기엔 #features 같은 섹션이 없어서 눌러도 아무 일이 안 일어났다.
+              `/#features` 면 홈으로 이동한 뒤 그 섹션으로 간다 — 랜딩에서 누를 때는
+              경로가 같으므로 그대로 앵커 스크롤만 된다.
+            */}
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[12px] text-text-sub">
-              <a href="#features" className="hover:text-text-main transition-colors">
+              <a href="/#features" className="hover:text-text-main transition-colors">
                 기능
               </a>
-              <a href="#how" className="hover:text-text-main transition-colors">
+              <a href="/#how" className="hover:text-text-main transition-colors">
                 작동 방식
               </a>
-              <a href="#pricing" className="hover:text-text-main transition-colors">
+              <a href="/#pricing" className="hover:text-text-main transition-colors">
                 가격
               </a>
-              <a href="#faq" className="hover:text-text-main transition-colors">
+              <a href="/#faq" className="hover:text-text-main transition-colors">
                 FAQ
               </a>
               <a href="/login" className="hover:text-text-main transition-colors">
@@ -41,6 +50,31 @@ const Footer = () => {
               </a>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/*
+        업종별 페이지 — sitemap 에만 있고 사이트 안에서 아무도 링크하지 않으면
+        고아 페이지가 된다. 크롤러가 따라올 경로를 만들어 주는 자리다.
+        목록은 `constants/industries.ts` 에서 온다.
+      */}
+      <div className="border-t border-line">
+        <div className="max-w-7xl mx-auto px-6 md:px-8 py-6">
+          <p className="font-mono text-[11px] uppercase tracking-tight text-text-sub mb-2.5">
+            업종별
+          </p>
+          <ul className="flex flex-wrap gap-x-5 gap-y-2 text-[12px] text-text-sub">
+            {INDUSTRIES.map((industry) => (
+              <li key={industry.slug}>
+                <Link
+                  to={`/for/${industry.slug}`}
+                  className="hover:text-text-main transition-colors"
+                >
+                  {industry.name} 챗봇
+                </Link>
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
 

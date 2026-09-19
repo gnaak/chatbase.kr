@@ -6,6 +6,7 @@ import { AuthProvider } from "@/context/AuthProvider";
 import { ThemeProvider } from "@/context/ThemeProvider";
 import { ToastProvider } from "@/context/ToastProvider";
 import NotFoundPage from "@/container/notfound";
+import ScrollToTop from "@/component/layout/scrollToTop";
 
 // 컴포넌트 본문에서 만들면 리렌더될 때마다 캐시가 새로 생겨
 // 이미 받아둔 데이터를 버리고 매번 로딩부터 다시 시작한다. 모듈 스코프에 한 번만 만든다.
@@ -43,10 +44,14 @@ interface AppShellProps {
  */
 const AppShell = ({ children, router }: AppShellProps) => {
   const routes = (
-    <Routes>
-      {children}
-      <Route path="*" element={<NotFoundPage />} />
-    </Routes>
+    <>
+      {/* 라우터 컨텍스트 안이어야 하므로 여기 둔다. 렌더 결과는 없다 */}
+      <ScrollToTop />
+      <Routes>
+        {children}
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
+    </>
   );
 
   return (

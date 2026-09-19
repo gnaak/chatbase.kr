@@ -4,6 +4,7 @@ import Landing from "@/container/landing";
 import Terms from "@/container/legal/terms";
 import Privacy from "@/container/legal/privacy";
 import SupportForm from "@/container/support";
+import IndustryPage from "@/container/industry";
 
 /**
  * 로그인 없이 볼 수 있고, **크롤러에게 열려 있는** 라우트.
@@ -36,6 +37,12 @@ const publicRoutes = () => (
     <Route path="/terms" element={<Terms />} />
     <Route path="/privacy" element={<Privacy />} />
     <Route path="/support" element={<SupportForm />} />
+    {/*
+      업종 페이지. 라우트는 하나지만 `prerender.tsx` ROUTES 가 업종마다 정적 HTML 을
+      굽는다. 없는 slug 는 컴포넌트가 404 화면을 그린다 — 리다이렉트하면 크롤러가
+      그 URL 을 홈으로 흡수해버린다.
+    */}
+    <Route path="/for/:slug" element={<IndustryPage />} />
   </>
 );
 

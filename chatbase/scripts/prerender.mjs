@@ -272,14 +272,14 @@ try {
 
   const pad = (s, n) => String(s).padEnd(n);
   console.log("\n  프리렌더 완료 — 크롤러가 읽는 본문 글자 수\n");
-  console.log(`  ${pad("라우트", 12)}${pad("출력", 22)}${pad("본문", 12)}lastmod`);
-  console.log(`  ${"-".repeat(58)}`);
+  console.log(`  ${pad("라우트", 16)}${pad("출력", 26)}${pad("본문", 12)}lastmod`);
+  console.log(`  ${"-".repeat(66)}`);
   for (const r of rows) {
     const chars = `${r.chars.toLocaleString()}자`;
-    console.log(`  ${pad(r.path, 12)}${pad(r.out, 22)}${pad(chars, 12)}${r.lastmod ?? "-"}`);
+    console.log(`  ${pad(r.path, 16)}${pad(r.out, 26)}${pad(chars, 12)}${r.lastmod ?? "-"}`);
   }
-  console.log(`  ${pad("(llms.txt)", 12)}${pad("llms.txt", 22)}${llms.length.toLocaleString()}자`);
-  console.log(`  ${pad("(sitemap)", 12)}${pad("sitemap.xml", 22)}${ROUTES.length}개 URL`);
+  console.log(`  ${pad("(llms.txt)", 16)}${pad("llms.txt", 26)}${llms.length.toLocaleString()}자`);
+  console.log(`  ${pad("(sitemap)", 16)}${pad("sitemap.xml", 26)}${ROUTES.length}개 URL`);
 
   if (rows.every((r) => !r.lastmod)) {
     console.warn(

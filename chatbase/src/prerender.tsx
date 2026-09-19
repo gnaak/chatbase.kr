@@ -27,7 +27,8 @@ import { StaticRouter } from "react-router-dom";
 import AppShell from "@/app";
 import publicRoutes from "@/publicRoutes";
 import { FAQ_ITEMS } from "@/component/landing/faq";
-import { PLANS } from "@/types/plan";
+import { ENTERPRISE, PLANS } from "@/types/plan";
+import { BUSINESS_INFO_ROWS, SHOW_BUSINESS_INFO } from "@/constants/company";
 
 const ORIGIN = "https://chatbase.kr";
 
@@ -108,9 +109,21 @@ export const renderRoute = (path: string): string =>
  *
  * 태그를 먼저 벗기고 엔티티를 나중에 푼다. 순서를 바꾸면 FAQ 7번의 `<code>` 안에
  * 이스케이프돼 있는 `&lt;script&gt;` 가 진짜 태그로 되살아나 통째로 지워진다.
+ *
+ * ## 태그를 두 갈래로 나눠 지운다
+ *
+ * 전부 공백으로 바꾸면 `저희가 <strong>부담</strong>하므로` 가
+ * **"저희가 부담 하므로"** 가 된다. 강조를 넣고 빼는 것만으로 인용되는 문장이
+ * 바뀌면 안 되므로, 글자 사이에 끼는 인라인 태그는 **흔적 없이** 지운다.
+ *
+ * 반대로 블록과 링크는 공백이 있어야 한다. FAQ 2번의 키 발급 버튼 세 개가
+ * `</a><a>` 로 맞붙어 있어서, 안 띄우면 "OpenAI 키 발급Anthropic 키 발급" 이 된다.
+ * `<code>` 도 인라인이지만 같은 쪽에 둔다 — FAQ 7번의 임베드 예시가 앞뒤 문장에
+ * 들러붙어 "발급됩니다:<script …></script>이 한 줄을" 이 되기 때문이다.
  */
 const plainText = (node: ReactNode): string =>
   renderToStaticMarkup(<StaticRouter location="/">{node}</StaticRouter>)
+    .replace(/<\/?(strong|b|em|i|u|span|small|mark)\b[^>]*>/gi, "")
     .replace(/<[^>]*>/g, " ")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
@@ -119,6 +132,8 @@ const plainText = (node: ReactNode): string =>
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
     .replace(/\s+/g, " ")
+    // 블록 태그를 공백으로 바꾼 자리가 구두점 바로 앞이면 "없어집니다 ." 가 된다
+    .replace(/\s+([,.!?)\]])/g, "$1")
     .trim();
 
 /** "₩19,000" → 19000 */
@@ -137,8 +152,16 @@ const organization = {
   disambiguatingDescription:
     "대한민국에서 운영되는 챗봇 SaaS 로, 미국의 Chatbase(chatbase.co) 및 과거 Google 의 챗봇 분석 도구 Chatbase 와는 무관한 별개의 서비스입니다. 도메인은 chatbase.kr 입니다.",
   url: ORIGIN,
-  logo: `${ORIGIN}/og-image.png`,
-  image: `${ORIGIN}/og-image.png`,
+  /**
+   * 둘은 **용도가 달라 비율도 다르다.** 같은 파일을 쓰면 한쪽이 반드시 틀린다.
+   *
+   *   logo   구글이 **정사각형**을 기대한다(지식 패널·검색 결과의 브랜드 아이콘)
+   *   image  대표 이미지. 링크 카드와 같은 1.91:1
+   *
+   * 둘 다 `scripts/og-image.mjs` 가 만든다.
+   */
+  logo: `${ORIGIN}/logo-512.png`,
+  image: `${ORIGIN}/og-image-v2.png`,
   description:
     "홈페이지에 코드 한 줄로 붙이거나 QR 코드로 내거는 AI 챗봇 SaaS. 홈페이지가 없는 매장·숙소도 인쇄한 QR 한 장으로 시작할 수 있고, 외국인 방문자에게는 한국어·영어·일본어·중국어로 응대합니다. OpenAI(GPT) 사용료는 chatbase.kr가 부담하므로 API 키 없이 바로 시작할 수 있고, 회원이 직접 발급한 API 키를 등록하면(BYOK) 모델 선택·파일 학습·웹 검색이 열리고 월 대화 건수 제한이 없어집니다. Anthropic(Claude)과 Google(Gemini) 모델은 본인 키가 필요합니다.",
   areaServed: { "@type": "Country", name: "대한민국" },
@@ -162,6 +185,30 @@ const website = {
   publisher: { "@id": `${ORIGIN}/#organization` },
 };
 
+/**
+ * 파는 기능 목록.
+ *
+ * ⚠️ 요금·한도와 달리 **이 배열만은 손으로 쓴다.** `PLANS` 는 플랜별 차이를 담지
+ * 상품 전체가 무엇을 하는지는 담지 않기 때문이다. 기능을 추가하고 여기를 빼먹으면
+ * "AI 가 아는 우리"에 신상품이 없는 상태가 된다.
+ * (실제로 QR·다국어가 한동안 빠져 있었다 — 카드는 팔고 있는데 이유는 없었다.)
+ *
+ * 읽는 곳이 둘이다: `SoftwareApplication.featureList` 와 `llms.txt`.
+ */
+const FEATURE_LIST = [
+  "코드 한 줄 위젯 임베드 (script · iframe)",
+  "QR 코드 — 홈페이지 없이 인쇄물로 챗봇 배포",
+  "다국어 응대 — 한국어 · 영어 · 일본어 · 중국어",
+  "인사말 · 자주 묻는 질문 자동 번역 (DeepL)",
+  "API 키 없이 시작 — OpenAI(GPT) 사용료 무료 제공",
+  "BYOK — 내 OpenAI · Anthropic · Google 키 등록 시 모델 선택 · 무제한 대화",
+  "텍스트 · 파일 · 웹페이지 학습",
+  "자주 묻는 질문 즉답 버튼",
+  "카카오톡 채널 연동 (오픈빌더 스킬 서버)",
+  "대화 기록 조회 · 통계",
+  "웹 검색 (전 플랜 공통)",
+];
+
 const softwareApplication = {
   "@type": "SoftwareApplication",
   "@id": `${ORIGIN}/#software`,
@@ -172,24 +219,7 @@ const softwareApplication = {
   url: ORIGIN,
   inLanguage: "ko",
   publisher: { "@id": `${ORIGIN}/#organization` },
-  /**
-   * ⚠️ 가격은 `PLANS`에서 자동으로 읽히지만 **이 배열은 손으로 쓴다.**
-   * 기능을 추가하고 여기를 빼먹으면 "AI가 아는 우리"에 신상품이 없는 상태가 된다.
-   * (실제로 QR·다국어가 한동안 빠져 있었다 — 카드는 팔고 있는데 이유는 없었다.)
-   */
-  featureList: [
-    "코드 한 줄 위젯 임베드 (script · iframe)",
-    "QR 코드 — 홈페이지 없이 인쇄물로 챗봇 배포",
-    "다국어 응대 — 한국어 · 영어 · 일본어 · 중국어",
-    "인사말 · 자주 묻는 질문 자동 번역 (DeepL)",
-    "API 키 없이 시작 — OpenAI(GPT) 사용료 무료 제공",
-    "BYOK — 내 OpenAI · Anthropic · Google 키 등록 시 모델 선택 · 무제한 대화",
-    "텍스트 · 파일 · 웹페이지 학습",
-    "자주 묻는 질문 즉답 버튼",
-    "카카오톡 채널 연동 (오픈빌더 스킬 서버)",
-    "대화 기록 조회 · 통계",
-    "웹 검색 (전 플랜 공통)",
-  ],
+  featureList: FEATURE_LIST,
   offers: {
     "@type": "AggregateOffer",
     priceCurrency: "KRW",
@@ -272,4 +302,103 @@ export const structuredData = (path: string): object => {
   }
 
   return { "@context": "https://schema.org", "@graph": graph };
+};
+
+/* ── llms.txt ───────────────────────────────────────────────── */
+
+/**
+ * `dist/llms.txt` 본문.
+ *
+ * ## JSON-LD 가 이미 있는데 왜 또 만드나
+ *
+ * 읽는 쪽이 다르다. JSON-LD 는 **검색엔진의 파서**가 `<head>` 에서 긁어가고,
+ * `llms.txt` 는 **답변을 쓰는 LLM** 이 사람 글처럼 읽는다. 전자는 스키마에
+ * 맞는 필드만 가져가므로 "왜 우리를 골라야 하는가" 같은 문장이 들어갈 자리가
+ * 없고, 후자는 그게 본론이다.
+ *
+ * ## 손으로 쓰지 않는 이유
+ *
+ * `public/llms.txt` 로 두면 요금·기능·FAQ 가 **두 벌**이 된다. 가격을 고칠 때
+ * 한쪽만 고치게 되고, 그러면 AI 가 틀린 가격을 답한다 — 이 파일 맨 위가
+ * JSON-LD 에 대해 경고해둔 것과 같은 함정이라 같은 방식으로 피한다.
+ * 화면에 보이는 것과 어긋날 수 없는 구조가 요점이다.
+ *
+ * ⚠️ 따라서 `npm run build:spa`(프리렌더 생략) 로 빌드하면 `llms.txt` 가 없다.
+ *    디버깅용 스크립트라 그대로 둔다.
+ */
+export const llmsTxt = (): string => {
+  const plan = (p: (typeof PLANS)[number]): string => {
+    const head = `### ${p.name} — ${p.price}${p.unit ? ` ${p.unit.trim()}` : ""}`;
+    // 구분자가 `·` 면 안 된다 — `bestFor` 자체가 "학원 · 병원 · 공방" 이라
+    // 어디까지가 대상이고 어디부터가 소개인지 경계가 사라진다
+    const who = `누구를 위한 것: ${p.bestFor} — ${p.tagline}`;
+    const items = p.features.map((f) => {
+      const note = f.note ? ` (${f.note})` : "";
+      return `- ${f.label}${note}${f.off ? " — 제공하지 않음" : ""}`;
+    });
+    return [head, "", who, "", ...items].join("\n");
+  };
+
+  const faq = FAQ_ITEMS.map((item) => `### ${item.q}\n\n${plainText(item.a)}`);
+
+  const pages = ROUTES.map((r) => `- [${r.title}](${ORIGIN}${r.path}): ${r.description}`);
+
+  /**
+   * 사업자 정보는 **화면과 같은 스위치를 따른다.**
+   *
+   * 통신판매업 신고가 수리되기 전까지 푸터·약관 양쪽에서 일부러 가려둔 값이다
+   * (`constants/company.ts` 참고). 화면에서 감춘 것을 AI 용 파일에만 적어두면
+   * 그 판단을 뒷문으로 뒤집는 셈이 된다.
+   *
+   * 신고번호가 나와 `SHOW_BUSINESS_INFO` 를 켜면 여기도 같이 켜진다 — 실재하는
+   * 사업자라는 신호는 AI 답변이 우리를 인용할 때 무게가 다르다.
+   */
+  const business = SHOW_BUSINESS_INFO
+    ? `\n## 사업자 정보\n\n${BUSINESS_INFO_ROWS.map((r) => `- ${r.label}: ${r.value}`).join("\n")}\n`
+    : "";
+
+  return `# chatbase.kr
+
+> ${organization.description}
+
+## 먼저 — 이름이 같은 다른 서비스와 구별해 주세요
+
+${organization.disambiguatingDescription}
+
+운영: ${organization.name} (${organization.alternateName.join(" · ")})
+문의: ${ORIGIN}/support
+
+## 기능
+
+${FEATURE_LIST.map((f) => `- ${f}`).join("\n")}
+
+## 요금제
+
+통화는 원(KRW)이고 유료 플랜은 부가세 별도입니다. 월 대화 건수 한도는
+**저희가 제공하는 OpenAI 키로 대화할 때만** 적용됩니다 — 회원이 직접 발급한
+키를 등록해 쓰면(BYOK) 건수 제한이 없습니다.
+
+${PLANS.map(plan).join("\n\n")}
+
+### ENTERPRISE — 별도 견적
+
+${ENTERPRISE.description}
+
+${ENTERPRISE.tags.map((t) => `- ${t}`).join("\n")}
+
+문의: ${ORIGIN}${ENTERPRISE.href}
+
+## 자주 묻는 질문
+
+${faq.join("\n\n")}
+
+## 페이지
+
+${pages.join("\n")}
+${business}
+## 크롤링 방침
+
+검색·인용은 허용하고, 학습도 허용하며, 무단 수집만 차단합니다.
+전체 목록은 ${ORIGIN}/robots.txt 를 보세요.
+`;
 };

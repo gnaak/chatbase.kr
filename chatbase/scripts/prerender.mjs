@@ -15,6 +15,9 @@
  * `#root` 안에 렌더 결과를 박고, `<head>` 의 title·description·canonical·OG 를
  * 라우트별로 갈아끼우고, JSON-LD 를 넣는다.
  *
+ * 덤으로 `dist/llms.txt` 도 같은 데이터에서 굽는다 — 요금·기능·FAQ 를 손으로
+ * 한 벌 더 적어두면 반드시 어긋나기 때문이다.
+ *
  * ## 서버를 띄우지 않는다
  *
  * `middlewareMode: true` + `hmr: false` 라 **포트를 열지 않는다.** TS·JSX·`@/` 별칭을
@@ -180,7 +183,7 @@ const vite = await createServer({
 });
 
 try {
-  const { ROUTES, renderRoute, structuredData } =
+  const { ROUTES, renderRoute, structuredData, llmsTxt } =
     await vite.ssrLoadModule("/src/prerender.tsx");
 
   const rows = [];
@@ -212,6 +215,16 @@ try {
     rows.push({ path: route.path, out: route.out, chars: bodyTextLength(html) });
   }
 
+  /**
+   * llms.txt — 답변을 쓰는 LLM 이 사람 글처럼 읽는 요약.
+   *
+   * **파일이 없으면 SPA 폴백이 `/llms.txt` 에 HTML 을 200 으로 돌려준다.**
+   * 404 보다 나쁘다 — 크롤러가 그 HTML 덩어리를 llms.txt 로 파싱한다.
+   * 실측(2026-09-19)에서 실제로 그 상태였다.
+   */
+  const llms = llmsTxt();
+  await writeFile(join(DIST, "llms.txt"), llms, "utf-8");
+
   const pad = (s, n) => String(s).padEnd(n);
   console.log("\n  프리렌더 완료 — 크롤러가 읽는 본문 글자 수\n");
   console.log(`  ${pad("라우트", 12)}${pad("출력", 22)}본문`);
@@ -219,6 +232,7 @@ try {
   for (const r of rows) {
     console.log(`  ${pad(r.path, 12)}${pad(r.out, 22)}${r.chars.toLocaleString()}자`);
   }
+  console.log(`  ${pad("(llms.txt)", 12)}${pad("llms.txt", 22)}${llms.length.toLocaleString()}자`);
 
   const empty = rows.filter((r) => r.chars < 200);
   if (empty.length) {

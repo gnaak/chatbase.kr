@@ -43,7 +43,20 @@
       property="og:description"
       content="홈페이지에는 코드 한 줄, 매장에는 QR 한 장. 외국인 손님에게는 한·영·일·중으로 답합니다."
     />
-    <meta property="og:image" content="https://chatbase.kr/og-image.png" />
+    <!--
+      파일명에 버전을 박아둔다. 카카오톡·페이스북은 OG 이미지를 오래 캐싱하고
+      `?v=` 쿼리스트링을 무시하는 크롤러가 있어서, 그림을 바꿀 때는 **경로 자체**를
+      바꿔야 확실하다(파비콘의 `?v=2` 와 다른 이유로 다른 방식을 쓴다).
+      바꿀 때는 `scripts/og-image.mjs` 의 출력 경로와 아래 세 줄을 같이 고친다.
+
+      width·height 를 같이 준다. 없으면 페이스북이 첫 크롤에서 크기를 모르는 채로
+      카드를 만들어, 이미지가 한 박자 늦게 뜨거나 작은 썸네일로 떨어진다.
+    -->
+    <meta property="og:image" content="https://chatbase.kr/og-image-v2.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="chatbase.kr" />
     <meta property="og:locale" content="ko_KR" />
     <meta property="og:site_name" content="chatbase.kr" />
 
@@ -55,7 +68,7 @@
       name="twitter:description"
       content="홈페이지에는 코드 한 줄, 매장에는 QR 한 장. 외국인 손님에게는 한·영·일·중으로 답합니다."
     />
-    <meta name="twitter:image" content="https://chatbase.kr/og-image.png" />
+    <meta name="twitter:image" content="https://chatbase.kr/og-image-v2.png" />
     <script>
       (function () {
         try {

@@ -1,12 +1,20 @@
 # chatbase.kr — robots.txt
 #
-# ⚠️ 이 파일만으로는 부족하다. Cloudflare가 자기 robots.txt를 이 위에 얹고,
-#    WAF에서 AI 봇을 실제 403으로 끊는다. 대시보드에서 두 개를 꺼야 이 파일이 산다:
-#      1) Bots  →  "AI 스크레이퍼 및 크롤러 차단" 토글 OFF
-#      2) Bots  →  "관리형 robots.txt" OFF
-#    확인:  curl -A "OAI-SearchBot/1.0" https://chatbase.kr/ -o /dev/null -w "%{http_code}"
+# ⚠️ 이 파일만으로는 부족하다. Cloudflare가 대시보드 설정으로 AI 봇을 실제 403으로
+#    끊는다. 여기 Allow라고 써도 그쪽이 이긴다. 2026-09-19 실측에서 GPTBot·ClaudeBot·
+#    Claude-User가 403이었다 — 즉 **문서화한 방침과 반대로 돌고 있었다.**
 #
-# 방침은 셋으로 나뉜다 (aeo/PROJECT.md §2):
+#    설정 위치:  Cloudflare → AI Crawl Control → Security  (예전 "Bots" 자리다)
+#      - 아래 Allow로 적은 것들은 Block 토글을 꺼야 한다
+#      - 개별 토글 위에 상위 "AI bot policy"가 따로 있다. 그걸 먼저 푼다
+#
+#    robots.txt 자체를 덮어쓰는 "Bot Preference Sync"는 별개 기능이고, 켜져 있어도
+#    지금은 아무것도 덧붙이지 않는다(라이브 파일이 이 파일과 바이트까지 같다).
+#
+#    확인:  curl -A "GPTBot/1.2" https://chatbase.kr/ -o /dev/null -w "%{http_code}"
+#           OAI-SearchBot은 원래 통과하므로 확인용으로 쓰면 안 된다
+#
+# 방침은 셋으로 나뉜다:
 #   검색·인용  → 허용. 이게 AEO 그 자체다
 #   학습       → 허용. 랜딩은 공개 마케팅 텍스트고, 브랜드가 알려지는 게 이득이다
 #   무단 수집  → 차단. 얻는 게 없다
@@ -43,6 +51,15 @@ User-agent: Applebot
 Allow: /
 
 User-agent: Applebot-Extended
+Allow: /
+
+# ── 링크 미리보기 (막으면 OG 이미지가 안 뜬다) ──
+# 페이스북·인스타그램에 링크를 올렸을 때 카드를 만드는 봇이다. 수집용이 아니다.
+User-agent: FacebookBot
+Allow: /
+
+# Agent(학습 수집)와 헷갈리기 쉽다. Fetcher는 사람이 링크를 열 때 가져오는 쪽이다
+User-agent: meta-externalfetcher
 Allow: /
 
 # ── 일반 검색엔진 ───────────────────────────────

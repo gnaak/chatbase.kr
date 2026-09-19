@@ -15,6 +15,34 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
+
+    <!--
+      폰트 preload — 글씨가 한 번 바뀌어 보이는(FOUT) 문제를 줄인다.
+
+      이게 없으면 브라우저가 CSS 를 받아 파싱하고 `@font-face` 를 만난 뒤에야
+      폰트를 요청한다. 그 사이 폴백 폰트로 그려졌다가 나중에 교체되면서 깜빡인다.
+      여기서 미리 걸어두면 CSS 와 **병렬로** 받는다.
+
+      ⚠️ `crossorigin` 이 없으면 안 된다. 폰트는 CORS 모드로 요청되므로, 속성을
+         빼면 preload 한 것과 CSS 가 요청하는 것이 서로 다른 요청으로 취급돼
+         **두 번 받는다.** 같은 출처라도 마찬가지다.
+
+      본문(Geist)과 로고·라벨(Geist Mono) 둘 다 첫 화면에 나오므로 같이 건다.
+    -->
+    <link
+      rel="preload"
+      href="/fonts/Geist-Variable.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/GeistMono-Variable.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
     <meta
       name="google-site-verification"
       content="SSOrBFGM1wDHl7KnX65LrsxSM-2acoSjtc_4mhsY-uM"

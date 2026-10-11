@@ -300,7 +300,13 @@ class PaymentService:
         )
 
         # 아직 결제수단이 없던 구독이라면 이 카드를 바로 물려준다.
-        if sub.billing_method_id is None:
+        #
+        # 구독 행은 찾기만 한다(_ensure_subscription 아님). 위 주석대로 카드는
+        # 구독 없이도 등록되므로 여기서 행을 만들 이유가 없다.
+        # 한때 `sub` 를 정의하는 줄이 리팩터(6338868)에서 빠진 채로 이 두 줄만 남아
+        # NameError 가 났다 — billingKey 는 토스에 발급됐는데 우리 DB에는 안 남았다.
+        sub = await self.payment_repo.find_subscription(user_id)
+        if sub and sub.billing_method_id is None:
             sub.billing_method_id = method.id
 
         await self.payment_repo.db.commit()

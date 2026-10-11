@@ -24,6 +24,11 @@ class SubscriptionStatus(str, enum.Enum):
     CANCELED = "canceled"
     #: 정기 청구가 실패해 재시도 대기 중.
     PAST_DUE = "past_due"
+    #: 관리자가 결제 없이 준 플랜(`PaymentService.admin_set_plan`).
+    #: ACTIVE와 따로 두는 이유는 크론이다 — ACTIVE면 `next_billing_at`에 카드를
+    #: 긁으려 든다. 여기서 `next_billing_at`은 "이용 종료일"이고, 비어 있으면 무기한.
+    #: 마이그레이션은 필요 없다. 컬럼이 CHECK 없는 VARCHAR(20)이고 이름('GRANTED')이 들어간다.
+    GRANTED = "granted"
 
 
 class BillingMethodType(str, enum.Enum):

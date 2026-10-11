@@ -305,6 +305,10 @@ const Billing = () => {
   const currentIdx = foundIdx >= 0 ? foundIdx : 0;
   const currentPlan = PLANS[currentIdx];
 
+  // 관리자가 결제 없이 준 플랜. 청구가 없으니 "매달 결제됩니다"·해지·하향 예약이
+  // 전부 맞지 않는다. next_billing_at 은 여기서 이용 종료일이고 null 이면 무기한이다.
+  const isGranted = subscription?.status === "granted";
+
   // 하향 확인창에서 "무엇이 빠지는지" 미리 보여주기 위한 목록.
   const downgradeLosses = downgradeTarget
     ? planLosses(currentPlan.limits, downgradeTarget.limits)
@@ -367,7 +371,11 @@ const Billing = () => {
                   <p className="mt-1.5 text-[13px] text-text-sub leading-relaxed">
                     {currentIdx === 0
                       ? "무료 플랜을 이용 중입니다. 유료 플랜으로 올리시면 대화 건수 제한이 없어집니다."
-                      : "매달 자동으로 결제됩니다. 언제든 해지하실 수 있습니다."}
+                      : isGranted
+                        ? subscription?.next_billing_at
+                          ? `chatbase.kr에서 제공한 플랜이라 결제되지 않습니다. ${formatDate(subscription.next_billing_at)}까지 이용하실 수 있고, 그 뒤에는 무료 플랜으로 돌아갑니다.`
+                          : "chatbase.kr에서 제공한 플랜이라 결제되지 않습니다."
+                        : "매달 자동으로 결제됩니다. 언제든 해지하실 수 있습니다."}
                   </p>
 
                   {/* 하향 예약 — 지금은 상위 플랜을 그대로 쓰고 있으므로
@@ -595,7 +603,10 @@ const Billing = () => {
                           (BILLING_BETA && idx > 0) ||
                           isCurrent ||
                           idx === 0 ||
-                          isScheduled
+                          isScheduled ||
+                          // 하향은 "다음 결제일에 적용"인데 관리자 지정에는 결제일이 없다.
+                          // 서버도 ACTIVE 가 아니면 예약을 거절한다.
+                          (isGranted && idx < currentIdx)
                         }
                         onClick={() =>
                           // 상향은 지금 결제하고 바로 올린다.
@@ -648,6 +659,13 @@ const Billing = () => {
                   <p className="text-[12px] text-warning mt-0.5">
                     결제에 실패했습니다 ·{" "}
                     {formatDate(subscription.next_billing_at)}에 다시 시도합니다
+                  </p>
+                ) : isGranted ? (
+                  // 아래 권유 문구가 뜨면 "카드를 등록해야 계속 쓸 수 있나" 로 읽힌다.
+                  <p className="text-[12px] text-text-sub mt-0.5">
+                    결제 없이 이용 중
+                    {subscription?.next_billing_at &&
+                      ` · ${formatDate(subscription.next_billing_at)}까지`}
                   </p>
                 ) : (
                   // 위 두 갈래(다음 결제일 / 해지 안내)와 달리 이건 상태가 아니라

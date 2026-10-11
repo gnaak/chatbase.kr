@@ -45,11 +45,25 @@ logger = logging.getLogger(__name__)
 #: 정기 청구 실패를 몇 번까지 재시도할지. 넘기면 구독을 만료시킨다.
 MAX_CHARGE_RETRY = 3
 
+#: 관리자가 한 번에 줄 수 있는 최장 기간(개월). 무기한은 months를 비워 보낸다.
+MAX_GRANT_MONTHS = 36
 
-def _add_month(base: datetime) -> datetime:
-    """한 달 뒤. 말일은 다음 달 마지막 날로 당긴다(1/31 → 2/28)."""
-    year = base.year + (base.month // 12)
-    month = base.month % 12 + 1
+#: 돈이 오가는 중인 구독. 관리자가 plan을 바꾸면 다음 청구가 바뀐 금액으로 나간다.
+PAID_STATUSES = (
+    SubscriptionStatus.ACTIVE,
+    SubscriptionStatus.PAST_DUE,
+    SubscriptionStatus.CANCELED,
+)
+
+
+def _add_month(base: datetime, months: int = 1) -> datetime:
+    """months개월 뒤. 말일은 그 달 마지막 날로 당긴다(1/31 → 2/28).
+
+    여러 달을 한 번에 계산한다. 한 달씩 반복하면 말일이 깎여 나간다(1/31 → 2/28 → 3/28).
+    """
+    total = base.month - 1 + months
+    year = base.year + total // 12
+    month = total % 12 + 1
     last_day = calendar.monthrange(year, month)[1]
     return base.replace(year=year, month=month, day=min(base.day, last_day))
 
@@ -543,6 +557,94 @@ class PaymentService:
             message=message,
         )
 
+    # ── 관리자 플랜 지정 ────────────────────────
+    async def admin_set_plan(self, request):
+        """body: {"plan": "premium", "months": 3} — `PATCH /api/admin/users/{id}/plan`
+
+        결제 없이 플랜을 준다. 결제를 아직 열지 않았으므로(`BILLING_BETA`)
+        지금은 이게 유료 플랜으로 가는 유일한 길이다.
+
+        - months를 주면 그만큼 뒤에 크론이 FREE로 내린다(`_charge_one`). 비우면 무기한.
+        - 이미 관리자 지정 기간이 남아 있으면 **남은 종료일 뒤에 이어 붙인다**(연장).
+          지금부터 세면 다시 줄 때마다 남은 날이 사라진다. 플랜을 바꿔 줘도 같다 —
+          남은 기간이 새 플랜으로 이어진다. 끝났거나 무기한이었으면 지금부터 센다.
+        - plan="free"는 회수다. 즉시 FREE.
+        - 결제로 돌고 있는 구독(`PAID_STATUSES`)은 거절한다. 여기서 plan을 바꾸면
+          다음 청구가 바뀐 플랜 금액으로 나간다 — 사용자가 동의하지 않은 청구다.
+        """
+        user_id = int(request.path_params.get("id"))
+        body = await request.json()
+
+        # resolve_plan은 모르는 값을 FREE로 떨어뜨린다. 여기서 그러면 오타 하나가
+        # 회수가 되므로 엄격하게 읽는다.
+        try:
+            plan = Plan((body.get("plan") or "").strip().lower())
+        except ValueError:
+            fail("알 수 없는 플랜입니다.", "INVALID_PLAN")
+
+        months = body.get("months")
+        # bool은 int의 하위 타입이라 true가 1개월로 통과한다. 따로 막는다.
+        if months is not None and (
+            isinstance(months, bool)
+            or not isinstance(months, int)
+            or not 1 <= months <= MAX_GRANT_MONTHS
+        ):
+            fail(f"기간은 1~{MAX_GRANT_MONTHS}개월이어야 합니다.", "INVALID_MONTHS")
+
+        user = await self.user_repo.get_user_by_id(user_id)
+        if not user:
+            fail("사용자를 찾을 수 없습니다.", "USER_NOT_FOUND", 404)
+        # 탈퇴하면 active=False가 된다(어드민 정지 기능은 없다). 봇·키가 이미 지워진 계정이다.
+        if user.active is False:
+            fail("탈퇴한 계정입니다.", "USER_WITHDRAWN", 409)
+
+        sub = await self._ensure_subscription(user_id)
+        if sub.status in PAID_STATUSES:
+            fail(
+                "결제로 이용 중인 구독은 여기서 바꿀 수 없습니다. "
+                "사용자가 결제 화면에서 직접 변경해야 합니다.",
+                "SUBSCRIPTION_PAID",
+                409,
+            )
+
+        if plan == Plan.FREE:
+            await self._expire(sub, f"revoked_by_admin admin_id={request.user_id}")
+        else:
+            until = None
+            if months:
+                # DB에서 읽은 DATETIME은 naive라 now_kst()(aware)와 바로 비교하면
+                # TypeError다. 둘 다 KST 벽시계 naive로 맞춘다(backend/CLAUDE.md "시간").
+                base = now_kst().replace(tzinfo=None)
+                end = sub.next_billing_at
+                if sub.status == SubscriptionStatus.GRANTED and end:
+                    base = max(base, end.replace(tzinfo=None))
+                until = _add_month(base, months)
+            sub.status = SubscriptionStatus.GRANTED
+            sub.plan = plan.value
+            sub.scheduled_plan = None
+            sub.next_billing_at = until
+            sub.retry_count = 0
+            sub.canceled_at = None
+            logger.info(
+                "plan granted admin_id=%s user_id=%s plan=%s until=%s",
+                request.user_id,
+                user_id,
+                plan.value,
+                until,
+            )
+
+        await self.payment_repo.db.commit()
+        return success(
+            data={
+                "user_id": user_id,
+                "plan": resolve_plan(sub.plan).value,
+                "plan_status": sub.status.value,
+                "plan_until": (
+                    sub.next_billing_at.isoformat() if sub.next_billing_at else None
+                ),
+            }
+        )
+
     # ── 정기 청구 (cron에서 호출) ───────────────
     def billing_key_of(self, method: BillingMethod) -> str:
         return decrypt(method.encrypted_billing_key)
@@ -568,6 +670,11 @@ class PaymentService:
         """
         if sub.status == SubscriptionStatus.CANCELED:
             await self._expire(sub, "canceled")
+            return "expired"
+
+        # 관리자가 준 기간이 끝났다. 받은 돈이 없으니 청구로 넘어가면 안 된다.
+        if sub.status == SubscriptionStatus.GRANTED:
+            await self._expire(sub, "grant_ended")
             return "expired"
 
         plan = self.plan_to_charge(sub)

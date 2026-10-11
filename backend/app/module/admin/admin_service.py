@@ -42,7 +42,8 @@ SUBSCRIPTION_STATUS_ORDER = {
     SubscriptionStatus.PAST_DUE: 0,
     SubscriptionStatus.ACTIVE: 1,
     SubscriptionStatus.CANCELED: 2,
-    SubscriptionStatus.NONE: 3,
+    SubscriptionStatus.GRANTED: 3,
+    SubscriptionStatus.NONE: 4,
 }
 
 #: 결제 내역 조회 기본/최대 건수. 전체를 통째로 내리면 운영이 커질수록 응답이 무거워진다.
@@ -149,34 +150,46 @@ class AdminService:
         session_counts = dict(session_rows)
 
         # 게이팅이 구독을 보므로 표시도 구독을 봐야 한다. 구독 행이 없는 사람은 FREE.
-        plan_rows = (
+        sub_rows = (
             await db.execute(
-                select(Subscription.user_id, Subscription.plan).where(
-                    Subscription.product == Product.CHATBOT
-                )
+                select(
+                    Subscription.user_id,
+                    Subscription.plan,
+                    Subscription.status,
+                    Subscription.next_billing_at,
+                ).where(Subscription.product == Product.CHATBOT)
             )
         ).all()
-        plan_by_user = dict(plan_rows)
+        sub_by_user = {uid: (plan, status, until) for uid, plan, status, until in sub_rows}
 
-        data = [
-            {
-                "id": u.id,
-                "email": u.email,
-                "name": u.name,
-                "active": u.active,
-                # 챗봇 상품의 플랜. 구독이 없으면 free.
-                "plan": resolve_plan(plan_by_user.get(u.id)).value,
-                "workspace_name": u.workspace_name,
-                "created_at": u.created_at.isoformat() if u.created_at else None,
-                "last_login_at": (
-                    u.last_login_at.isoformat() if u.last_login_at else None
-                ),
-                "bot_count": bot_counts.get(u.id, 0),
-                "key_providers": keys_by_user.get(u.id, []),
-                "session_count": session_counts.get(u.id, 0),
-            }
-            for u in users
-        ]
+        data = []
+        for u in users:
+            plan, status, until = sub_by_user.get(u.id, (None, None, None))
+            status = status or SubscriptionStatus.NONE
+            data.append(
+                {
+                    "id": u.id,
+                    "email": u.email,
+                    "name": u.name,
+                    "active": u.active,
+                    # 챗봇 상품의 플랜. 구독이 없으면 free.
+                    "plan": resolve_plan(plan).value,
+                    # granted면 관리자가 준 것이다. 결제 상태(active 등)면 어드민에서 못 바꾼다.
+                    "plan_status": _enum_value(status),
+                    # 관리자 지정 플랜의 종료일. 무기한이거나 지정이 아니면 null.
+                    "plan_until": (
+                        _iso(until) if status == SubscriptionStatus.GRANTED else None
+                    ),
+                    "workspace_name": u.workspace_name,
+                    "created_at": u.created_at.isoformat() if u.created_at else None,
+                    "last_login_at": (
+                        u.last_login_at.isoformat() if u.last_login_at else None
+                    ),
+                    "bot_count": bot_counts.get(u.id, 0),
+                    "key_providers": keys_by_user.get(u.id, []),
+                    "session_count": session_counts.get(u.id, 0),
+                }
+            )
         return success(data=data)
 
     # ── 유입 출처 ─────────────────────────────────
@@ -365,6 +378,11 @@ class AdminService:
                     SubscriptionStatus.PAST_DUE.value, 0
                 ),
                 "none_count": status_counts.get(SubscriptionStatus.NONE.value, 0),
+                # 관리자가 결제 없이 준 플랜. plan_counts에는 들어가고(권한이 있으니까)
+                # MRR에는 안 들어간다(받는 돈이 없으니까).
+                "granted_count": status_counts.get(
+                    SubscriptionStatus.GRANTED.value, 0
+                ),
                 "plan_counts": plan_counts,
                 "revenue_this_month": await _revenue(
                     Payment.approved_at >= month_start

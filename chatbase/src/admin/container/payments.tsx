@@ -68,13 +68,14 @@ const planBreakdown = (counts: Record<string, number>) =>
     `FREE ${counts.free ?? 0}`,
   ].join(" · ");
 
-type Tone = "green" | "amber" | "red" | "gray";
+type Tone = "green" | "amber" | "red" | "gray" | "blue";
 
 const toneClass: Record<Tone, string> = {
   green: "bg-success-bg text-point-green",
   amber: "bg-warning-bg text-point-amber",
   red: "bg-error-bg text-point-red",
   gray: "bg-bg-sub text-text-sub",
+  blue: "bg-info-bg text-point-blue",
 };
 
 const Badge = ({
@@ -102,6 +103,7 @@ const SUBSCRIPTION_TONE: Record<AdminSubscription["status"], Tone> = {
   canceled: "amber",
   past_due: "red",
   none: "gray",
+  granted: "blue",
 };
 
 const PAYMENT_TONE: Record<AdminPayment["status"], Tone> = {
@@ -260,9 +262,14 @@ const AdminPayments = () => {
         width: "130px",
         align: "center",
         render: (r: AdminSubscription) => (
+          // 해지 예정·관리자 지정은 청구일이 아니라 이용 종료일이다.
           <Line
             className={r.status === "canceled" ? "text-point-amber" : ""}
-            title={r.status === "canceled" ? "이용 종료일" : undefined}
+            title={
+              r.status === "canceled" || r.status === "granted"
+                ? "이용 종료일"
+                : undefined
+            }
           >
             {formatDate(r.next_billing_at)}
           </Line>
@@ -452,8 +459,15 @@ const AdminPayments = () => {
         <StatCard
           icon={<Users className="w-4 h-4" />}
           label="유료 사용자"
-          value={sumPaid(summary?.plan_counts)}
-          note={summary ? planBreakdown(summary.plan_counts) : undefined}
+          // plan_counts 는 권한 기준이라 관리자 지정도 들어 있다. 유료 수에서는 뺀다.
+          value={sumPaid(summary?.plan_counts) - (summary?.granted_count ?? 0)}
+          note={
+            summary
+              ? (summary.granted_count > 0
+                  ? `관리자 지정 ${summary.granted_count} 제외 · `
+                  : "") + planBreakdown(summary.plan_counts)
+              : undefined
+          }
           loading={summaryLoading}
         />
         {/* 청구 실패는 방치하면 그대로 이탈이라 항상 눈에 걸리게 둔다. */}

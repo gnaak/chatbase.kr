@@ -31,6 +31,8 @@ export interface AdminBillingSummary {
   past_due_count: number;
   /** 결제 프로필만 만들어진 상태(카드 등록 화면까지 온 사용자). */
   none_count: number;
+  /** 관리자가 결제 없이 준 플랜. `plan_counts`에는 들어가고 MRR에는 안 들어간다. */
+  granted_count: number;
   /**
    * 플랜별 사용자 수. 서버가 `PLAN_ORDER`를 돌며 채우므로 **플랜이 늘면 키도 는다**
    * (`{ free, standard, premium, global }`). 화면에서 키를 손으로 나열하지 말 것 —
@@ -101,6 +103,7 @@ export const SUBSCRIPTION_STATUS_LABEL: Record<SubscriptionStatus, string> = {
   canceled: "해지 예정",
   past_due: "청구 실패",
   none: "미구독",
+  granted: "관리자 지정",
 };
 
 export const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = {
@@ -118,5 +121,6 @@ export const SUBSCRIPTION_FILTERS: { value: SubscriptionFilter; label: string }[
     { value: "active", label: "구독중" },
     { value: "canceled", label: "해지 예정" },
     { value: "past_due", label: "청구 실패" },
+    { value: "granted", label: "관리자 지정" },
     { value: "none", label: "미구독" },
   ];

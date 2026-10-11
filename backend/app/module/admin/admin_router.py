@@ -66,6 +66,14 @@ async def list_users(p: ServiceProvider):
     return await p.admin_service.list_users(p.request)
 
 
+@router.patch("/users/{id}/plan")
+@with_provider
+@with_login("admin")
+async def set_user_plan(p: ServiceProvider):
+    """body: {plan, months?} — 결제 없이 플랜 지정. months를 비우면 무기한, plan=free는 회수."""
+    return await p.payment_service.admin_set_plan(p.request)
+
+
 # ── 결제 관리 (조회 전용) ──────────────────────
 @router.get("/acquisition")
 @with_provider

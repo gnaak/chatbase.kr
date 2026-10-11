@@ -36,7 +36,8 @@ class PaymentRepository:
         return list(result.scalars().all())
 
     async def find_due_subscriptions(self, now) -> list[Subscription]:
-        """청구일이 지난 구독. 해지 예정 건도 포함한다 — 그 날 만료시켜야 한다.
+        """청구일이 지난 구독. 해지 예정 건과 기간이 끝난 관리자 지정 건도 포함한다
+        — 그 날 만료시켜야 한다.
 
         with_for_update: 크론이 겹쳐 실행돼도 같은 구독을 두 번 청구하지 않도록 잠근다.
         """
@@ -48,6 +49,7 @@ class PaymentRepository:
                         SubscriptionStatus.ACTIVE,
                         SubscriptionStatus.PAST_DUE,
                         SubscriptionStatus.CANCELED,
+                        SubscriptionStatus.GRANTED,
                     ]
                 ),
                 Subscription.next_billing_at.isnot(None),

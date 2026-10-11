@@ -9,8 +9,17 @@
  * 금액의 SOT는 백엔드 `core/utils/plan.py`의 `PLAN_PRICES`다.
  */
 
-/** `none` = 결제 프로필만 있고 구독하지 않은 상태. */
-export type SubscriptionStatus = "none" | "active" | "canceled" | "past_due";
+/**
+ * `none` = 결제 프로필만 있고 구독하지 않은 상태.
+ * `granted` = 관리자가 결제 없이 준 플랜. `next_billing_at`은 이용 종료일이고
+ * null이면 무기한이다. 청구되지 않으므로 해지·하향 대상이 아니다.
+ */
+export type SubscriptionStatus =
+  | "none"
+  | "active"
+  | "canceled"
+  | "past_due"
+  | "granted";
 
 /**
  * 등록된 수단의 종류.

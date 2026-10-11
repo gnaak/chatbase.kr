@@ -223,8 +223,12 @@ const AdminMain = () => {
   const planTotal = billing
     ? PLAN_TIERS.reduce((s, t) => s + (billing.plan_counts[t.key] ?? 0), 0)
     : 0;
+  // plan_counts 는 권한 기준이라 관리자가 결제 없이 준 플랜도 들어 있다.
+  // 분포에는 그게 맞지만 "유료"에서는 빼야 전환율이 부풀지 않는다.
+  const grantedUsers = billing?.granted_count ?? 0;
   const paidUsers = billing
-    ? PAID_PLAN_KEYS.reduce((s, k) => s + (billing.plan_counts[k] ?? 0), 0)
+    ? PAID_PLAN_KEYS.reduce((s, k) => s + (billing.plan_counts[k] ?? 0), 0) -
+      grantedUsers
     : 0;
   const paidRatio = planTotal > 0 ? (paidUsers / planTotal) * 100 : 0;
 
@@ -363,7 +367,12 @@ const AdminMain = () => {
           icon={<TrendingUp className="w-4 h-4" />}
           label="유료 전환율"
           value={`${paidRatio.toFixed(1)}%`}
-          note={billing ? `유료 ${paidUsers} / 전체 ${planTotal}명` : undefined}
+          note={
+            billing
+              ? `유료 ${paidUsers} / 전체 ${planTotal}명` +
+                (grantedUsers > 0 ? ` · 관리자 지정 ${grantedUsers} 제외` : "")
+              : undefined
+          }
           loading={billingLoading}
           large
         />

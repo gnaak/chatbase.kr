@@ -320,6 +320,18 @@ const BotEdit = () => {
     });
   }, [chatModels, ownKeyProviders, usingServiceKey, serviceModel]);
 
+  // 새 봇은 모델을 미리 채운다. 비워두면 저장 버튼이 `!form.model` 로 말없이
+  // 잠겨서, 이름만 쓰고 저장하려던 사람이 이유를 모른 채 떠났다.
+  // 무료 키면 그 모델 하나뿐이고, 내 키면 쓸 수 있는 첫 모델을 고른다.
+  useEffect(() => {
+    if (!isNew || form.model) return;
+    const pick =
+      usingServiceKey && serviceModel
+        ? serviceModel
+        : modelOptions.find((o) => !o.disabled)?.value;
+    if (pick) setForm((f) => (f.model ? f : { ...f, model: pick }));
+  }, [isNew, form.model, usingServiceKey, serviceModel, modelOptions]);
+
   // 로드된 봇 정보를 폼에 반영
   useEffect(() => {
     if (botDto) {
@@ -541,20 +553,33 @@ const BotEdit = () => {
               />
             </Field>
 
+            {/* 무료 키면 고를 게 없다(서버도 그 모델로 고정해 답한다). 드롭다운을
+                보여주면 "골라야 하나" 싶어지고, 대부분의 칸이 잠겨 있어 더 헷갈린다. */}
             <Field
               label="모델"
+              htmlFor={usingServiceKey ? "bot-model" : undefined}
+              required={!usingServiceKey}
               description={
                 usingServiceKey
-                  ? "무료 제공 키를 쓰는 중이라 모델이 고정됩니다. 직접 고르려면 API 키 화면에서 내 키를 등록하세요."
-                  : "응답에 사용할 LLM. 키는 API 키 페이지에서 등록하세요."
+                  ? "무료로 바로 답합니다. 다른 모델을 쓰려면 API 키 화면에서 내 키를 등록하세요(선택)."
+                  : "응답에 사용할 LLM. 등록한 키의 모델만 고를 수 있습니다."
               }
             >
-              <Select
-                value={form.model}
-                onChange={(v) => update("model", v)}
-                options={modelOptions}
-                placeholder="모델을 선택하세요"
-              />
+              {usingServiceKey ? (
+                <Input
+                  id="bot-model"
+                  value={`무료 제공 모델 · ${serviceModel ?? ""}`}
+                  readOnly
+                  disabled
+                />
+              ) : (
+                <Select
+                  value={form.model}
+                  onChange={(v) => update("model", v)}
+                  options={modelOptions}
+                  placeholder="모델을 선택하세요"
+                />
+              )}
             </Field>
           </Section>
 

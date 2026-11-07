@@ -16,7 +16,7 @@ import Footer from "@/component/landing/footer";
  * 눌렀을 때 "봇이 존재하지 않습니다"를 보게 되는데, 그건 첫인상이 깨지는
  * 자리다 — 제품이 자기 사이트에서 안 도는 걸 보여주는 셈이다.
  *
- * 학습 자료는 `chatbase-knowledge.txt`에 있다.
+ * 학습 자료와 설정은 `demoBots/landing/`에 있다.
  */
 const DEMO_BOT_SLUG = "0rFgOK3XXZLMCF9p";
 

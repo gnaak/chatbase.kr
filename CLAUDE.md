@@ -32,8 +32,7 @@ chatbase/   React — chatbase.kr            :3000
 |------|------|------|---|
 | 루트 | `CLAUDE.md`(이 문서) | 레포 구조 · 규칙 | |
 | 루트 | `DESIGN.md` | 디자인 시스템 · 토큰 | |
-| `chatbase/` | `chatbase-knowledge.txt` | 랜딩 데모 봇의 **학습 자료** | |
-| `chatbase/` | `demo-bot.md` | 랜딩 데모 봇의 **나머지 설정** — 인사말·FAQ·프롬프트 | |
+| `chatbase/` | `demoBots/` | 데모 봇 — 봇마다 폴더(`settings.md` + `knowledge.txt`). 랜딩 안내봇 · 업종 데모 | |
 | `chatbase/` | `PROJECT.md` | **현재 동작하는 방식** + 함정 모음 | 로컬 |
 | `chatbase/` | `NEED.md` | 기능 보완 — 지금 하는 것 | 로컬 |
 | `chatbase/` | `TODO.md` | 사업 확장 — 그다음 | 로컬 |

@@ -4,10 +4,10 @@
 여기가 어설프면 가격표를 아무리 잘 써도 안 믿는다.
 
 DB를 다시 만들면 이 봇도 사라진다. 그때 이 문서대로 다시 만들고,
-[`src/container/landing.tsx`](src/container/landing.tsx)의 `DEMO_BOT_SLUG` 에
+[`src/container/landing.tsx`](../../src/container/landing.tsx)의 `DEMO_BOT_SLUG` 에
 새 slug를 넣는다. 비어 있으면 위젯이 아예 안 뜬다(오류 대신 그게 낫다).
 
-학습 텍스트는 [`chatbase-knowledge.txt`](chatbase-knowledge.txt)를 **그대로
+학습 텍스트는 같은 폴더의 [`knowledge.txt`](knowledge.txt)를 **그대로
 복사**해 넣는다. 그 파일이 SOT고 이 문서는 나머지 설정이다.
 
 ---
@@ -19,7 +19,7 @@ DB를 다시 만들면 이 봇도 사라진다. 그때 이 문서대로 다시 �
 | 이름 | `chatbase.kr 안내봇` |
 | 모델 | `gpt-5.6-luna` (무료 제공 키 그대로) |
 | 학습 방식 | **텍스트** (파일 아님) |
-| 학습 텍스트 | `chatbase-knowledge.txt` 전문 |
+| 학습 텍스트 | `knowledge.txt` 전문 |
 | 다국어 응대 | 계정 플랜이 GLOBAL이면 ON, 아니면 OFF |
 
 > ⚠️ 이 봇의 대화도 **네 계정의 월 한도를 태운다.** 무료 제공 키로 도니까

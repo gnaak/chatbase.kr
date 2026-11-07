@@ -16,6 +16,7 @@ from app.module.infra.gemini.model_service import GeminiModelService
 from app.module.infra.llm import pricing as pricing_module
 from app.module.infra.openai.model_service import OpenAIModelService
 from app.module.llm_model.llm_model import LLMModel, ModelProvider, ModelType
+from app.module.payment.plan_lookup import effective_plan
 from app.module.payment.payment import (
     BillingMethod,
     Payment,
@@ -173,7 +174,8 @@ class AdminService:
                     "name": u.name,
                     "active": u.active,
                     # 챗봇 상품의 플랜. 구독이 없으면 free.
-                    "plan": resolve_plan(plan).value,
+                    # 게이팅과 같은 판정 — 기간이 끝난 관리자 지정은 FREE로 보인다.
+                    "plan": resolve_plan(effective_plan(plan, status, until)).value,
                     # granted면 관리자가 준 것이다. 결제 상태(active 등)면 어드민에서 못 바꾼다.
                     "plan_status": _enum_value(status),
                     # 관리자 지정 플랜의 종료일. 무기한이거나 지정이 아니면 null.

@@ -12,13 +12,40 @@
 - ACTIVE / PAST_DUE — `sub.plan`이 살아 있다. 재시도 중에는 권한을 유지한다
 - CANCELED — 남은 기간은 그대로 쓴다. `next_billing_at`에 `_expire`가 비운다
 - NONE / 구독 없음 — `None` → FREE
+- GRANTED — 관리자가 준 플랜. `next_billing_at`(종료일)이 지났으면 **읽는 시점에** FREE
+
+GRANTED만 읽는 쪽에서 만료를 판정하는 이유: 정기 청구 크론
+(`charge_due_subscriptions`)을 **호출하는 곳이 아직 없다**(chatbase/TODO.md 1번).
+크론에만 맡기면 종료일이 지나도 영원히 유료로 읽힌다. 돈이 오가는 상태(ACTIVE 등)는
+여기서 손대지 않는다 — 그건 청구 결과로만 바뀌어야 한다.
 """
+
+from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.database.base import now_kst
 from app.core.utils.plan import PlanLimits, Product, limits_for
-from app.module.payment.payment import Subscription
+from app.module.payment.payment import Subscription, SubscriptionStatus
+
+
+def effective_plan(
+    plan: str | None,
+    status: SubscriptionStatus | None,
+    until: datetime | None,
+    now: datetime | None = None,
+) -> str | None:
+    """구독 행 값으로 지금 유효한 플랜. 기간이 끝난 관리자 지정은 None(= FREE).
+
+    DB에서 읽은 DATETIME은 naive라 비교 기준도 naive KST로 맞춘다
+    (backend/CLAUDE.md "시간 — 이미 두 번 걸렸다").
+    """
+    if status == SubscriptionStatus.GRANTED and until is not None:
+        now = now or now_kst().replace(tzinfo=None)
+        if until.replace(tzinfo=None) <= now:
+            return None
+    return plan
 
 
 async def plan_of(
@@ -27,13 +54,17 @@ async def plan_of(
     product: Product = Product.CHATBOT,
 ) -> str | None:
     """해당 상품의 현재 플랜 문자열. 구독이 없으면 None(= FREE)."""
-    result = await db.execute(
-        select(Subscription.plan).where(
-            Subscription.user_id == user_id,
-            Subscription.product == product,
+    row = (
+        await db.execute(
+            select(
+                Subscription.plan, Subscription.status, Subscription.next_billing_at
+            ).where(
+                Subscription.user_id == user_id,
+                Subscription.product == product,
+            )
         )
-    )
-    return result.scalar_one_or_none()
+    ).one_or_none()
+    return effective_plan(*row) if row else None
 
 
 async def limits_of(

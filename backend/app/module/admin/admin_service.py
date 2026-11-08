@@ -38,15 +38,6 @@ PROVIDER_ORDER = [
     ModelProvider.GEMINI,
 ]
 
-#: 구독 목록 정렬 우선순위. 조치가 필요한 것(청구 실패)을 맨 위로 올린다.
-SUBSCRIPTION_STATUS_ORDER = {
-    SubscriptionStatus.PAST_DUE: 0,
-    SubscriptionStatus.ACTIVE: 1,
-    SubscriptionStatus.CANCELED: 2,
-    SubscriptionStatus.GRANTED: 3,
-    SubscriptionStatus.NONE: 4,
-}
-
 #: 결제 내역 조회 기본/최대 건수. 전체를 통째로 내리면 운영이 커질수록 응답이 무거워진다.
 PAYMENT_PAGE_DEFAULT = 200
 PAYMENT_PAGE_MAX = 1000
@@ -395,16 +386,27 @@ class AdminService:
         )
 
     async def list_subscriptions(self, request):
-        """구독 목록 — **가입자 전원**. 결제 프로필만 만들어진(NONE) 행도 함께 내린다 —
-        카드까지 등록하고 결제를 멈춘 사용자가 이탈 지점이라 걸러내면 안 보인다.
-        구독 행이 없는 가입자는 맨 뒤에 NONE으로 붙는다(아래)."""
+        """구독 목록 — **가입자 전원, 고객 관리와 같은 순서(최신 가입 먼저)**.
+
+        결제 프로필만 만들어진(NONE) 행도 함께 내린다 — 카드까지 등록하고 결제를 멈춘
+        사용자가 이탈 지점이라 걸러내면 안 보인다.
+
+        구독 행이 아예 없는 가입자도 NONE("미구독")으로 한 줄 넣는다. 구독 행은 결제 화면을
+        처음 열 때(`get_subscription`)나 어드민 플랜 지정·결제 때만 생겨서, 결제 화면에 한 번도
+        안 들어온 FREE 사용자가 통째로 빠지고 고객 관리의 가입자 수와 "전체"가 어긋났다.
+
+        예전엔 청구 실패(PAST_DUE)를 맨 위로 올리는 상태순 정렬이었다. 두 화면의 순서를
+        맞추려고 가입순으로 바꿨다 — 청구 실패는 상태 필터와 상단 카드에서 본다.
+        """
         db = self.admin_repo.db
 
-        rows = (
-            await db.execute(
-                select(Subscription, User).join(User, User.id == Subscription.user_id)
-            )
-        ).all()
+        users = (
+            await db.execute(select(User).order_by(User.id.desc()))
+        ).scalars().all()
+
+        subs_by_user: dict[int, list[Subscription]] = {}
+        for sub in (await db.execute(select(Subscription))).scalars().all():
+            subs_by_user.setdefault(sub.user_id, []).append(sub)
 
         methods = (await db.execute(select(BillingMethod))).scalars().all()
         method_by_id = {m.id: m for m in methods}
@@ -414,77 +416,58 @@ class AdminService:
 
         totals = await self._paid_totals_by_user()
 
-        def _sort_key(pair):
-            sub = pair[0]
-            status = sub.status or SubscriptionStatus.NONE
-            return (
-                SUBSCRIPTION_STATUS_ORDER.get(status, 9),
-                sub.next_billing_at or datetime.max,
-                -sub.id,
-            )
-
         data = []
-        for sub, user in sorted(rows, key=_sort_key):
-            status = sub.status or SubscriptionStatus.NONE
+        for user in users:
             paid = totals.get(user.id, {})
+            base = {
+                "user_id": user.id,
+                "email": user.email,
+                "name": user.name,
+                "method_count": method_counts.get(user.id, 0),
+                "paid_total": paid.get("paid_total", 0),
+                "paid_count": paid.get("paid_count", 0),
+            }
+
+            subs = subs_by_user.get(user.id)
+            if not subs:
+                # 구독 행 없음 = 구독 안 함. 상태로는 NONE과 같아 따로 구분하지 않는다.
+                data.append(
+                    {
+                        **base,
+                        "product": Product.CHATBOT.value,
+                        "status": SubscriptionStatus.NONE.value,
+                        "plan": None,
+                        "scheduled_plan": None,
+                        "method": None,
+                        "retry_count": 0,
+                        "started_at": None,
+                        "next_billing_at": None,
+                        "canceled_at": None,
+                        "created_at": None,
+                    }
+                )
+                continue
 
             # `plan_mismatch`가 있던 자리. 게이팅이 이제 이 구독 행을 직접 읽으므로
             # "받은 돈과 열어준 기능이 어긋나는" 상태 자체가 생길 수 없다.
-            data.append(
-                {
-                    "user_id": user.id,
-                    "email": user.email,
-                    "name": user.name,
-                    "product": _enum_value(sub.product) or Product.CHATBOT.value,
-                    "status": _enum_value(status),
-                    "plan": sub.plan,
-                    "scheduled_plan": sub.scheduled_plan,
-                    "method": _method_summary(method_by_id.get(sub.billing_method_id)),
-                    "method_count": method_counts.get(user.id, 0),
-                    "retry_count": sub.retry_count or 0,
-                    "paid_total": paid.get("paid_total", 0),
-                    "paid_count": paid.get("paid_count", 0),
-                    "started_at": _iso(sub.started_at),
-                    "next_billing_at": _iso(sub.next_billing_at),
-                    "canceled_at": _iso(sub.canceled_at),
-                    "created_at": _iso(sub.created_at),
-                }
-            )
-
-        # 구독 행이 아예 없는 가입자도 "미구독"으로 붙인다.
-        #
-        # 구독 행은 결제 화면을 처음 열 때(`get_subscription`)나 어드민 플랜 지정·결제 때만
-        # 생긴다. 그래서 결제 화면에 한 번도 안 들어온 FREE 사용자가 이 목록에서 통째로
-        # 빠졌고, 고객 관리의 가입자 수와 이 목록의 "전체"가 어긋났다. 상태로는 NONE과
-        # 같다(구독 안 함) — 화면에서 따로 구분할 이유가 없어 같은 값으로 내린다.
-        with_sub = {user.id for _, user in rows}
-        users = (
-            await db.execute(select(User).order_by(User.id.desc()))
-        ).scalars().all()
-        for user in users:
-            if user.id in with_sub:
-                continue
-            paid = totals.get(user.id, {})
-            data.append(
-                {
-                    "user_id": user.id,
-                    "email": user.email,
-                    "name": user.name,
-                    "product": Product.CHATBOT.value,
-                    "status": SubscriptionStatus.NONE.value,
-                    "plan": None,
-                    "scheduled_plan": None,
-                    "method": None,
-                    "method_count": method_counts.get(user.id, 0),
-                    "retry_count": 0,
-                    "paid_total": paid.get("paid_total", 0),
-                    "paid_count": paid.get("paid_count", 0),
-                    "started_at": None,
-                    "next_billing_at": None,
-                    "canceled_at": None,
-                    "created_at": None,
-                }
-            )
+            for sub in subs:
+                data.append(
+                    {
+                        **base,
+                        "product": _enum_value(sub.product) or Product.CHATBOT.value,
+                        "status": _enum_value(sub.status or SubscriptionStatus.NONE),
+                        "plan": sub.plan,
+                        "scheduled_plan": sub.scheduled_plan,
+                        "method": _method_summary(
+                            method_by_id.get(sub.billing_method_id)
+                        ),
+                        "retry_count": sub.retry_count or 0,
+                        "started_at": _iso(sub.started_at),
+                        "next_billing_at": _iso(sub.next_billing_at),
+                        "canceled_at": _iso(sub.canceled_at),
+                        "created_at": _iso(sub.created_at),
+                    }
+                )
 
         return success(data=data)
 

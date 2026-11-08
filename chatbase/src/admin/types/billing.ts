@@ -47,6 +47,11 @@ export interface AdminBillingSummary {
   failed_30d: number;
 }
 
+/**
+ * 구독 목록 한 줄. **가입자 전원이 한 줄씩** 온다 — 구독 행이 없는 사람(결제 화면을 한 번도
+ * 안 연 FREE 사용자)도 `status: "none"`, `plan: null` 로 붙는다. 그래서 "전체" 건수가
+ * 고객 관리의 가입자 수와 같다.
+ */
 export interface AdminSubscription {
   user_id: number;
   email: string;

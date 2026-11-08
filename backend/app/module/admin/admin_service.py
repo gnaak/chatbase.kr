@@ -395,8 +395,9 @@ class AdminService:
         )
 
     async def list_subscriptions(self, request):
-        """구독 목록. 결제 프로필만 만들어진(NONE) 행도 함께 내린다 —
-        카드까지 등록하고 결제를 멈춘 사용자가 이탈 지점이라 걸러내면 안 보인다."""
+        """구독 목록 — **가입자 전원**. 결제 프로필만 만들어진(NONE) 행도 함께 내린다 —
+        카드까지 등록하고 결제를 멈춘 사용자가 이탈 지점이라 걸러내면 안 보인다.
+        구독 행이 없는 가입자는 맨 뒤에 NONE으로 붙는다(아래)."""
         db = self.admin_repo.db
 
         rows = (
@@ -447,6 +448,41 @@ class AdminService:
                     "next_billing_at": _iso(sub.next_billing_at),
                     "canceled_at": _iso(sub.canceled_at),
                     "created_at": _iso(sub.created_at),
+                }
+            )
+
+        # 구독 행이 아예 없는 가입자도 "미구독"으로 붙인다.
+        #
+        # 구독 행은 결제 화면을 처음 열 때(`get_subscription`)나 어드민 플랜 지정·결제 때만
+        # 생긴다. 그래서 결제 화면에 한 번도 안 들어온 FREE 사용자가 이 목록에서 통째로
+        # 빠졌고, 고객 관리의 가입자 수와 이 목록의 "전체"가 어긋났다. 상태로는 NONE과
+        # 같다(구독 안 함) — 화면에서 따로 구분할 이유가 없어 같은 값으로 내린다.
+        with_sub = {user.id for _, user in rows}
+        users = (
+            await db.execute(select(User).order_by(User.id.desc()))
+        ).scalars().all()
+        for user in users:
+            if user.id in with_sub:
+                continue
+            paid = totals.get(user.id, {})
+            data.append(
+                {
+                    "user_id": user.id,
+                    "email": user.email,
+                    "name": user.name,
+                    "product": Product.CHATBOT.value,
+                    "status": SubscriptionStatus.NONE.value,
+                    "plan": None,
+                    "scheduled_plan": None,
+                    "method": None,
+                    "method_count": method_counts.get(user.id, 0),
+                    "retry_count": 0,
+                    "paid_total": paid.get("paid_total", 0),
+                    "paid_count": paid.get("paid_count", 0),
+                    "started_at": None,
+                    "next_billing_at": None,
+                    "canceled_at": None,
+                    "created_at": None,
                 }
             )
 

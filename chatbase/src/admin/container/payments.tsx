@@ -218,8 +218,9 @@ const AdminPayments = () => {
         align: "center",
         render: (r: AdminSubscription) => (
           <div className="flex items-center justify-center gap-1">
+            {/* plan 이 비어 있으면 게이팅이 FREE 로 읽는다(미구독 · 구독 행 없음 · 탈퇴). */}
             <span className="text-[12px] font-medium text-text-main">
-              {planLabel(r.plan)}
+              {planLabel(r.plan ?? "free")}
             </span>
             {r.scheduled_plan && (
               <span
